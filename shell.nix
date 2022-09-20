@@ -5,6 +5,7 @@ pkgs.stdenv.mkDerivation {
   buildInputs = (
     (with pkgs; [
       cacert
+      diesel-cli
       mdbook
       rust-analyzer
     ]) ++
