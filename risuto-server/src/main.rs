@@ -8,19 +8,12 @@ use axum::{
 };
 use std::net::SocketAddr;
 
-#[derive(sqlx::FromRow, serde::Deserialize, serde::Serialize)]
-pub struct User {
-    pub id: usize,
-    pub name: String,
-    pub password: String,
-}
-
 #[derive(Clone, Debug)]
 struct Auth(Option<CurrentUser>);
 
 #[derive(Clone, Debug)]
 struct CurrentUser {
-    id: usize,
+    id: i64,
 }
 
 async fn auth<B: std::fmt::Debug>(mut req: Request<B>, next: Next<B>) -> Result<Response, StatusCode> {
@@ -53,7 +46,11 @@ async fn authorize_current_user(db: &sqlx::SqlitePool, auth: &str) -> Option<Cur
         return None;
     }
 
-    Some(CurrentUser { id: 42 })
+    let user = sqlx::query_as!(CurrentUser, "SELECT id FROM users WHERE name = ? AND password = ?", split[0], split[1])
+        .fetch_one(db)
+        .await
+        .ok()?;
+    Some(user)
 }
 
 #[tokio::main]
