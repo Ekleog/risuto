@@ -9,6 +9,9 @@ use diesel::{sqlite::SqliteConnection, Connection};
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
 
+mod models;
+mod schema;
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt::init();
