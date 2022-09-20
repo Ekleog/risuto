@@ -1,0 +1,12 @@
+[package]
+name = "risuto-server"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0"
+axum = "0.5.16"
+serde = "1.0"
+tokio = { version = "1.21", features = ["full"] }
+tracing = "0.1.36"
+tracing-subscriber = "0.3.15"
