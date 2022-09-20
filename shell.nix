@@ -8,6 +8,7 @@ pkgs.stdenv.mkDerivation {
       diesel-cli
       mdbook
       rust-analyzer
+      sqlite
     ]) ++
     (with rustNightlyChannel; [
       cargo
