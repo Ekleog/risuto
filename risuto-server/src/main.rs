@@ -1,53 +1,59 @@
 use anyhow::Context;
 use axum::{
-    http::{self, StatusCode},
+    http::{self, Request, StatusCode},
     middleware::Next,
-    request::Request,
     response::Response,
-    routing::{get, post},
-    Json, Router,
+    routing::get,
+    Extension, Router,
 };
-use diesel::{sqlite::SqliteConnection, Connection};
-use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
 
-mod models;
-mod schema;
+#[derive(sqlx::FromRow, serde::Deserialize, serde::Serialize)]
+pub struct User {
+    pub id: usize,
+    pub name: String,
+    pub password: String,
+}
 
+#[derive(Clone, Debug)]
+struct Auth(Option<CurrentUser>);
+
+#[derive(Clone, Debug)]
 struct CurrentUser {
     id: usize,
 }
 
-async fn auth<B>(mut req: Request<B>, next: Next<B>, Extension(connection): Extension<SqliteConnection>) -> Result<Response, StatusCode> {
-    let auth_header = req.headers()
-        .get(http::header::AUTHORIZATION)
-        .and_then(|header| header.to_str().ok())
-        .ok_or(StatusCode::UNAUTHORIZED)?;
+async fn auth<B: std::fmt::Debug>(mut req: Request<B>, next: Next<B>) -> Result<Response, StatusCode> {
+    if let Some(auth) = req.headers().get(http::header::AUTHORIZATION) {
+        let auth = auth.to_str().map_err(|_| StatusCode::UNAUTHORIZED)?;
 
-    if let Some(current_user) = authorize_current_user(auth_header).await {
-        req.extensions_mut().insert(current_user);
-        Ok(next.run(req).await)
+        let db = req.extensions().get::<sqlx::SqlitePool>().expect("No sqlite pool extension");
+        if let Some(current_user) = authorize_current_user(db, auth).await {
+            req.extensions_mut().insert(Auth(Some(current_user)));
+            Ok(next.run(req).await)
+        } else {
+            Err(StatusCode::UNAUTHORIZED)
+        }
     } else {
-        Err(StatusCode::UNAUTHORIZED)
+        req.extensions_mut().insert(Auth(None));
+        Ok(next.run(req).await)
     }
 }
 
-async fn authorize_current_user(auth_token: &str) -> Option<CurrentUser> {
-    let split = auth_token.split(" ");
+async fn authorize_current_user(db: &sqlx::SqlitePool, auth: &str) -> Option<CurrentUser> {
+    let split = auth.split(' ').collect::<Vec<_>>();
     if split.len() != 2 || split[0] != "Basic" {
         return None;
     }
 
-    let userpass = base64::decode(split[1])?;
-    let split = userpass.split(":");
+    let userpass = base64::decode(split[1]).ok()?;
+    let userpass = std::str::from_utf8(&userpass).ok()?;
+    let split = userpass.split(':').collect::<Vec<_>>();
     if split.len() != 2 {
         return None;
     }
 
-    use diesel::prelude::*;
-    use self::schema::users::dsl::*;
-    let user = users.filter(name.eq(split[0])).load::<models::User>(connection)?;
-    Some(user.id)
+    Some(CurrentUser { id: 42 })
 }
 
 #[tokio::main]
@@ -55,11 +61,15 @@ async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt::init();
 
     let db_file = std::env::var("DATABASE_URL").context("DATABASE_URL must be set")?;
-    let db = SqliteConnection::establish(&db_file)
+    let db = sqlx::sqlite::SqlitePoolOptions::new()
+        .connect(&db_file)
+        .await
         .with_context(|| format!("Error opening database {:?}", db_file))?;
 
-    let app = Router::new().route("/", get(root))
-    .route_layer(axum::middleware::from_fn(auth));
+    let app = Router::new()
+        .route("/", get(root))
+        .route_layer(axum::middleware::from_fn(auth))
+        .layer(Extension(db));
 
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
     tracing::info!("listening on {}", addr);
@@ -70,6 +80,6 @@ async fn main() -> anyhow::Result<()> {
 }
 
 // basic handler that responds with a static string, but only to auth'd users
-async fn root(Extension(current_user): Extension<CurrentUser>) -> &'static str {
-    "Hello, World!"
+async fn root(Extension(user): Extension<Auth>) -> String {
+    format!("Hello user {:?}", user)
 }
