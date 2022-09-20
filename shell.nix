@@ -5,10 +5,10 @@ pkgs.stdenv.mkDerivation {
   buildInputs = (
     (with pkgs; [
       cacert
-      diesel-cli
       mdbook
       rust-analyzer
       sqlite
+      sqlx-cli
     ]) ++
     (with rustNightlyChannel; [
       cargo
