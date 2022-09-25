@@ -12,7 +12,7 @@ CREATE TABLE tasks (
         ON DELETE CASCADE
 );
 
-CREATE TABLE order_tasks_events (
+CREATE TABLE task_dependencies_events (
     id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
     owner_id INTEGER NOT NULL,
     date TIMESTAMP NOT NULL,
