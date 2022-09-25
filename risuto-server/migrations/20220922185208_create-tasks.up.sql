@@ -1,7 +1,7 @@
 PRAGMA foreign_keys = ON;
 
 CREATE TABLE tasks (
-    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+    id VARCHAR PRIMARY KEY NOT NULL,
     owner_id INTEGER NOT NULL,
     date TIMESTAMP NOT NULL,
 
@@ -13,12 +13,12 @@ CREATE TABLE tasks (
 );
 
 CREATE TABLE task_dependencies_events (
-    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+    id VARCHAR PRIMARY KEY NOT NULL,
     owner_id INTEGER NOT NULL,
     date TIMESTAMP NOT NULL,
 
-    first_id INTEGER NOT NULL,
-    then_id INTEGER NOT NULL,
+    first_id VARCHAR NOT NULL,
+    then_id VARCHAR NOT NULL,
 
     FOREIGN KEY (owner_id) REFERENCES users (id)
         ON DELETE CASCADE,
@@ -29,7 +29,7 @@ CREATE TABLE task_dependencies_events (
 );
 
 CREATE TABLE tags (
-    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+    id VARCHAR PRIMARY KEY NOT NULL,
     owner_id INTEGER NOT NULL,
 
     name VARCHAR NOT NULL UNIQUE,
@@ -39,12 +39,12 @@ CREATE TABLE tags (
 );
 
 CREATE TABLE add_tag_events (
-    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+    id VARCHAR PRIMARY KEY NOT NULL,
     owner_id INTEGER NOT NULL,
     date TIMESTAMP NOT NULL,
 
-    task_id INTEGER NOT NULL,
-    tag_id INTEGER NOT NULL,
+    task_id VARCHAR NOT NULL,
+    tag_id VARCHAR NOT NULL,
 
     FOREIGN KEY (owner_id) REFERENCES users (id)
         ON DELETE CASCADE,
@@ -55,11 +55,11 @@ CREATE TABLE add_tag_events (
 );
 
 CREATE TABLE add_comment_events (
-    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+    id VARCHAR PRIMARY KEY NOT NULL,
     owner_id INTEGER NOT NULL,
     date TIMESTAMP NOT NULL,
 
-    task_id INTEGER NOT NULL,
+    task_id VARCHAR NOT NULL,
     text TEXT NOT NULL,
 
     FOREIGN KEY (owner_id) REFERENCES users (id)
@@ -69,12 +69,12 @@ CREATE TABLE add_comment_events (
 );
 
 CREATE TABLE edit_comment_events (
-    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+    id VARCHAR PRIMARY KEY NOT NULL,
     owner_id INTEGER NOT NULL,
     date TIMESTAMP NOT NULL,
 
-    task_id INTEGER NOT NULL,
-    comment_id INTEGER NOT NULL,
+    task_id VARCHAR NOT NULL,
+    comment_id VARCHAR NOT NULL,
     text TEXT NOT NULL,
 
     FOREIGN KEY (owner_id) REFERENCES users (id)
