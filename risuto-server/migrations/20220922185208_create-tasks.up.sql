@@ -12,7 +12,7 @@ CREATE TABLE tasks (
         ON DELETE CASCADE
 );
 
-CREATE TABLE task_dependencies_events (
+CREATE TABLE add_dependency_events (
     id VARCHAR PRIMARY KEY NOT NULL,
     owner_id VARCHAR NOT NULL,
     date TIMESTAMP NOT NULL,
@@ -25,6 +25,19 @@ CREATE TABLE task_dependencies_events (
     FOREIGN KEY (first_id) REFERENCES tasks (id)
         ON DELETE CASCADE,
     FOREIGN KEY (then_id) REFERENCES tasks (id)
+        ON DELETE CASCADE
+);
+
+CREATE TABLE remove_dependency_events (
+    id VARCHAR PRIMARY KEY NOT NULL,
+    owner_id VARCHAR NOT NULL,
+    date TIMESTAMP NOT NULL,
+
+    dep_id VARCHAR NOT NULL,
+
+    FOREIGN KEY (owner_id) REFERENCES users (id)
+        ON DELETE CASCADE,
+    FOREIGN KEY (dep_id) REFERENCES add_dependency_events (id)
         ON DELETE CASCADE
 );
 
@@ -54,6 +67,19 @@ CREATE TABLE add_tag_events (
     FOREIGN KEY (task_id) REFERENCES tasks (id)
         ON DELETE CASCADE,
     FOREIGN KEY (tag_id) REFERENCES tags (id)
+        ON DELETE CASCADE
+);
+
+CREATE TABLE remove_tag_events (
+    id VARCHAR PRIMARY KEY NOT NULL,
+    owner_id VARCHAR NOT NULL,
+    date TIMESTAMP NOT NULL,
+
+    add_tag_id VARCHAR NOT NULL,
+
+    FOREIGN KEY (owner_id) REFERENCES users (id)
+        ON DELETE CASCADE,
+    FOREIGN KEY (add_tag_id) REFERENCES add_tag_events (id)
         ON DELETE CASCADE
 );
 
