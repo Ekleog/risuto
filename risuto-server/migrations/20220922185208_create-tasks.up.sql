@@ -2,7 +2,7 @@ PRAGMA foreign_keys = ON;
 
 CREATE TABLE tasks (
     id VARCHAR PRIMARY KEY NOT NULL,
-    owner_id INTEGER NOT NULL,
+    owner_id VARCHAR NOT NULL,
     date TIMESTAMP NOT NULL,
 
     title VARCHAR NOT NULL,
@@ -14,7 +14,7 @@ CREATE TABLE tasks (
 
 CREATE TABLE task_dependencies_events (
     id VARCHAR PRIMARY KEY NOT NULL,
-    owner_id INTEGER NOT NULL,
+    owner_id VARCHAR NOT NULL,
     date TIMESTAMP NOT NULL,
 
     first_id VARCHAR NOT NULL,
@@ -30,7 +30,7 @@ CREATE TABLE task_dependencies_events (
 
 CREATE TABLE tags (
     id VARCHAR PRIMARY KEY NOT NULL,
-    owner_id INTEGER NOT NULL,
+    owner_id VARCHAR NOT NULL,
 
     name VARCHAR NOT NULL UNIQUE,
 
@@ -40,7 +40,7 @@ CREATE TABLE tags (
 
 CREATE TABLE add_tag_events (
     id VARCHAR PRIMARY KEY NOT NULL,
-    owner_id INTEGER NOT NULL,
+    owner_id VARCHAR NOT NULL,
     date TIMESTAMP NOT NULL,
 
     task_id VARCHAR NOT NULL,
@@ -59,7 +59,7 @@ CREATE TABLE add_tag_events (
 
 CREATE TABLE add_comment_events (
     id VARCHAR PRIMARY KEY NOT NULL,
-    owner_id INTEGER NOT NULL,
+    owner_id VARCHAR NOT NULL,
     date TIMESTAMP NOT NULL,
 
     task_id VARCHAR NOT NULL,
@@ -73,7 +73,7 @@ CREATE TABLE add_comment_events (
 
 CREATE TABLE edit_comment_events (
     id VARCHAR PRIMARY KEY NOT NULL,
-    owner_id INTEGER NOT NULL,
+    owner_id VARCHAR NOT NULL,
     date TIMESTAMP NOT NULL,
 
     task_id VARCHAR NOT NULL,
