@@ -46,6 +46,7 @@ CREATE TABLE tags (
     owner_id VARCHAR NOT NULL,
 
     name VARCHAR NOT NULL UNIQUE,
+    archived BOOLEAN NOT NULL,
 
     FOREIGN KEY (owner_id) REFERENCES users (id)
         ON DELETE CASCADE
