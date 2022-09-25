@@ -45,6 +45,9 @@ CREATE TABLE add_tag_events (
 
     task_id VARCHAR NOT NULL,
     tag_id VARCHAR NOT NULL,
+    priority INTEGER NOT NULL,
+
+    UNIQUE (tag_id, priority),
 
     FOREIGN KEY (owner_id) REFERENCES users (id)
         ON DELETE CASCADE,
