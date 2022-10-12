@@ -5,12 +5,91 @@ CREATE TABLE tasks (
     owner_id VARCHAR NOT NULL,
     date TIMESTAMP NOT NULL,
 
-    title VARCHAR NOT NULL,
-    scheduled TIMESTAMP NOT NULL,
+    initial_title VARCHAR NOT NULL,
 
     FOREIGN KEY (owner_id) REFERENCES users (id)
         ON DELETE CASCADE
 );
+
+CREATE TABLE set_title_events {
+    id VARCHAR PRIMARY KEY NOT NULL,
+    owner_id VARCHAR NOT NULL,
+    date TIMESTAMP NOT NULL,
+
+    task_id VARCHAR NOT NULL,
+    title VARCHAR NOT NULL,
+
+    FOREIGN KEY (owner_id) REFERENCES users (id)
+        ON DELETE CASCADE,
+    FOREIGN KEY (task_id) REFERENCES tasks (id)
+        ON DELETE CASCADE,
+}
+
+CREATE TABLE complete_task_events {
+    id VARCHAR PRIMARY KEY NOT NULL,
+    owner_id VARCHAR NOT NULL,
+    date TIMESTAMP NOT NULL,
+
+    task_id VARCHAR NOT NULL,
+
+    FOREIGN KEY (owner_id) REFERENCES users (id)
+        ON DELETE CASCADE,
+    FOREIGN KEY (task_id) REFERENCES tasks (id)
+        ON DELETE CASCADE,
+}
+
+CREATE TABLE reopen_task_events {
+    id VARCHAR PRIMARY KEY NOT NULL,
+    owner_id VARCHAR NOT NULL,
+    date TIMESTAMP NOT NULL,
+
+    task_id VARCHAR NOT NULL,
+
+    FOREIGN KEY (owner_id) REFERENCES users (id)
+        ON DELETE CASCADE,
+    FOREIGN KEY (task_id) REFERENCES tasks (id)
+        ON DELETE CASCADE,
+}
+
+CREATE TABLE archive_task_events {
+    id VARCHAR PRIMARY KEY NOT NULL,
+    owner_id VARCHAR NOT NULL,
+    date TIMESTAMP NOT NULL,
+
+    task_id VARCHAR NOT NULL,
+
+    FOREIGN KEY (owner_id) REFERENCES users (id)
+        ON DELETE CASCADE,
+    FOREIGN KEY (task_id) REFERENCES tasks (id)
+        ON DELETE CASCADE,
+}
+
+CREATE TABLE unarchive_task_events {
+    id VARCHAR PRIMARY KEY NOT NULL,
+    owner_id VARCHAR NOT NULL,
+    date TIMESTAMP NOT NULL,
+
+    task_id VARCHAR NOT NULL,
+
+    FOREIGN KEY (owner_id) REFERENCES users (id)
+        ON DELETE CASCADE,
+    FOREIGN KEY (task_id) REFERENCES tasks (id)
+        ON DELETE CASCADE,
+}
+
+CREATE TABLE schedule_events {
+    id VARCHAR PRIMARY KEY NOT NULL,
+    owner_id VARCHAR NOT NULL,
+    date TIMESTAMP NOT NULL,
+
+    task_id VARCHAR NOT NULL,
+    scheduled_date TIMESTAMP, -- nullable, to remove scheduled date
+
+    FOREIGN KEY (owner_id) REFERENCES users (id)
+        ON DELETE CASCADE,
+    FOREIGN KEY (task_id) REFERENCES tasks (id)
+        ON DELETE CASCADE,
+}
 
 CREATE TABLE add_dependency_events (
     id VARCHAR PRIMARY KEY NOT NULL,
@@ -59,7 +138,7 @@ CREATE TABLE add_tag_events (
 
     task_id VARCHAR NOT NULL,
     tag_id VARCHAR NOT NULL,
-    priority INTEGER NOT NULL,
+    priority INTEGER NOT NULL, -- priority of this task within the tag
 
     UNIQUE (tag_id, priority),
 
