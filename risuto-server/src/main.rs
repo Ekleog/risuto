@@ -485,6 +485,24 @@ async fn fetch_unarchived(
         |e| EventType::AddTag { tag: TagId(e.tag_id), prio: e.priority },
     );
 
+    query_events!(
+        "
+            SELECT e.id, e.owner_id, e.date, e.add_tag_id, ate.task_id
+                FROM remove_tag_events e
+            LEFT JOIN add_tag_events ate
+                ON ate.id = e.add_tag_id
+            LEFT JOIN v_tasks_archived vta
+                ON vta.task_id = ate.task_id
+            LEFT JOIN v_tasks_users vtu
+                ON vtu.task_id = ate.task_id
+            WHERE vtu.user_id = $1
+            AND vta.archived = false
+        ",
+        "remove_tag_events",
+        task_id,
+        |e| EventType::RmTag(EventId(e.add_tag_id)),
+    );
+
     for t in tasks.values_mut() {
         for e in t.events.values() {
             match &e.contents {
