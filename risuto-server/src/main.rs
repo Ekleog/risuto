@@ -311,40 +311,57 @@ async fn fetch_unarchived(
         }
     );
 
-    let mut ste_query = sqlx::query!(
+    query_events!(
         "
-            SELECT ste.id, ste.owner_id, ste.date, ste.task_id, ste.title
-                FROM set_title_events ste
+            SELECT e.id, e.owner_id, e.date, e.task_id
+                FROM complete_task_events e
             LEFT JOIN v_tasks_archived vta
-                ON vta.task_id = ste.task_id
+                ON vta.task_id = e.task_id
             LEFT JOIN v_tasks_users vtu
-                ON vtu.task_id = ste.task_id
+                ON vtu.task_id = e.task_id
             WHERE vtu.user_id = $1
             AND vta.archived = false
         ",
-        user
-    )
-    .fetch(&db);
-    while let Some(ste) = ste_query
-        .try_next()
-        .await
-        .context("querying set_title_events table")?
-    {
-        if let Some(t) = tasks.get_mut(&TaskId(ste.task_id)) {
-            // if none, the db changed since fetching the tasks, just ignore
-            let date = ste.date.and_local_timezone(Utc).unwrap();
-            t.current_title = ste.title.clone();
+        "complete_task_events",
+        task_id,
+        |t, e, date| {
             t.events.insert(
                 date,
                 Event {
-                    id: EventId(ste.id),
-                    owner: UserId(ste.owner_id),
+                    id: EventId(e.id),
+                    owner: UserId(e.owner_id),
                     date,
-                    contents: EventType::SetTitle(ste.title),
+                    contents: EventType::Complete,
                 },
             );
         }
-    }
+    );
+
+    query_events!(
+        "
+            SELECT e.id, e.owner_id, e.date, e.task_id
+                FROM reopen_task_events e
+            LEFT JOIN v_tasks_archived vta
+                ON vta.task_id = e.task_id
+            LEFT JOIN v_tasks_users vtu
+                ON vtu.task_id = e.task_id
+            WHERE vtu.user_id = $1
+            AND vta.archived = false
+        ",
+        "reopen_task_events",
+        task_id,
+        |t, e, date| {
+            t.events.insert(
+                date,
+                Event {
+                    id: EventId(e.id),
+                    owner: UserId(e.owner_id),
+                    date,
+                    contents: EventType::Reopen,
+                },
+            );
+        }
+    );
 
     Ok(Ok(axum::Json(DbDump { users, tags, tasks })))
 }
