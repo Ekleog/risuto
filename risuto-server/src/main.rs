@@ -267,6 +267,50 @@ async fn fetch_unarchived(
         );
     }
 
+    macro_rules! query_events {
+        ($query:expr, $table:expr, $task_id:ident, |$t:ident, $e:ident, $d:ident| $b:block) => {{
+            let mut query = sqlx::query!($query, user).fetch(&db);
+            while let Some($e) =
+                query
+                    .try_next()
+                    .await
+                    .context(concat!("querying ", $table, " table"))?
+            {
+                if let Some($t) = tasks.get_mut(&TaskId($e.$task_id)) {
+                    let $d = $e.date.and_local_timezone(Utc).unwrap();
+                    $b
+                }
+            }
+        }};
+    }
+
+    query_events!(
+        "
+            SELECT e.id, e.owner_id, e.date, e.task_id, e.title
+                FROM set_title_events e
+            LEFT JOIN v_tasks_archived vta
+                ON vta.task_id = e.task_id
+            LEFT JOIN v_tasks_users vtu
+                ON vtu.task_id = e.task_id
+            WHERE vtu.user_id = $1
+            AND vta.archived = false
+        ",
+        "set_title_events",
+        task_id,
+        |t, e, date| {
+            t.current_title = e.title.clone();
+            t.events.insert(
+                date,
+                Event {
+                    id: EventId(e.id),
+                    owner: UserId(e.owner_id),
+                    date,
+                    contents: EventType::SetTitle(e.title),
+                },
+            );
+        }
+    );
+
     let mut ste_query = sqlx::query!(
         "
             SELECT ste.id, ste.owner_id, ste.date, ste.task_id, ste.title
