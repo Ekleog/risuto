@@ -7,7 +7,8 @@ use axum::{
     Extension, Router,
 };
 use chrono::Utc;
-use std::{net::SocketAddr, collections::HashMap};
+use futures::{StreamExt, TryStreamExt};
+use std::{collections::HashMap, net::SocketAddr};
 
 #[derive(Clone, Debug)]
 struct Auth(Option<CurrentUser>);
@@ -122,7 +123,7 @@ struct TagId(String);
 
 #[derive(serde::Serialize)]
 struct Tag {
-    owner: User,
+    owner: UserId,
     name: String,
     archived: bool,
 }
@@ -184,14 +185,74 @@ struct DbDump {
 }
 
 #[axum_macros::debug_handler]
-async fn fetch_unarchived(Extension(user): Extension<Auth>, Extension(db): Extension<sqlx::SqlitePool>) -> Result<axum::Json<DbDump>, AnyhowError> {
+async fn fetch_unarchived(
+    Extension(user): Extension<Auth>,
+    Extension(db): Extension<sqlx::SqlitePool>,
+) -> Result<Result<axum::Json<DbDump>, (StatusCode, &'static str)>, AnyhowError> {
+    if !user.0.is_some() {
+        return Ok(Err((StatusCode::FORBIDDEN, "Permission denied")));
+    }
+    let user = user.0.unwrap().id;
+
     let users = sqlx::query!("SELECT id, name FROM users")
-        .fetch_all(&db)
+        .fetch(&db)
+        .map_ok(|u| (UserId(u.id), User { name: u.name }))
+        .try_collect::<HashMap<UserId, User>>()
         .await
-        .context("querying users table");
-    let tags = sqlx::query!("SELECT id, owner_id, name, archived FROM tags")
-        .fetch_all(&db)
+        .context("querying users table")?;
+
+    let tags = sqlx::query!(
+        "
+            SELECT tags.id, tags.owner_id, tags.name, tags.archived
+            FROM tags
+            INNER JOIN perms
+            ON perms.tag_id = tags.id
+            WHERE perms.user_id = ?
+        ",
+        user
+    )
+    .fetch(&db)
+    .map_ok(|t| {
+        (
+            TagId(t.id),
+            Tag {
+                owner: UserId(t.owner_id),
+                name: t.name,
+                archived: t.archived,
+            },
+        )
+    })
+    .try_collect::<HashMap<TagId, Tag>>()
+    .await
+    .context("querying tags table")?;
+
+    let mut tasks = HashMap::new();
+    while let Some(t) = sqlx::query!(
+        "
+            SELECT t.id, t.owner_id, t.date, t.initial_title
+            FROM tasks t
+            WHERE owner_id = ?
+            OR EXISTS (
+                SELECT NULL
+                FROM add_tag_events ate
+                LEFT JOIN remove_tag_events rte
+                ON rte.add_tag_id = ate.id
+                LEFT JOIN perms p
+                ON p.tag_id = ate.tag_id
+                WHERE ate.task_id = t.id
+                AND rte.id IS NULL
+                AND p.user_id = ?
+            )
+        ",
+        user, user
+    )
+        .fetch(&db)
+        .try_next()
         .await
-        .context("querying tags table");
-    Ok(axum::Json(todo!()))
+        .context("querying tasks table")?
+    {
+        todo!();
+    }
+
+    Ok(Ok(axum::Json(DbDump { users, tags, tasks })))
 }
