@@ -401,6 +401,38 @@ async fn fetch_unarchived(
         |e| EventType::Schedule(e.scheduled_date.map(|d| d.and_local_timezone(Utc).unwrap())),
     );
 
+    query_events!(
+        "
+            SELECT e.id, e.owner_id, e.date, e.first_id, e.then_id
+                FROM add_dependency_events e
+            LEFT JOIN v_tasks_archived vta
+                ON vta.task_id = e.first_id
+            LEFT JOIN v_tasks_users vtu
+                ON vtu.task_id = e.first_id
+            WHERE vtu.user_id = $1
+            AND vta.archived = false
+        ",
+        "add_dependency_events",
+        first_id,
+        |e| EventType::AddDepAfterSelf(TaskId(e.then_id)),
+    );
+
+    query_events!(
+        "
+            SELECT e.id, e.owner_id, e.date, e.first_id, e.then_id
+                FROM add_dependency_events e
+            LEFT JOIN v_tasks_archived vta
+                ON vta.task_id = e.then_id
+            LEFT JOIN v_tasks_users vtu
+                ON vtu.task_id = e.then_id
+            WHERE vtu.user_id = $1
+            AND vta.archived = false
+        ",
+        "add_dependency_events",
+        then_id,
+        |e| EventType::AddDepBeforeSelf(TaskId(e.first_id)),
+    );
+
     for t in tasks.values_mut() {
         for e in t.events.values() {
             match &e.contents {
