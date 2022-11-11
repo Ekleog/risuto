@@ -230,32 +230,15 @@ async fn fetch_unarchived(
     while let Some(t) = sqlx::query!(
         "
             SELECT t.id, t.owner_id, t.date, t.initial_title
-            FROM tasks t
-            WHERE (
-                owner_id = ?
-                OR EXISTS (
-                    SELECT NULL
-                        FROM add_tag_events ate
-                    INNER JOIN perms p
-                        ON p.tag_id = ate.tag_id
-                    LEFT JOIN remove_tag_events rte
-                        ON rte.add_tag_id = ate.id
-                    WHERE ate.task_id = t.id
-                        AND rte.id IS NULL
-                        AND p.user_id = ?
-                )
-            )
-            AND (
-                (
-                    SELECT MAX(ate.date)
-                    FROM archive_task_events ate
-                    WHERE ate.task_id = t.id
-                ) < (
-                    SELECT MAX(ute.date)
-                    FROM unarchive_task_events ute
-                    WHERE ute.task_id = t.id
-                )
-            )
+                FROM tasks t
+            LEFT JOIN v_tasks_archived vta
+                ON vta.task_id = t.id
+            LEFT JOIN v_tasks_tags vtt
+                ON vtt.task_id = t.id
+            LEFT JOIN perms p
+                ON p.tag_id = vtt.tag_id
+            WHERE (owner_id = ? OR p.user_id = ?)
+            AND vta.archived = false
         ",
         user, user
     )
