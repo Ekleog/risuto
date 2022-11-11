@@ -9,7 +9,7 @@ use axum::{
 use chrono::Utc;
 use futures::TryStreamExt;
 use std::{
-    collections::{BTreeMap, HashMap},
+    collections::{BTreeMap, HashMap, HashSet},
     net::SocketAddr,
 };
 use uuid::Uuid;
@@ -115,7 +115,7 @@ impl axum::response::IntoResponse for AnyhowError {
 
 type Time = chrono::DateTime<Utc>;
 
-#[derive(Eq, Hash, PartialEq, serde::Serialize)]
+#[derive(Clone, Copy, Eq, Hash, PartialEq, serde::Serialize)]
 struct UserId(Uuid);
 
 #[derive(serde::Serialize)]
@@ -123,7 +123,7 @@ struct User {
     name: String,
 }
 
-#[derive(Eq, Hash, PartialEq, serde::Serialize)]
+#[derive(Clone, Copy, Eq, Hash, PartialEq, serde::Serialize)]
 struct TagId(Uuid);
 
 #[derive(serde::Serialize)]
@@ -133,7 +133,7 @@ struct Tag {
     archived: bool,
 }
 
-#[derive(Eq, Hash, PartialEq, serde::Serialize)]
+#[derive(Clone, Copy, Eq, Hash, PartialEq, serde::Serialize)]
 struct TaskId(Uuid);
 
 #[derive(serde::Serialize)]
@@ -144,9 +144,13 @@ struct Task {
     initial_title: String,
     current_title: String,
 
+    is_done: bool,
+    is_archived: bool,
     scheduled_for: Option<Time>,
+    current_tags: HashSet<(TagId, usize)>,
 
-    current_tags: Vec<(TagId, usize)>,
+    deps_before_self: HashSet<TaskId>,
+    deps_after_self: HashSet<TaskId>,
 
     /// List of comments in chronological order, with for each comment each edit in chronological order
     current_comments: BTreeMap<Time, BTreeMap<Time, String>>,
@@ -154,7 +158,7 @@ struct Task {
     events: BTreeMap<Time, Event>,
 }
 
-#[derive(serde::Serialize)]
+#[derive(Clone, Copy, Eq, PartialEq, serde::Serialize)]
 struct EventId(Uuid);
 
 #[derive(serde::Serialize)]
@@ -173,11 +177,11 @@ enum EventType {
     Reopen,
     Archive,
     Unarchive,
-    Schedule(Time),
+    Schedule(Option<Time>),
     AddDepBeforeSelf(TaskId),
     AddDepAfterSelf(TaskId),
     RmDep(EventId),
-    AddTag(TagId, usize),
+    AddTag { tag: TagId, prio: usize },
     RmTag(EventId),
     AddComment(String),
     EditComment(EventId, String),
@@ -257,11 +261,20 @@ async fn fetch_unarchived(
             Task {
                 owner: UserId(t.owner_id),
                 date: t.date.and_local_timezone(Utc).unwrap(),
-                initial_title: t.initial_title.clone(),
-                current_title: t.initial_title,
+
+                initial_title: t.initial_title,
+                current_title: String::new(),
+
+                is_done: false,
+                is_archived: false,
                 scheduled_for: None,
-                current_tags: vec![],
+                current_tags: HashSet::new(),
+
+                deps_before_self: HashSet::new(),
+                deps_after_self: HashSet::new(),
+
                 current_comments: BTreeMap::new(),
+
                 events: BTreeMap::new(),
             },
         );
@@ -298,7 +311,6 @@ async fn fetch_unarchived(
         "set_title_events",
         task_id,
         |t, e, date| {
-            t.current_title = e.title.clone();
             t.events.insert(
                 date,
                 Event {
@@ -362,6 +374,72 @@ async fn fetch_unarchived(
             );
         }
     );
+
+    for t in tasks.values_mut() {
+        for e in t.events.values() {
+            match &e.contents {
+                EventType::SetTitle(title) => t.current_title = title.clone(),
+                EventType::Complete => t.is_done = true,
+                EventType::Reopen => t.is_done = false,
+                EventType::Archive => t.is_archived = true,
+                EventType::Unarchive => t.is_archived = false,
+                EventType::Schedule(time) => t.scheduled_for = *time,
+                EventType::AddDepBeforeSelf(task) => {
+                    t.deps_before_self.insert(*task);
+                }
+                EventType::AddDepAfterSelf(task) => {
+                    t.deps_after_self.insert(*task);
+                }
+                EventType::RmDep(evt) => {
+                    if let Some(evt) = t.events.values().find(|e| &e.id == evt) {
+                        // ignore if no matching event
+                        match evt.contents {
+                            EventType::AddDepBeforeSelf(task) => {
+                                t.deps_before_self.remove(&task);
+                            }
+                            EventType::AddDepAfterSelf(task) => {
+                                t.deps_after_self.remove(&task);
+                            }
+                            _ => panic!("RmDep refering to wrong event"),
+                        }
+                    }
+                }
+                EventType::AddTag { tag, prio } => {
+                    t.current_tags.insert((*tag, *prio));
+                }
+                EventType::RmTag(evt) => {
+                    if let Some(evt) = t.events.values().find(|e| &e.id == evt) {
+                        // ignore if no matching event
+                        match evt.contents {
+                            EventType::AddTag { tag, prio } => {
+                                t.current_tags.remove(&(tag, prio));
+                            }
+                            _ => panic!("RmTag refering to wrong event"),
+                        }
+                    }
+                }
+                EventType::AddComment(txt) => {
+                    let mut edits = BTreeMap::new();
+                    edits.insert(e.date, txt.clone());
+                    t.current_comments.insert(e.date, edits);
+                }
+                EventType::EditComment(evt, txt) => {
+                    if let Some(evt) = t.events.values().find(|e| &e.id == evt) {
+                        // ignore if no matching event
+                        match evt.contents {
+                            EventType::AddComment(_) => {
+                                t.current_comments
+                                    .get_mut(&evt.date)
+                                    .unwrap()
+                                    .insert(e.date, txt.clone());
+                            }
+                            _ => panic!("RmTag refering to wrong event"),
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     Ok(Ok(axum::Json(DbDump { users, tags, tasks })))
 }
