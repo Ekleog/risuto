@@ -147,7 +147,7 @@ struct Task {
     is_done: bool,
     is_archived: bool,
     scheduled_for: Option<Time>,
-    current_tags: HashSet<(TagId, usize)>,
+    current_tags: HashSet<(TagId, i64)>,
 
     deps_before_self: HashSet<TaskId>,
     deps_after_self: HashSet<TaskId>,
@@ -181,7 +181,7 @@ enum EventType {
     AddDepBeforeSelf(TaskId),
     AddDepAfterSelf(TaskId),
     RmDep(EventId),
-    AddTag { tag: TagId, prio: usize },
+    AddTag { tag: TagId, prio: i64 },
     RmTag(EventId),
     AddComment(String),
     EditComment(EventId, String),
@@ -467,6 +467,22 @@ async fn fetch_unarchived(
         "remove_dependency_events",
         then_id,
         |e| EventType::RmDep(EventId(e.dep_id)),
+    );
+
+    query_events!(
+        "
+            SELECT e.id, e.owner_id, e.date, e.task_id, e.tag_id, e.priority
+                FROM add_tag_events e
+            LEFT JOIN v_tasks_archived vta
+                ON vta.task_id = e.task_id
+            LEFT JOIN v_tasks_users vtu
+                ON vtu.task_id = e.task_id
+            WHERE vtu.user_id = $1
+            AND vta.archived = false
+        ",
+        "add_tag_events",
+        task_id,
+        |e| EventType::AddTag { tag: TagId(e.tag_id), prio: e.priority },
     );
 
     for t in tasks.values_mut() {

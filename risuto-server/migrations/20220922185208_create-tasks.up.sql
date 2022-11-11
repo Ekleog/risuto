@@ -136,7 +136,7 @@ CREATE TABLE add_tag_events (
 
     task_id UUID NOT NULL,
     tag_id UUID NOT NULL,
-    priority INTEGER NOT NULL, -- priority of this task within the tag
+    priority BIGINT NOT NULL, -- priority of this task within the tag
 
     FOREIGN KEY (owner_id) REFERENCES users (id)
         ON DELETE CASCADE,
