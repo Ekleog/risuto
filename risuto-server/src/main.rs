@@ -375,6 +375,58 @@ async fn fetch_unarchived(
         }
     );
 
+    query_events!(
+        "
+            SELECT e.id, e.owner_id, e.date, e.task_id
+                FROM archive_task_events e
+            LEFT JOIN v_tasks_archived vta
+                ON vta.task_id = e.task_id
+            LEFT JOIN v_tasks_users vtu
+                ON vtu.task_id = e.task_id
+            WHERE vtu.user_id = $1
+            AND vta.archived = false
+        ",
+        "archive_task_events",
+        task_id,
+        |t, e, date| {
+            t.events.insert(
+                date,
+                Event {
+                    id: EventId(e.id),
+                    owner: UserId(e.owner_id),
+                    date,
+                    contents: EventType::Archive,
+                },
+            );
+        }
+    );
+
+    query_events!(
+        "
+            SELECT e.id, e.owner_id, e.date, e.task_id
+                FROM unarchive_task_events e
+            LEFT JOIN v_tasks_archived vta
+                ON vta.task_id = e.task_id
+            LEFT JOIN v_tasks_users vtu
+                ON vtu.task_id = e.task_id
+            WHERE vtu.user_id = $1
+            AND vta.archived = false
+        ",
+        "unarchive_task_events",
+        task_id,
+        |t, e, date| {
+            t.events.insert(
+                date,
+                Event {
+                    id: EventId(e.id),
+                    owner: UserId(e.owner_id),
+                    date,
+                    contents: EventType::Unarchive,
+                },
+            );
+        }
+    );
+
     for t in tasks.values_mut() {
         for e in t.events.values() {
             match &e.contents {
