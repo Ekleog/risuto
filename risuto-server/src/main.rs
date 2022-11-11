@@ -27,7 +27,7 @@ async fn auth<B: std::fmt::Debug>(
 
         let db = req
             .extensions()
-            .get::<sqlx::SqlitePool>()
+            .get::<sqlx::PgPool>()
             .expect("No sqlite pool extension");
         if let Some(current_user) = authorize_current_user(db, auth).await {
             req.extensions_mut().insert(Auth(Some(current_user)));
@@ -41,7 +41,7 @@ async fn auth<B: std::fmt::Debug>(
     }
 }
 
-async fn authorize_current_user(db: &sqlx::SqlitePool, auth: &str) -> Option<CurrentUser> {
+async fn authorize_current_user(db: &sqlx::PgPool, auth: &str) -> Option<CurrentUser> {
     let split = auth.split(' ').collect::<Vec<_>>();
     if split.len() != 2 || split[0] != "Basic" {
         return None;
@@ -70,11 +70,12 @@ async fn authorize_current_user(db: &sqlx::SqlitePool, auth: &str) -> Option<Cur
 async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt::init();
 
-    let db_file = std::env::var("DATABASE_URL").context("DATABASE_URL must be set")?;
-    let db = sqlx::sqlite::SqlitePoolOptions::new()
-        .connect(&db_file)
+    let db_url = std::env::var("DATABASE_URL").context("DATABASE_URL must be set")?;
+    let db = sqlx::postgres::PgPoolOptions::new()
+        .max_connections(8)
+        .connect(&db_url)
         .await
-        .with_context(|| format!("Error opening database {:?}", db_file))?;
+        .with_context(|| format!("Error opening database {:?}", db_url))?;
 
     let app = Router::new()
         .route("/fetch-unarchived", get(fetch_unarchived))
@@ -187,7 +188,7 @@ struct DbDump {
 #[axum_macros::debug_handler]
 async fn fetch_unarchived(
     Extension(user): Extension<Auth>,
-    Extension(db): Extension<sqlx::SqlitePool>,
+    Extension(db): Extension<sqlx::PgPool>,
 ) -> Result<Result<axum::Json<DbDump>, (StatusCode, &'static str)>, AnyhowError> {
     if !user.0.is_some() {
         return Ok(Err((StatusCode::FORBIDDEN, "Permission denied")));

@@ -1,1 +1,1 @@
-DELETE FROM users WHERE name = "admin"
+DELETE FROM users WHERE name = 'admin';

@@ -1,1 +1,1 @@
-DROP TABLE perms
+DROP TABLE perms;

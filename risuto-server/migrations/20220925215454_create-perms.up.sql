@@ -1,6 +1,6 @@
 CREATE TABLE perms (
-    tag_id VARCHAR NOT NULL,
-    user_id VARCHAR NOT NULL,
+    tag_id UUID NOT NULL,
+    user_id UUID NOT NULL,
 
     can_read BOOLEAN NOT NULL, -- read tasks
     can_tag BOOLEAN NOT NULL, -- add/remove tasks that user_id owns to tag

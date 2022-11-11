@@ -3,11 +3,11 @@ SELECT
     t.id as task_id,
     (
         (
-            SELECT COALESCE(MAX(ate.date), 0)
+            SELECT COALESCE(MAX(ate.date), '0001-01-01')
             FROM archive_task_events ate
             WHERE ate.task_id = t.id
         ) > (
-            SELECT COALESCE(MAX(ute.date), 0)
+            SELECT COALESCE(MAX(ute.date), '0001-01-01')
             FROM unarchive_task_events ute
             WHERE ute.task_id = t.id
         )
