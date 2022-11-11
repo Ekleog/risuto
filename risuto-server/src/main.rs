@@ -235,11 +235,9 @@ async fn fetch_unarchived(
                 FROM tasks t
             LEFT JOIN v_tasks_archived vta
                 ON vta.task_id = t.id
-            LEFT JOIN v_tasks_tags vtt
-                ON vtt.task_id = t.id
-            LEFT JOIN perms p
-                ON p.tag_id = vtt.tag_id
-            WHERE (owner_id = $1 OR p.user_id = $1)
+            LEFT JOIN v_tasks_users vtu
+                ON vtu.task_id = t.id
+            WHERE vtu.user_id = $1
             AND vta.archived = false
         ",
         user

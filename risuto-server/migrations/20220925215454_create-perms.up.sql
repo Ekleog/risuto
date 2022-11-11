@@ -7,6 +7,13 @@ CREATE TABLE perms (
     can_comment BOOLEAN NOT NULL, -- add comments to task
     can_close BOOLEAN NOT NULL, -- close a task as done
 
+    CONSTRAINT at_least_one_perm CHECK (
+        can_read != false OR
+        can_tag != false OR
+        can_comment != false OR
+        can_close != false
+    ),
+
     PRIMARY KEY (tag_id, user_id),
     FOREIGN KEY (tag_id) REFERENCES tags (id)
         ON DELETE CASCADE,

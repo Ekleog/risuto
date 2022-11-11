@@ -28,3 +28,24 @@ WHERE NOT EXISTS (
     FROM remove_tag_events rte
     WHERE rte.add_tag_id = ate.id
 );
+
+CREATE VIEW v_tasks_users AS
+(
+    SELECT
+        id as task_id,
+        owner_id as user_id
+    FROM
+        tasks
+)
+UNION
+(
+    SELECT
+        t.id as task_id,
+        p.user_id as user_id
+    FROM
+        tasks t
+    INNER JOIN v_tasks_tags vtt
+        ON vtt.task_id = t.id
+    INNER JOIN perms p
+        ON p.tag_id = vtt.tag_id
+);
