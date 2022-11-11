@@ -7,9 +7,9 @@ use axum::{
     Extension, Router,
 };
 use chrono::Utc;
-use futures::{StreamExt, TryStreamExt};
-use uuid::Uuid;
+use futures::TryStreamExt;
 use std::{collections::HashMap, net::SocketAddr};
+use uuid::Uuid;
 
 #[derive(Clone, Debug)]
 struct Auth(Option<CurrentUser>);
@@ -249,7 +249,19 @@ async fn fetch_unarchived(
     .await
     .context("querying tasks table")?
     {
-        todo!();
+        tasks.insert(
+            TaskId(t.id),
+            Task {
+                owner: UserId(t.owner_id),
+                date: t.date.and_local_timezone(Utc).unwrap(),
+                initial_title: t.initial_title,
+                current_title: String::new(),
+                scheduled_for: None,
+                current_tags: vec![],
+                current_comments: vec![],
+                events: vec![],
+            },
+        );
     }
 
     Ok(Ok(axum::Json(DbDump { users, tags, tasks })))
