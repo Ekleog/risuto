@@ -519,6 +519,24 @@ async fn fetch_unarchived(
         |e| EventType::AddComment(e.text),
     );
 
+    query_events!(
+        "
+            SELECT e.id, e.owner_id, e.date, e.comment_id, e.text, ace.task_id
+                FROM edit_comment_events e
+            LEFT JOIN add_comment_events ace
+                ON ace.id = e.comment_id
+            LEFT JOIN v_tasks_archived vta
+                ON vta.task_id = ace.task_id
+            LEFT JOIN v_tasks_users vtu
+                ON vtu.task_id = ace.task_id
+            WHERE vtu.user_id = $1
+            AND vta.archived = false
+        ",
+        "edit_comment_events",
+        task_id,
+        |e| EventType::EditComment(EventId(e.comment_id), e.text),
+    );
+
     for t in tasks.values_mut() {
         for e in t.events.values() {
             match &e.contents {

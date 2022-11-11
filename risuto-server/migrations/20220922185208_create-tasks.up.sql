@@ -178,7 +178,6 @@ CREATE TABLE edit_comment_events (
     owner_id UUID NOT NULL,
     date TIMESTAMP NOT NULL,
 
-    task_id UUID NOT NULL,
     comment_id UUID NOT NULL,
     text TEXT NOT NULL,
 
