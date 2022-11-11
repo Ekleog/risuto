@@ -385,6 +385,22 @@ async fn fetch_unarchived(
         |e| EventType::Unarchive,
     );
 
+    query_events!(
+        "
+            SELECT e.id, e.owner_id, e.date, e.task_id, e.scheduled_date
+                FROM schedule_events e
+            LEFT JOIN v_tasks_archived vta
+                ON vta.task_id = e.task_id
+            LEFT JOIN v_tasks_users vtu
+                ON vtu.task_id = e.task_id
+            WHERE vtu.user_id = $1
+            AND vta.archived = false
+        ",
+        "schedule_events",
+        task_id,
+        |e| EventType::Schedule(e.scheduled_date.map(|d| d.and_local_timezone(Utc).unwrap())),
+    );
+
     for t in tasks.values_mut() {
         for e in t.events.values() {
             match &e.contents {
