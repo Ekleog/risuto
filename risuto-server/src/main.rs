@@ -8,6 +8,7 @@ use axum::{
 };
 use chrono::Utc;
 use futures::{StreamExt, TryStreamExt};
+use uuid::Uuid;
 use std::{collections::HashMap, net::SocketAddr};
 
 #[derive(Clone, Debug)]
@@ -15,7 +16,7 @@ struct Auth(Option<CurrentUser>);
 
 #[derive(Clone, Debug)]
 struct CurrentUser {
-    id: String,
+    id: Uuid,
 }
 
 async fn auth<B: std::fmt::Debug>(
@@ -56,7 +57,7 @@ async fn authorize_current_user(db: &sqlx::PgPool, auth: &str) -> Option<Current
 
     let user = sqlx::query_as!(
         CurrentUser,
-        "SELECT id FROM users WHERE name = ? AND password = ?",
+        "SELECT id FROM users WHERE name = $1 AND password = $2",
         split[0],
         split[1]
     )
@@ -112,7 +113,7 @@ impl axum::response::IntoResponse for AnyhowError {
 type Time = chrono::DateTime<Utc>;
 
 #[derive(Eq, Hash, PartialEq, serde::Serialize)]
-struct UserId(String);
+struct UserId(Uuid);
 
 #[derive(serde::Serialize)]
 struct User {
@@ -120,7 +121,7 @@ struct User {
 }
 
 #[derive(Eq, Hash, PartialEq, serde::Serialize)]
-struct TagId(String);
+struct TagId(Uuid);
 
 #[derive(serde::Serialize)]
 struct Tag {
@@ -130,7 +131,7 @@ struct Tag {
 }
 
 #[derive(Eq, Hash, PartialEq, serde::Serialize)]
-struct TaskId(String);
+struct TaskId(Uuid);
 
 #[derive(serde::Serialize)]
 struct Task {
@@ -151,7 +152,7 @@ struct Task {
 }
 
 #[derive(serde::Serialize)]
-struct EventId(String);
+struct EventId(Uuid);
 
 #[derive(serde::Serialize)]
 struct Event {
@@ -208,7 +209,7 @@ async fn fetch_unarchived(
             FROM tags
             INNER JOIN perms
             ON perms.tag_id = tags.id
-            WHERE perms.user_id = ?
+            WHERE perms.user_id = $1
         ",
         user
     )
@@ -238,15 +239,15 @@ async fn fetch_unarchived(
                 ON vtt.task_id = t.id
             LEFT JOIN perms p
                 ON p.tag_id = vtt.tag_id
-            WHERE (owner_id = ? OR p.user_id = ?)
+            WHERE (owner_id = $1 OR p.user_id = $1)
             AND vta.archived = false
         ",
-        user, user
+        user
     )
-        .fetch(&db)
-        .try_next()
-        .await
-        .context("querying tasks table")?
+    .fetch(&db)
+    .try_next()
+    .await
+    .context("querying tasks table")?
     {
         todo!();
     }
