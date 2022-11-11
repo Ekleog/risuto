@@ -281,7 +281,7 @@ async fn fetch_unarchived(
     }
 
     macro_rules! query_events {
-        ($query:expr, $table:expr, $task_id:ident, |$t:ident, $e:ident, $d:ident| $b:block) => {{
+        ($query:expr, $table:expr, $task_id:ident, |$e:ident| $c:expr,) => {{
             let mut query = sqlx::query!($query, user).fetch(&db);
             while let Some($e) =
                 query
@@ -289,9 +289,17 @@ async fn fetch_unarchived(
                     .await
                     .context(concat!("querying ", $table, " table"))?
             {
-                if let Some($t) = tasks.get_mut(&TaskId($e.$task_id)) {
-                    let $d = $e.date.and_local_timezone(Utc).unwrap();
-                    $b
+                if let Some(t) = tasks.get_mut(&TaskId($e.$task_id)) {
+                    let date = $e.date.and_local_timezone(Utc).unwrap();
+                    t.events.insert(
+                        date,
+                        Event {
+                            id: EventId($e.id),
+                            owner: UserId($e.owner_id),
+                            date,
+                            contents: $c,
+                        },
+                    );
                 }
             }
         }};
@@ -310,17 +318,7 @@ async fn fetch_unarchived(
         ",
         "set_title_events",
         task_id,
-        |t, e, date| {
-            t.events.insert(
-                date,
-                Event {
-                    id: EventId(e.id),
-                    owner: UserId(e.owner_id),
-                    date,
-                    contents: EventType::SetTitle(e.title),
-                },
-            );
-        }
+        |e| EventType::SetTitle(e.title),
     );
 
     query_events!(
@@ -336,17 +334,7 @@ async fn fetch_unarchived(
         ",
         "complete_task_events",
         task_id,
-        |t, e, date| {
-            t.events.insert(
-                date,
-                Event {
-                    id: EventId(e.id),
-                    owner: UserId(e.owner_id),
-                    date,
-                    contents: EventType::Complete,
-                },
-            );
-        }
+        |e| EventType::Complete,
     );
 
     query_events!(
@@ -362,17 +350,7 @@ async fn fetch_unarchived(
         ",
         "reopen_task_events",
         task_id,
-        |t, e, date| {
-            t.events.insert(
-                date,
-                Event {
-                    id: EventId(e.id),
-                    owner: UserId(e.owner_id),
-                    date,
-                    contents: EventType::Reopen,
-                },
-            );
-        }
+        |e| EventType::Reopen,
     );
 
     query_events!(
@@ -388,17 +366,7 @@ async fn fetch_unarchived(
         ",
         "archive_task_events",
         task_id,
-        |t, e, date| {
-            t.events.insert(
-                date,
-                Event {
-                    id: EventId(e.id),
-                    owner: UserId(e.owner_id),
-                    date,
-                    contents: EventType::Archive,
-                },
-            );
-        }
+        |e| EventType::Archive,
     );
 
     query_events!(
@@ -414,17 +382,7 @@ async fn fetch_unarchived(
         ",
         "unarchive_task_events",
         task_id,
-        |t, e, date| {
-            t.events.insert(
-                date,
-                Event {
-                    id: EventId(e.id),
-                    owner: UserId(e.owner_id),
-                    date,
-                    contents: EventType::Unarchive,
-                },
-            );
-        }
+        |e| EventType::Unarchive,
     );
 
     for t in tasks.values_mut() {
