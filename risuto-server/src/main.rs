@@ -6,7 +6,8 @@ use axum::{
     routing::get,
     Extension, Router,
 };
-use std::net::SocketAddr;
+use chrono::Utc;
+use std::{net::SocketAddr, collections::HashMap};
 
 #[derive(Clone, Debug)]
 struct Auth(Option<CurrentUser>);
@@ -64,7 +65,7 @@ async fn main() -> anyhow::Result<()> {
         .with_context(|| format!("Error opening database {:?}", db_file))?;
 
     let app = Router::new()
-        .route("/", get(root))
+        .route("/fetch-unarchived", get(fetch_unarchived))
         .route_layer(axum::middleware::from_fn(auth))
         .layer(Extension(db));
 
@@ -76,7 +77,106 @@ async fn main() -> anyhow::Result<()> {
         .context("serving axum webserver")
 }
 
-// basic handler that responds with a static string, but only to auth'd users
-async fn root(Extension(user): Extension<Auth>) -> String {
-    format!("Hello user {:?}", user)
+struct AnyhowError(());
+
+impl From<anyhow::Error> for AnyhowError {
+    fn from(e: anyhow::Error) -> AnyhowError {
+        tracing::error!(err=%e, "got an error");
+        AnyhowError(())
+    }
+}
+
+impl axum::response::IntoResponse for AnyhowError {
+    fn into_response(self) -> axum::response::Response {
+        (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error, see logs for details").into_response()
+    }
+}
+
+type Time = chrono::DateTime<Utc>;
+
+#[derive(Eq, Hash, PartialEq, serde::Serialize)]
+struct UserId(String);
+
+#[derive(serde::Serialize)]
+struct User {
+    name: String,
+}
+
+#[derive(Eq, Hash, PartialEq, serde::Serialize)]
+struct TagId(String);
+
+#[derive(serde::Serialize)]
+struct Tag {
+    owner: User,
+    name: String,
+    archived: bool,
+}
+
+#[derive(Eq, Hash, PartialEq, serde::Serialize)]
+struct TaskId(String);
+
+#[derive(serde::Serialize)]
+struct Task {
+    owner: UserId,
+    date: Time,
+
+    initial_title: String,
+    current_title: String,
+
+    scheduled_for: Option<Time>,
+
+    current_tags: Vec<(TagId, usize)>,
+
+    /// List of comments in chronological order, with for each comment each edit in chronological order
+    current_comments: Vec<Vec<String>>,
+
+    events: Vec<Event>,
+}
+
+#[derive(serde::Serialize)]
+struct EventId(String);
+
+#[derive(serde::Serialize)]
+struct Event {
+    owner: User,
+    date: Time,
+
+    contents: EventType,
+}
+
+#[derive(serde::Serialize)]
+enum EventType {
+    SetTitle(String),
+    Complete,
+    Reopen,
+    Archive,
+    Unarchive,
+    Schedule(Time),
+    AddDepBeforeSelf(TaskId),
+    AddDepAfterSelf(TaskId),
+    RmDep(EventId),
+    AddTag(TagId, usize),
+    RmTag(EventId),
+    AddComment(String),
+    EditComment(EventId, String),
+}
+
+#[derive(serde::Serialize)]
+struct DbDump {
+    users: HashMap<UserId, User>,
+    tags: HashMap<TagId, Tag>,
+    tasks: HashMap<TaskId, Task>,
+}
+
+#[axum_macros::debug_handler]
+async fn fetch_unarchived(Extension(user): Extension<Auth>, Extension(db): Extension<sqlx::SqlitePool>) -> Result<axum::Json<DbDump>, AnyhowError> {
+    let users = sqlx::query!("SELECT id, name FROM users")
+        .fetch_all(&db)
+        .await
+        .context("querying users table");
+    let tags = sqlx::query!("SELECT id, owner_id, name, archived FROM tags")
+        .fetch_all(&db)
+        .await
+        .context("querying tags table");
+    Ok(axum::Json(todo!()))
 }
