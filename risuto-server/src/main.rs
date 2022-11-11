@@ -433,6 +433,42 @@ async fn fetch_unarchived(
         |e| EventType::AddDepBeforeSelf(TaskId(e.first_id)),
     );
 
+    query_events!(
+        "
+            SELECT e.id, e.owner_id, e.date, e.dep_id, ade.first_id
+                FROM remove_dependency_events e
+            LEFT JOIN add_dependency_events ade
+                ON ade.id = e.dep_id
+            LEFT JOIN v_tasks_archived vta
+                ON vta.task_id = ade.first_id
+            LEFT JOIN v_tasks_users vtu
+                ON vtu.task_id = ade.first_id
+            WHERE vtu.user_id = $1
+            AND vta.archived = false
+        ",
+        "remove_dependency_events",
+        first_id,
+        |e| EventType::RmDep(EventId(e.dep_id)),
+    );
+
+    query_events!(
+        "
+            SELECT e.id, e.owner_id, e.date, e.dep_id, ade.then_id
+                FROM remove_dependency_events e
+            LEFT JOIN add_dependency_events ade
+                ON ade.id = e.dep_id
+            LEFT JOIN v_tasks_archived vta
+                ON vta.task_id = ade.then_id
+            LEFT JOIN v_tasks_users vtu
+                ON vtu.task_id = ade.then_id
+            WHERE vtu.user_id = $1
+            AND vta.archived = false
+        ",
+        "remove_dependency_events",
+        then_id,
+        |e| EventType::RmDep(EventId(e.dep_id)),
+    );
+
     for t in tasks.values_mut() {
         for e in t.events.values() {
             match &e.contents {
