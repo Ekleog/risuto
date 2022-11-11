@@ -17,11 +17,17 @@ struct CurrentUser {
     id: String,
 }
 
-async fn auth<B: std::fmt::Debug>(mut req: Request<B>, next: Next<B>) -> Result<Response, StatusCode> {
+async fn auth<B: std::fmt::Debug>(
+    mut req: Request<B>,
+    next: Next<B>,
+) -> Result<Response, StatusCode> {
     if let Some(auth) = req.headers().get(http::header::AUTHORIZATION) {
         let auth = auth.to_str().map_err(|_| StatusCode::UNAUTHORIZED)?;
 
-        let db = req.extensions().get::<sqlx::SqlitePool>().expect("No sqlite pool extension");
+        let db = req
+            .extensions()
+            .get::<sqlx::SqlitePool>()
+            .expect("No sqlite pool extension");
         if let Some(current_user) = authorize_current_user(db, auth).await {
             req.extensions_mut().insert(Auth(Some(current_user)));
             Ok(next.run(req).await)
@@ -47,10 +53,15 @@ async fn authorize_current_user(db: &sqlx::SqlitePool, auth: &str) -> Option<Cur
         return None;
     }
 
-    let user = sqlx::query_as!(CurrentUser, "SELECT id FROM users WHERE name = ? AND password = ?", split[0], split[1])
-        .fetch_one(db)
-        .await
-        .ok()?;
+    let user = sqlx::query_as!(
+        CurrentUser,
+        "SELECT id FROM users WHERE name = ? AND password = ?",
+        split[0],
+        split[1]
+    )
+    .fetch_one(db)
+    .await
+    .ok()?;
     Some(user)
 }
 
@@ -88,7 +99,11 @@ impl From<anyhow::Error> for AnyhowError {
 
 impl axum::response::IntoResponse for AnyhowError {
     fn into_response(self) -> axum::response::Response {
-        (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error, see logs for details").into_response()
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Internal server error, see logs for details",
+        )
+            .into_response()
     }
 }
 
