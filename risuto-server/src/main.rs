@@ -503,6 +503,22 @@ async fn fetch_unarchived(
         |e| EventType::RmTag(EventId(e.add_tag_id)),
     );
 
+    query_events!(
+        "
+            SELECT e.id, e.owner_id, e.date, e.task_id, e.text
+                FROM add_comment_events e
+            LEFT JOIN v_tasks_archived vta
+                ON vta.task_id = e.task_id
+            LEFT JOIN v_tasks_users vtu
+                ON vtu.task_id = e.task_id
+            WHERE vtu.user_id = $1
+            AND vta.archived = false
+        ",
+        "add_comment_events",
+        task_id,
+        |e| EventType::AddComment(e.text),
+    );
+
     for t in tasks.values_mut() {
         for e in t.events.values() {
             match &e.contents {
