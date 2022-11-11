@@ -8,7 +8,10 @@ use axum::{
 };
 use chrono::Utc;
 use futures::TryStreamExt;
-use std::{collections::HashMap, net::SocketAddr};
+use std::{
+    collections::{BTreeMap, HashMap},
+    net::SocketAddr,
+};
 use uuid::Uuid;
 
 #[derive(Clone, Debug)]
@@ -146,9 +149,9 @@ struct Task {
     current_tags: Vec<(TagId, usize)>,
 
     /// List of comments in chronological order, with for each comment each edit in chronological order
-    current_comments: Vec<Vec<String>>,
+    current_comments: BTreeMap<Time, BTreeMap<Time, String>>,
 
-    events: Vec<Event>,
+    events: BTreeMap<Time, Event>,
 }
 
 #[derive(serde::Serialize)]
@@ -156,7 +159,8 @@ struct EventId(Uuid);
 
 #[derive(serde::Serialize)]
 struct Event {
-    owner: User,
+    id: EventId,
+    owner: UserId,
     date: Time,
 
     contents: EventType,
@@ -229,7 +233,7 @@ async fn fetch_unarchived(
     .context("querying tags table")?;
 
     let mut tasks = HashMap::new();
-    while let Some(t) = sqlx::query!(
+    let mut tasks_query = sqlx::query!(
         "
             SELECT t.id, t.owner_id, t.date, t.initial_title
                 FROM tasks t
@@ -242,24 +246,60 @@ async fn fetch_unarchived(
         ",
         user
     )
-    .fetch(&db)
-    .try_next()
-    .await
-    .context("querying tasks table")?
+    .fetch(&db);
+    while let Some(t) = tasks_query
+        .try_next()
+        .await
+        .context("querying tasks table")?
     {
         tasks.insert(
             TaskId(t.id),
             Task {
                 owner: UserId(t.owner_id),
                 date: t.date.and_local_timezone(Utc).unwrap(),
-                initial_title: t.initial_title,
-                current_title: String::new(),
+                initial_title: t.initial_title.clone(),
+                current_title: t.initial_title,
                 scheduled_for: None,
                 current_tags: vec![],
-                current_comments: vec![],
-                events: vec![],
+                current_comments: BTreeMap::new(),
+                events: BTreeMap::new(),
             },
         );
+    }
+
+    let mut ste_query = sqlx::query!(
+        "
+            SELECT ste.id, ste.owner_id, ste.date, ste.task_id, ste.title
+                FROM set_title_events ste
+            LEFT JOIN v_tasks_archived vta
+                ON vta.task_id = ste.task_id
+            LEFT JOIN v_tasks_users vtu
+                ON vtu.task_id = ste.task_id
+            WHERE vtu.user_id = $1
+            AND vta.archived = false
+        ",
+        user
+    )
+    .fetch(&db);
+    while let Some(ste) = ste_query
+        .try_next()
+        .await
+        .context("querying set_title_events table")?
+    {
+        if let Some(t) = tasks.get_mut(&TaskId(ste.task_id)) {
+            // if none, the db changed since fetching the tasks, just ignore
+            let date = ste.date.and_local_timezone(Utc).unwrap();
+            t.current_title = ste.title.clone();
+            t.events.insert(
+                date,
+                Event {
+                    id: EventId(ste.id),
+                    owner: UserId(ste.owner_id),
+                    date,
+                    contents: EventType::SetTitle(ste.title),
+                },
+            );
+        }
     }
 
     Ok(Ok(axum::Json(DbDump { users, tags, tasks })))
