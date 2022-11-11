@@ -13,7 +13,7 @@ struct Auth(Option<CurrentUser>);
 
 #[derive(Clone, Debug)]
 struct CurrentUser {
-    id: i64,
+    id: String,
 }
 
 async fn auth<B: std::fmt::Debug>(mut req: Request<B>, next: Next<B>) -> Result<Response, StatusCode> {
