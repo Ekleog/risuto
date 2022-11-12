@@ -147,7 +147,7 @@ struct Task {
     is_done: bool,
     is_archived: bool,
     scheduled_for: Option<Time>,
-    current_tags: HashSet<(TagId, i64)>,
+    current_tags: HashMap<TagId, i64>,
 
     deps_before_self: HashSet<TaskId>,
     deps_after_self: HashSet<TaskId>,
@@ -180,9 +180,10 @@ enum EventType {
     Schedule(Option<Time>),
     AddDepBeforeSelf(TaskId),
     AddDepAfterSelf(TaskId),
-    RmDep(EventId),
+    RmDepBeforeSelf(TaskId),
+    RmDepAfterSelf(TaskId),
     AddTag { tag: TagId, prio: i64 },
-    RmTag(EventId),
+    RmTag(TagId),
     AddComment(String),
     EditComment(EventId, String),
 }
@@ -268,7 +269,7 @@ async fn fetch_unarchived(
                 is_done: false,
                 is_archived: false,
                 scheduled_for: None,
-                current_tags: HashSet::new(),
+                current_tags: HashMap::new(),
 
                 deps_before_self: HashSet::new(),
                 deps_after_self: HashSet::new(),
@@ -435,38 +436,34 @@ async fn fetch_unarchived(
 
     query_events!(
         "
-            SELECT e.id, e.owner_id, e.date, e.dep_id, ade.first_id
+            SELECT e.id, e.owner_id, e.date, e.first_id, e.then_id
                 FROM remove_dependency_events e
-            LEFT JOIN add_dependency_events ade
-                ON ade.id = e.dep_id
             LEFT JOIN v_tasks_archived vta
-                ON vta.task_id = ade.first_id
+                ON vta.task_id = e.first_id
             LEFT JOIN v_tasks_users vtu
-                ON vtu.task_id = ade.first_id
+                ON vtu.task_id = e.first_id
             WHERE vtu.user_id = $1
             AND vta.archived = false
         ",
         "remove_dependency_events",
         first_id,
-        |e| EventType::RmDep(EventId(e.dep_id)),
+        |e| EventType::RmDepAfterSelf(TaskId(e.then_id)),
     );
 
     query_events!(
         "
-            SELECT e.id, e.owner_id, e.date, e.dep_id, ade.then_id
+            SELECT e.id, e.owner_id, e.date, e.first_id, e.then_id
                 FROM remove_dependency_events e
-            LEFT JOIN add_dependency_events ade
-                ON ade.id = e.dep_id
             LEFT JOIN v_tasks_archived vta
-                ON vta.task_id = ade.then_id
+                ON vta.task_id = e.then_id
             LEFT JOIN v_tasks_users vtu
-                ON vtu.task_id = ade.then_id
+                ON vtu.task_id = e.then_id
             WHERE vtu.user_id = $1
             AND vta.archived = false
         ",
         "remove_dependency_events",
         then_id,
-        |e| EventType::RmDep(EventId(e.dep_id)),
+        |e| EventType::RmDepBeforeSelf(TaskId(e.first_id)),
     );
 
     query_events!(
@@ -487,20 +484,18 @@ async fn fetch_unarchived(
 
     query_events!(
         "
-            SELECT e.id, e.owner_id, e.date, e.add_tag_id, ate.task_id
+            SELECT e.id, e.owner_id, e.date, e.task_id, e.tag_id
                 FROM remove_tag_events e
-            LEFT JOIN add_tag_events ate
-                ON ate.id = e.add_tag_id
             LEFT JOIN v_tasks_archived vta
-                ON vta.task_id = ate.task_id
+                ON vta.task_id = e.task_id
             LEFT JOIN v_tasks_users vtu
-                ON vtu.task_id = ate.task_id
+                ON vtu.task_id = e.task_id
             WHERE vtu.user_id = $1
             AND vta.archived = false
         ",
         "remove_tag_events",
         task_id,
-        |e| EventType::RmTag(EventId(e.add_tag_id)),
+        |e| EventType::RmTag(TagId(e.tag_id)),
     );
 
     query_events!(
@@ -552,33 +547,17 @@ async fn fetch_unarchived(
                 EventType::AddDepAfterSelf(task) => {
                     t.deps_after_self.insert(*task);
                 }
-                EventType::RmDep(evt) => {
-                    if let Some(evt) = t.events.values().find(|e| &e.id == evt) {
-                        // ignore if no matching event
-                        match evt.contents {
-                            EventType::AddDepBeforeSelf(task) => {
-                                t.deps_before_self.remove(&task);
-                            }
-                            EventType::AddDepAfterSelf(task) => {
-                                t.deps_after_self.remove(&task);
-                            }
-                            _ => panic!("RmDep refering to wrong event"),
-                        }
-                    }
+                EventType::RmDepBeforeSelf(task) => {
+                    t.deps_before_self.remove(task);
+                }
+                EventType::RmDepAfterSelf(task) => {
+                    t.deps_after_self.remove(task);
                 }
                 EventType::AddTag { tag, prio } => {
-                    t.current_tags.insert((*tag, *prio));
+                    t.current_tags.insert(*tag, *prio);
                 }
-                EventType::RmTag(evt) => {
-                    if let Some(evt) = t.events.values().find(|e| &e.id == evt) {
-                        // ignore if no matching event
-                        match evt.contents {
-                            EventType::AddTag { tag, prio } => {
-                                t.current_tags.remove(&(tag, prio));
-                            }
-                            _ => panic!("RmTag refering to wrong event"),
-                        }
-                    }
+                EventType::RmTag(tag) => {
+                    t.current_tags.remove(tag);
                 }
                 EventType::AddComment(txt) => {
                     let mut edits = BTreeMap::new();

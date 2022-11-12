@@ -26,7 +26,8 @@ INNER JOIN add_tag_events ate
 WHERE NOT EXISTS (
     SELECT NULL
     FROM remove_tag_events rte
-    WHERE rte.add_tag_id = ate.id
+    WHERE rte.tag_id = ate.tag_id
+    AND rte.date > ate.date
 );
 
 CREATE VIEW v_tasks_users AS

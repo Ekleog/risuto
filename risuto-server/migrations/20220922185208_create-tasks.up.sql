@@ -110,11 +110,14 @@ CREATE TABLE remove_dependency_events (
     owner_id UUID NOT NULL,
     date TIMESTAMP NOT NULL,
 
-    dep_id UUID NOT NULL,
+    first_id UUID NOT NULL,
+    then_id UUID NOT NULL,
 
     FOREIGN KEY (owner_id) REFERENCES users (id)
         ON DELETE CASCADE,
-    FOREIGN KEY (dep_id) REFERENCES add_dependency_events (id)
+    FOREIGN KEY (first_id) REFERENCES tasks (id)
+        ON DELETE CASCADE,
+    FOREIGN KEY (then_id) REFERENCES tasks (id)
         ON DELETE CASCADE
 );
 
@@ -151,11 +154,14 @@ CREATE TABLE remove_tag_events (
     owner_id UUID NOT NULL,
     date TIMESTAMP NOT NULL,
 
-    add_tag_id UUID NOT NULL,
+    task_id UUID NOT NULL,
+    tag_id UUID NOT NULL,
 
     FOREIGN KEY (owner_id) REFERENCES users (id)
         ON DELETE CASCADE,
-    FOREIGN KEY (add_tag_id) REFERENCES add_tag_events (id)
+    FOREIGN KEY (task_id) REFERENCES tasks (id)
+        ON DELETE CASCADE,
+    FOREIGN KEY (tag_id) REFERENCES tags (id)
         ON DELETE CASCADE
 );
 
@@ -182,8 +188,6 @@ CREATE TABLE edit_comment_events (
     text TEXT NOT NULL,
 
     FOREIGN KEY (owner_id) REFERENCES users (id)
-        ON DELETE CASCADE,
-    FOREIGN KEY (task_id) REFERENCES tasks (id)
         ON DELETE CASCADE,
     FOREIGN KEY (comment_id) REFERENCES add_comment_events (id)
         ON DELETE CASCADE
