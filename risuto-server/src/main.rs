@@ -8,6 +8,7 @@ use axum::{
 };
 use chrono::Utc;
 use futures::TryStreamExt;
+use sqlx::Row;
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
     net::SocketAddr,
@@ -238,10 +239,15 @@ async fn fetch_unarchived(
     .await
     .context("querying tags table")?;
 
-    let mut tasks = HashMap::new();
-    let mut tasks_query = sqlx::query!(
+    let mut conn = db.acquire().await.context("acquiring db connection")?;
+    sqlx::query("CREATE TEMPORARY TABLE tmp_tasks (id UUID NOT NULL)")
+        .execute(&mut conn)
+        .await
+        .context("creating temp table")?;
+    sqlx::query(
         "
-            SELECT t.id, t.owner_id, t.date, t.initial_title
+            INSERT INTO tmp_tasks
+            SELECT t.id
                 FROM tasks t
             LEFT JOIN v_tasks_archived vta
                 ON vta.task_id = t.id
@@ -250,21 +256,58 @@ async fn fetch_unarchived(
             WHERE vtu.user_id = $1
             AND vta.archived = false
         ",
-        user
     )
-    .fetch(&db);
+    .bind(user)
+    .execute(&mut conn)
+    .await
+    .context("filling temp table with interesting task ids")?;
+
+    let fetched_tasks = fetch_tasks_from_tmp_tasks_table(&mut conn).await;
+
+    sqlx::query("DROP TABLE tmp_tasks")
+        .execute(&mut conn)
+        .await
+        .context("dropping temp table")?;
+
+    let tasks = fetched_tasks?;
+
+    Ok(Ok(axum::Json(DbDump { users, tags, tasks })))
+}
+
+async fn fetch_tasks_from_tmp_tasks_table(
+    conn: &mut sqlx::PgConnection,
+) -> Result<HashMap<TaskId, Task>, AnyhowError> {
+    let mut tasks = HashMap::new();
+    let mut tasks_query = sqlx::query(
+        "
+            SELECT t.id, t.owner_id, t.date, t.initial_title
+                FROM tmp_tasks interesting_tasks
+            INNER JOIN tasks t
+                ON t.id = interesting_tasks.id
+        ",
+    )
+    .fetch(&mut *conn);
     while let Some(t) = tasks_query
         .try_next()
         .await
         .context("querying tasks table")?
     {
         tasks.insert(
-            TaskId(t.id),
+            TaskId(t.try_get("id").context("retrieving the id field")?),
             Task {
-                owner: UserId(t.owner_id),
-                date: t.date.and_local_timezone(Utc).unwrap(),
+                owner: UserId(
+                    t.try_get("owner_id")
+                        .context("retrieving the owner_id field")?,
+                ),
+                date: t
+                    .try_get::<chrono::NaiveDateTime, _>("date")
+                    .context("retrieving the date field")?
+                    .and_local_timezone(Utc)
+                    .unwrap(),
 
-                initial_title: t.initial_title,
+                initial_title: t
+                    .try_get("initial_title")
+                    .context("retrieving the initial_title field")?,
                 current_title: String::new(),
 
                 is_done: false,
@@ -281,23 +324,31 @@ async fn fetch_unarchived(
             },
         );
     }
+    std::mem::drop(tasks_query); // free conn borrow
 
     macro_rules! query_events {
-        ($query:expr, $table:expr, $task_id:ident, |$e:ident| $c:expr,) => {{
-            let mut query = sqlx::query!($query, user).fetch(&db);
+        (full: $query:expr, $table:expr, $task_id:expr, |$e:ident| $c:expr,) => {{
+            let mut query = sqlx::query($query).fetch(&mut *conn);
             while let Some($e) =
                 query
                     .try_next()
                     .await
                     .context(concat!("querying ", $table, " table"))?
             {
-                if let Some(t) = tasks.get_mut(&TaskId($e.$task_id)) {
-                    let date = $e.date.and_local_timezone(Utc).unwrap();
+                let task_id = $e.try_get($task_id).context("retrieving task_id field")?;
+                if let Some(t) = tasks.get_mut(&TaskId(task_id)) {
+                    let date: chrono::NaiveDateTime =
+                        $e.try_get("date").context("retrieving date field")?;
+                    let date = date.and_local_timezone(Utc).unwrap();
+                    let id = $e.try_get("id").context("retrieving id field")?;
+                    let owner = $e
+                        .try_get("owner_id")
+                        .context("retrieving owner_id field")?;
                     t.events.insert(
                         date,
                         Event {
-                            id: EventId($e.id),
-                            owner: UserId($e.owner_id),
+                            id: EventId(id),
+                            owner: UserId(owner),
                             date,
                             contents: $c,
                         },
@@ -305,232 +356,151 @@ async fn fetch_unarchived(
                 }
             }
         }};
+
+        (fields: $additional_fields:expr, $table:expr, $task_id:expr, |$e:ident| $c:expr,) => {
+            query_events!(
+                full: concat!(
+                    "SELECT e.id, e.owner_id, e.date, ",
+                    $additional_fields,
+                    " FROM tmp_tasks t
+                    INNER JOIN ",
+                    $table,
+                    " e ON t.id = e.",
+                    $task_id
+                ),
+                $table,
+                $task_id,
+                |$e| $c,
+            )
+        };
     }
 
     query_events!(
-        "
-            SELECT e.id, e.owner_id, e.date, e.task_id, e.title
-                FROM set_title_events e
-            LEFT JOIN v_tasks_archived vta
-                ON vta.task_id = e.task_id
-            LEFT JOIN v_tasks_users vtu
-                ON vtu.task_id = e.task_id
-            WHERE vtu.user_id = $1
-            AND vta.archived = false
-        ",
+        fields: "e.task_id, e.title",
         "set_title_events",
-        task_id,
-        |e| EventType::SetTitle(e.title),
+        "task_id",
+        |e| EventType::SetTitle(e.try_get("title").context("retrieving title field")?),
     );
 
     query_events!(
-        "
-            SELECT e.id, e.owner_id, e.date, e.task_id
-                FROM complete_task_events e
-            LEFT JOIN v_tasks_archived vta
-                ON vta.task_id = e.task_id
-            LEFT JOIN v_tasks_users vtu
-                ON vtu.task_id = e.task_id
-            WHERE vtu.user_id = $1
-            AND vta.archived = false
-        ",
+        fields: "e.task_id",
         "complete_task_events",
-        task_id,
+        "task_id",
         |e| EventType::Complete,
     );
 
     query_events!(
-        "
-            SELECT e.id, e.owner_id, e.date, e.task_id
-                FROM reopen_task_events e
-            LEFT JOIN v_tasks_archived vta
-                ON vta.task_id = e.task_id
-            LEFT JOIN v_tasks_users vtu
-                ON vtu.task_id = e.task_id
-            WHERE vtu.user_id = $1
-            AND vta.archived = false
-        ",
+        fields: "e.task_id",
         "reopen_task_events",
-        task_id,
+        "task_id",
         |e| EventType::Reopen,
     );
 
     query_events!(
-        "
-            SELECT e.id, e.owner_id, e.date, e.task_id
-                FROM archive_task_events e
-            LEFT JOIN v_tasks_archived vta
-                ON vta.task_id = e.task_id
-            LEFT JOIN v_tasks_users vtu
-                ON vtu.task_id = e.task_id
-            WHERE vtu.user_id = $1
-            AND vta.archived = false
-        ",
+        fields: "e.task_id",
         "archive_task_events",
-        task_id,
+        "task_id",
         |e| EventType::Archive,
     );
 
     query_events!(
-        "
-            SELECT e.id, e.owner_id, e.date, e.task_id
-                FROM unarchive_task_events e
-            LEFT JOIN v_tasks_archived vta
-                ON vta.task_id = e.task_id
-            LEFT JOIN v_tasks_users vtu
-                ON vtu.task_id = e.task_id
-            WHERE vtu.user_id = $1
-            AND vta.archived = false
-        ",
+        fields: "e.task_id",
         "unarchive_task_events",
-        task_id,
+        "task_id",
         |e| EventType::Unarchive,
     );
 
     query_events!(
-        "
-            SELECT e.id, e.owner_id, e.date, e.task_id, e.scheduled_date
-                FROM schedule_events e
-            LEFT JOIN v_tasks_archived vta
-                ON vta.task_id = e.task_id
-            LEFT JOIN v_tasks_users vtu
-                ON vtu.task_id = e.task_id
-            WHERE vtu.user_id = $1
-            AND vta.archived = false
-        ",
+        fields: "e.task_id, e.scheduled_date",
         "schedule_events",
-        task_id,
-        |e| EventType::Schedule(e.scheduled_date.map(|d| d.and_local_timezone(Utc).unwrap())),
+        "task_id",
+        |e| EventType::Schedule(
+            e.try_get::<Option<chrono::NaiveDateTime>, _>("scheduled_date")
+                .context("retrieving scheduled_date field")?
+                .map(|d| d.and_local_timezone(Utc).unwrap())
+        ),
     );
 
     query_events!(
-        "
-            SELECT e.id, e.owner_id, e.date, e.first_id, e.then_id
-                FROM add_dependency_events e
-            LEFT JOIN v_tasks_archived vta
-                ON vta.task_id = e.first_id
-            LEFT JOIN v_tasks_users vtu
-                ON vtu.task_id = e.first_id
-            WHERE vtu.user_id = $1
-            AND vta.archived = false
-        ",
+        fields: "e.first_id, e.then_id",
         "add_dependency_events",
-        first_id,
-        |e| EventType::AddDepAfterSelf(TaskId(e.then_id)),
+        "first_id",
+        |e| EventType::AddDepAfterSelf(TaskId(
+            e.try_get("then_id").context("retrieving then_id field")?
+        )),
     );
 
     query_events!(
-        "
-            SELECT e.id, e.owner_id, e.date, e.first_id, e.then_id
-                FROM add_dependency_events e
-            LEFT JOIN v_tasks_archived vta
-                ON vta.task_id = e.then_id
-            LEFT JOIN v_tasks_users vtu
-                ON vtu.task_id = e.then_id
-            WHERE vtu.user_id = $1
-            AND vta.archived = false
-        ",
+        fields: "e.first_id, e.then_id",
         "add_dependency_events",
-        then_id,
-        |e| EventType::AddDepBeforeSelf(TaskId(e.first_id)),
+        "then_id",
+        |e| EventType::AddDepBeforeSelf(TaskId(
+            e.try_get("first_id").context("retrieving first_id field")?
+        )),
     );
 
     query_events!(
-        "
-            SELECT e.id, e.owner_id, e.date, e.first_id, e.then_id
-                FROM remove_dependency_events e
-            LEFT JOIN v_tasks_archived vta
-                ON vta.task_id = e.first_id
-            LEFT JOIN v_tasks_users vtu
-                ON vtu.task_id = e.first_id
-            WHERE vtu.user_id = $1
-            AND vta.archived = false
-        ",
+        fields: "e.first_id, e.then_id",
         "remove_dependency_events",
-        first_id,
-        |e| EventType::RmDepAfterSelf(TaskId(e.then_id)),
+        "first_id",
+        |e| EventType::RmDepAfterSelf(TaskId(
+            e.try_get("then_id").context("retrieving then_id field")?
+        )),
     );
 
     query_events!(
-        "
-            SELECT e.id, e.owner_id, e.date, e.first_id, e.then_id
-                FROM remove_dependency_events e
-            LEFT JOIN v_tasks_archived vta
-                ON vta.task_id = e.then_id
-            LEFT JOIN v_tasks_users vtu
-                ON vtu.task_id = e.then_id
-            WHERE vtu.user_id = $1
-            AND vta.archived = false
-        ",
+        fields: "e.first_id, e.then_id",
         "remove_dependency_events",
-        then_id,
-        |e| EventType::RmDepBeforeSelf(TaskId(e.first_id)),
+        "then_id",
+        |e| EventType::RmDepBeforeSelf(TaskId(
+            e.try_get("first_id").context("retrieving first_id field")?
+        )),
     );
 
     query_events!(
-        "
-            SELECT e.id, e.owner_id, e.date, e.task_id, e.tag_id, e.priority
-                FROM add_tag_events e
-            LEFT JOIN v_tasks_archived vta
-                ON vta.task_id = e.task_id
-            LEFT JOIN v_tasks_users vtu
-                ON vtu.task_id = e.task_id
-            WHERE vtu.user_id = $1
-            AND vta.archived = false
-        ",
+        fields: "e.task_id, e.tag_id, e.priority",
         "add_tag_events",
-        task_id,
-        |e| EventType::AddTag { tag: TagId(e.tag_id), prio: e.priority },
+        "task_id",
+        |e| EventType::AddTag {
+            tag: TagId(e.try_get("tag_id").context("retrieving tag_id field")?),
+            prio: e.try_get("priority").context("retrieving prio field")?
+        },
     );
 
     query_events!(
-        "
-            SELECT e.id, e.owner_id, e.date, e.task_id, e.tag_id
-                FROM remove_tag_events e
-            LEFT JOIN v_tasks_archived vta
-                ON vta.task_id = e.task_id
-            LEFT JOIN v_tasks_users vtu
-                ON vtu.task_id = e.task_id
-            WHERE vtu.user_id = $1
-            AND vta.archived = false
-        ",
+        fields: "e.task_id, e.tag_id",
         "remove_tag_events",
-        task_id,
-        |e| EventType::RmTag(TagId(e.tag_id)),
+        "task_id",
+        |e| EventType::RmTag(TagId(
+            e.try_get("tag_id").context("retrieving tag_id field")?
+        )),
     );
 
     query_events!(
-        "
-            SELECT e.id, e.owner_id, e.date, e.task_id, e.text
-                FROM add_comment_events e
-            LEFT JOIN v_tasks_archived vta
-                ON vta.task_id = e.task_id
-            LEFT JOIN v_tasks_users vtu
-                ON vtu.task_id = e.task_id
-            WHERE vtu.user_id = $1
-            AND vta.archived = false
-        ",
+        fields: "e.task_id, e.text",
         "add_comment_events",
-        task_id,
-        |e| EventType::AddComment(e.text),
+        "task_id",
+        |e| EventType::AddComment(e.try_get("text").context("retrieving text field")?),
     );
 
     query_events!(
-        "
+        full: "
             SELECT e.id, e.owner_id, e.date, e.comment_id, e.text, ace.task_id
-                FROM edit_comment_events e
-            LEFT JOIN add_comment_events ace
+                FROM tmp_tasks t
+            INNER JOIN add_comment_events ace
+                ON t.id = ace.task_id
+            INNER JOIN edit_comment_events e
                 ON ace.id = e.comment_id
-            LEFT JOIN v_tasks_archived vta
-                ON vta.task_id = ace.task_id
-            LEFT JOIN v_tasks_users vtu
-                ON vtu.task_id = ace.task_id
-            WHERE vtu.user_id = $1
-            AND vta.archived = false
         ",
         "edit_comment_events",
-        task_id,
-        |e| EventType::EditComment(EventId(e.comment_id), e.text),
+        "task_id",
+        |e| EventType::EditComment(
+            EventId(
+                e.try_get("comment_id")
+                    .context("retrieving comment_id field")?
+            ),
+            e.try_get("text").context("retrieving text field")?
+        ),
     );
 
     for t in tasks.values_mut() {
@@ -583,5 +553,5 @@ async fn fetch_unarchived(
         }
     }
 
-    Ok(Ok(axum::Json(DbDump { users, tags, tasks })))
+    Ok(tasks)
 }
