@@ -98,7 +98,7 @@ struct AnyhowError(());
 
 impl From<anyhow::Error> for AnyhowError {
     fn from(e: anyhow::Error) -> AnyhowError {
-        tracing::error!(err=%e, "got an error");
+        tracing::error!(err=?e, "got an error");
         AnyhowError(())
     }
 }
