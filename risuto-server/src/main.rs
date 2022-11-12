@@ -206,40 +206,11 @@ async fn fetch_unarchived(
     }
     let user = user.0.unwrap().id;
 
-    let users = sqlx::query!("SELECT id, name FROM users")
-        .fetch(&db)
-        .map_ok(|u| (UserId(u.id), User { name: u.name }))
-        .try_collect::<HashMap<UserId, User>>()
-        .await
-        .context("querying users table")?;
-
-    let tags = sqlx::query!(
-        "
-            SELECT tags.id, tags.owner_id, tags.name, tags.archived
-            FROM tags
-            INNER JOIN perms
-            ON perms.tag_id = tags.id
-            WHERE perms.user_id = $1
-            OR tags.owner_id = $1
-        ",
-        user
-    )
-    .fetch(&db)
-    .map_ok(|t| {
-        (
-            TagId(t.id),
-            Tag {
-                owner: UserId(t.owner_id),
-                name: t.name,
-                archived: t.archived,
-            },
-        )
-    })
-    .try_collect::<HashMap<TagId, Tag>>()
-    .await
-    .context("querying tags table")?;
-
     let mut conn = db.acquire().await.context("acquiring db connection")?;
+
+    let users = fetch_users(&mut conn).await?;
+    let tags = fetch_tags_for_user(&mut conn, user).await?;
+
     sqlx::query("CREATE TEMPORARY TABLE tmp_tasks (id UUID NOT NULL)")
         .execute(&mut conn)
         .await
@@ -272,6 +243,46 @@ async fn fetch_unarchived(
     let tasks = fetched_tasks?;
 
     Ok(Ok(axum::Json(DbDump { users, tags, tasks })))
+}
+
+async fn fetch_users(conn: &mut sqlx::PgConnection) -> Result<HashMap<UserId, User>, AnyhowError> {
+    Ok(sqlx::query!("SELECT id, name FROM users")
+        .fetch(conn)
+        .map_ok(|u| (UserId(u.id), User { name: u.name }))
+        .try_collect::<HashMap<UserId, User>>()
+        .await
+        .context("querying users table")?)
+}
+
+async fn fetch_tags_for_user(
+    conn: &mut sqlx::PgConnection,
+    user: Uuid,
+) -> Result<HashMap<TagId, Tag>, AnyhowError> {
+    Ok(sqlx::query!(
+        "
+            SELECT tags.id, tags.owner_id, tags.name, tags.archived
+            FROM tags
+            INNER JOIN perms
+            ON perms.tag_id = tags.id
+            WHERE perms.user_id = $1
+            OR tags.owner_id = $1
+        ",
+        user
+    )
+    .fetch(conn)
+    .map_ok(|t| {
+        (
+            TagId(t.id),
+            Tag {
+                owner: UserId(t.owner_id),
+                name: t.name,
+                archived: t.archived,
+            },
+        )
+    })
+    .try_collect::<HashMap<TagId, Tag>>()
+    .await
+    .context("querying tags table")?)
 }
 
 async fn fetch_tasks_from_tmp_tasks_table(
