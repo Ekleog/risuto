@@ -42,6 +42,18 @@ UNION
 (
     SELECT
         t.id as task_id,
+        tag.owner_id as user_id
+    FROM
+        tasks t
+    INNER JOIN v_tasks_tags vtt
+        ON vtt.task_id = t.id
+    INNER JOIN tags tag
+        ON tag.id = vtt.tag_id
+)
+UNION
+(
+    SELECT
+        t.id as task_id,
         p.user_id as user_id
     FROM
         tasks t
