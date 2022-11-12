@@ -219,6 +219,7 @@ async fn fetch_unarchived(
             INNER JOIN perms
             ON perms.tag_id = tags.id
             WHERE perms.user_id = $1
+            OR tags.owner_id = $1
         ",
         user
     )
