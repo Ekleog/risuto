@@ -27,6 +27,7 @@ WHERE NOT EXISTS (
     SELECT NULL
     FROM remove_tag_events rte
     WHERE rte.tag_id = ate.tag_id
+    AND rte.task_id = ate.task_id
     AND rte.date > ate.date
 );
 
