@@ -1,3 +1,4 @@
+use gloo_storage::{LocalStorage, Storage};
 use risuto_api::*;
 use std::collections::HashMap;
 use yew::prelude::*;
@@ -20,7 +21,7 @@ async fn fetch_db_dump(login: &LoginInfo) -> reqwest::Result<DbDump> {
         .await
 }
 
-#[derive(Clone)]
+#[derive(Clone, serde::Deserialize, serde::Serialize)]
 pub struct LoginInfo {
     host: String,
     user: String,
@@ -39,37 +40,50 @@ struct App {
     initial_load_completed: bool,
 }
 
+impl App {
+    fn fetch_db_dump(&self, ctx: &Context<Self>) {
+        let login = self.login.clone()
+            .expect("called App::fetch_db_dump without a login set");
+        ctx.link().send_future(async move {
+            let db: DbDump = loop {
+                match fetch_db_dump(&login).await {
+                    Ok(db) => break db,
+                    Err(e) if e.is_timeout() => continue,
+                    // TODO: at least handle unauthorized error
+                    _ => panic!("failed to fetch db dump"), // TODO: should eg be a popup
+                }
+            };
+            AppMsg::ReceivedDb(db)
+        });
+    }
+}
+
 impl Component for App {
     type Message = AppMsg;
     type Properties = ();
 
-    fn create(_ctx: &Context<Self>) -> Self {
-        Self {
-            login: None,
+    fn create(ctx: &Context<Self>) -> Self {
+        let login = LocalStorage::get("login").ok();
+        let this = Self {
+            login,
             db: DbDump {
                 users: HashMap::new(),
                 tags: HashMap::new(),
                 tasks: HashMap::new(),
             },
             initial_load_completed: false,
-        }
+        };
+        this.fetch_db_dump(ctx);
+        this
     }
 
     fn update(&mut self, ctx: &Context<Self>, msg: Self::Message) -> bool {
         match msg {
             AppMsg::UserLogin(login) => {
-                self.login = Some(login.clone());
-                ctx.link().send_future(async move {
-                    let db: DbDump = loop {
-                        match fetch_db_dump(&login).await {
-                            Ok(db) => break db,
-                            Err(e) if e.is_timeout() => continue,
-                            // TODO: at least handle unauthorized error
-                            _ => panic!("failed to fetch db dump"), // TODO: should eg be a popup
-                        }
-                    };
-                    AppMsg::ReceivedDb(db)
-                });
+                LocalStorage::set("login", &login)
+                    .expect("failed saving login info to LocalStorage");
+                    self.login = Some(login);
+                self.fetch_db_dump(ctx);
             }
             AppMsg::ReceivedDb(db) => {
                 self.db = db;

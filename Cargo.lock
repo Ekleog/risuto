@@ -1383,8 +1383,10 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "getrandom",
+ "gloo-storage",
  "reqwest",
  "risuto-api",
+ "serde",
  "tracing",
  "tracing-wasm",
  "web-sys",
