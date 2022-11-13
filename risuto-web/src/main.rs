@@ -99,7 +99,9 @@ impl Component for App {
             .iter()
             .map(|(id, task)| (*id, task.clone()))
             .collect::<Vec<_>>();
-        let on_done_change = ctx.link().callback(|(id, is_done)| AppMsg::TaskSetDone(id, is_done));
+        let on_done_change = ctx
+            .link()
+            .callback(|(id, is_done)| AppMsg::TaskSetDone(id, is_done));
         html! {
             <>
                 {for loading_banner}
@@ -124,10 +126,9 @@ fn task_list(p: &TaskListProps) -> Html {
         .iter()
         .map(|(id, t)| {
             let on_done_change = {
-                let on_done_change = p.on_done_change.clone();
                 let id = *id;
                 let is_done = t.is_done;
-                Callback::from(move |_| on_done_change.emit((id, !is_done)))
+                p.on_done_change.reform(move |_| (id, !is_done))
             };
             html! {
                 <li class="list-group-item">
