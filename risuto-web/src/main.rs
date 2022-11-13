@@ -2,10 +2,14 @@ use chrono::Utc;
 use risuto_api::*;
 use yew::prelude::*;
 
+fn main() {
+    yew::start_app::<App>();
+}
+
 #[function_component(App)]
 fn app() -> Html {
-    let mut tasks = std::collections::HashMap::new();
-    tasks.insert("000", Task {
+    let mut tasks = Vec::new();
+    tasks.push((TaskId(Uuid::new_v4()), Task {
         owner: UserId(Uuid::new_v4()),
         date: Utc::now(),
         initial_title: "Task 1".to_string(),
@@ -18,8 +22,8 @@ fn app() -> Html {
         deps_after_self: std::collections::HashSet::new(),
         current_comments: std::collections::BTreeMap::new(),
         events: std::collections::BTreeMap::new(),
-    });
-    tasks.insert("001", Task {
+    }));
+    tasks.push((TaskId(Uuid::new_v4()), Task {
         owner: UserId(Uuid::new_v4()),
         date: Utc::now(),
         initial_title: "Task 2".to_string(),
@@ -32,20 +36,25 @@ fn app() -> Html {
         deps_after_self: std::collections::HashSet::new(),
         current_comments: std::collections::BTreeMap::new(),
         events: std::collections::BTreeMap::new(),
-    });
-    let task_items = tasks.values().map(|t| html! {
-        <li class="list-group-item">{ format!("{} (owned by {})", t.current_title, t.owner.0)}</li>
-    }).collect::<Html>();
+    }));
     html! {
         <>
             <h1>{ "Tasks" }</h1>
             <ul class="list-group">
-                { task_items }
+                <TaskList tasks={tasks} />
             </ul>
         </>
     }
 }
 
-fn main() {
-    yew::start_app::<App>();
+#[derive(Clone, PartialEq, Properties)]
+struct TaskListProps {
+    tasks: Vec<(TaskId, Task)>,
+}
+
+#[function_component(TaskList)]
+fn task_list(TaskListProps { tasks }: &TaskListProps) -> Html {
+    tasks.iter().map(|(_, t)| html! {
+        <li class="list-group-item">{ format!("{} (owned by {})", t.current_title, t.owner.0)}</li>
+    }).collect()
 }

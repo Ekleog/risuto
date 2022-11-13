@@ -25,7 +25,7 @@ pub struct Tag {
 #[derive(Clone, Copy, Eq, Hash, PartialEq, serde::Serialize)]
 pub struct TaskId(pub Uuid);
 
-#[derive(serde::Serialize)]
+#[derive(Clone, Eq, PartialEq, serde::Serialize)]
 pub struct Task {
     pub owner: UserId,
     pub date: Time,
@@ -50,7 +50,7 @@ pub struct Task {
 #[derive(Clone, Copy, Eq, PartialEq, serde::Serialize)]
 pub struct EventId(pub Uuid);
 
-#[derive(serde::Serialize)]
+#[derive(Clone, Eq, PartialEq, serde::Serialize)]
 pub struct Event {
     pub id: EventId,
     pub owner: UserId,
@@ -59,7 +59,7 @@ pub struct Event {
     pub contents: EventType,
 }
 
-#[derive(serde::Serialize)]
+#[derive(Clone, Eq, PartialEq, serde::Serialize)]
 pub enum EventType {
     SetTitle(String),
     Complete,
