@@ -55,35 +55,44 @@ impl Component for Login {
                     let input: web_sys::HtmlInputElement = e.target_unchecked_into();
                     LoginMsg::$msg(input.value())
                 })
-            }
+            };
         }
-        html! {
+        html! {<>
+            <div class="text-center my-4">
+                <h1>{ "Login" }</h1>
+            </div>
             <form>
-                <div class="form-group">
-                    <label for="host">{ "Host" }</label>
+                <div class="input-group mb-3">
+                    <div class="input-group-prepend">
+                        <label class="input-group-text" for="host">{ "Host" }</label>
+                    </div>
                     <input
                         type="url"
-                        class="form-control"
+                        class="form-control form-control-lg"
                         id="host"
                         placeholder="https://example.org"
                         onchange={callback_for!(HostChanged)}
                     />
                 </div>
-                <div class="form-group">
-                    <label for="user">{ "Username" }</label>
+                <div class="input-group mb-3">
+                    <div class="input-group-prepend">
+                        <label class="input-group-text" for="user">{ "Username" }</label>
+                    </div>
                     <input
                         type="text"
-                        class="form-control"
+                        class="form-control form-control-lg"
                         id="user"
                         placeholder="user"
                         onchange={callback_for!(UserChanged)}
                     />
                 </div>
-                <div class="form-group">
-                    <label for="pass">{ "Password" }</label>
+                <div class="input-group mb-3">
+                    <div class="input-group-prepend">
+                        <label class="input-group-text" for="pass">{ "Password" }</label>
+                    </div>
                     <input
                         type="password"
-                        class="form-control"
+                        class="form-control form-control-lg"
                         id="pass"
                         placeholder="pass"
                         onchange={callback_for!(PassChanged)}
@@ -97,6 +106,6 @@ impl Component for Login {
                     { "Connect" }
                 </button>
             </form>
-        }
+        </>}
     }
 }

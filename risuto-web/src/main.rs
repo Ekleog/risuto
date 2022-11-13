@@ -88,7 +88,9 @@ impl Component for App {
     fn view(&self, ctx: &Context<Self>) -> Html {
         if self.login.is_none() {
             return html! {
-                <Login on_submit={ctx.link().callback(AppMsg::UserLogin)} />
+                <div class="container">
+                    <Login on_submit={ctx.link().callback(AppMsg::UserLogin)} />
+                </div>
             };
         }
         let loading_banner =
