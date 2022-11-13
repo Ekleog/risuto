@@ -143,14 +143,7 @@ impl Component for App {
                 <h1>{ "Tags" }</h1>
                 <ul>
                     {for self.db.tags.iter().map(|(_id, t)| html! {
-                        <li>
-                            { for (t.owner != self.db.owner)
-                                .then(|| format!("{}:",
-                                    self.db.users.get(&t.owner)
-                                        .expect("got a tag owned by an user that does not exist").name
-                                )) }
-                            { &t.name }
-                        </li>
+                        <li>{ &t.name }</li>
                     })}
                 </ul>
                 <h1>{ "Tasks" }</h1>

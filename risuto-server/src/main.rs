@@ -184,12 +184,19 @@ async fn fetch_tags_for_user(
 ) -> Result<HashMap<TagId, Tag>, AnyhowError> {
     Ok(sqlx::query!(
         "
-            SELECT tags.id, tags.owner_id, tags.name, tags.archived
+            SELECT
+                tags.id,
+                tags.owner_id,
+                tags.name,
+                tags.archived,
+                users.name AS owner_name
             FROM tags
+            INNER JOIN users
+                ON users.id = tags.owner_id
             LEFT JOIN perms
-            ON perms.tag_id = tags.id
+                ON perms.tag_id = tags.id
             WHERE perms.user_id = $1
-            OR tags.owner_id = $1
+                OR tags.owner_id = $1
         ",
         user.0
     )
@@ -199,7 +206,11 @@ async fn fetch_tags_for_user(
             TagId(t.id),
             Tag {
                 owner: UserId(t.owner_id),
-                name: t.name,
+                name: if t.owner_id == user.0 {
+                    t.name
+                } else {
+                    format!("{}:{}", t.owner_name, t.name)
+                },
                 archived: t.archived,
             },
         )
