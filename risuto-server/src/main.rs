@@ -180,7 +180,7 @@ async fn fetch_tags_for_user(
         "
             SELECT tags.id, tags.owner_id, tags.name, tags.archived
             FROM tags
-            INNER JOIN perms
+            LEFT JOIN perms
             ON perms.tag_id = tags.id
             WHERE perms.user_id = $1
             OR tags.owner_id = $1
