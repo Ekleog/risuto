@@ -8,12 +8,12 @@ use axum::{
 };
 use chrono::Utc;
 use futures::TryStreamExt;
+use risuto_api::{DbDump, Event, EventId, EventType, Tag, TagId, Task, TaskId, User, UserId, Uuid};
 use sqlx::Row;
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
     net::SocketAddr,
 };
-use uuid::Uuid;
 
 #[derive(Clone, Debug)]
 struct Auth(Option<CurrentUser>);
@@ -112,88 +112,6 @@ impl axum::response::IntoResponse for AnyhowError {
         )
             .into_response()
     }
-}
-
-type Time = chrono::DateTime<Utc>;
-
-#[derive(Clone, Copy, Eq, Hash, PartialEq, serde::Serialize)]
-struct UserId(Uuid);
-
-#[derive(serde::Serialize)]
-struct User {
-    name: String,
-}
-
-#[derive(Clone, Copy, Eq, Hash, PartialEq, serde::Serialize)]
-struct TagId(Uuid);
-
-#[derive(serde::Serialize)]
-struct Tag {
-    owner: UserId,
-    name: String,
-    archived: bool,
-}
-
-#[derive(Clone, Copy, Eq, Hash, PartialEq, serde::Serialize)]
-struct TaskId(Uuid);
-
-#[derive(serde::Serialize)]
-struct Task {
-    owner: UserId,
-    date: Time,
-
-    initial_title: String,
-    current_title: String,
-
-    is_done: bool,
-    is_archived: bool,
-    scheduled_for: Option<Time>,
-    current_tags: HashMap<TagId, i64>,
-
-    deps_before_self: HashSet<TaskId>,
-    deps_after_self: HashSet<TaskId>,
-
-    /// List of comments in chronological order, with for each comment each edit in chronological order
-    current_comments: BTreeMap<Time, Vec<BTreeMap<Time, Vec<String>>>>,
-
-    events: BTreeMap<Time, Vec<Event>>,
-}
-
-#[derive(Clone, Copy, Eq, PartialEq, serde::Serialize)]
-struct EventId(Uuid);
-
-#[derive(serde::Serialize)]
-struct Event {
-    id: EventId,
-    owner: UserId,
-    date: Time,
-
-    contents: EventType,
-}
-
-#[derive(serde::Serialize)]
-enum EventType {
-    SetTitle(String),
-    Complete,
-    Reopen,
-    Archive,
-    Unarchive,
-    Schedule(Option<Time>),
-    AddDepBeforeSelf(TaskId),
-    AddDepAfterSelf(TaskId),
-    RmDepBeforeSelf(TaskId),
-    RmDepAfterSelf(TaskId),
-    AddTag { tag: TagId, prio: i64 },
-    RmTag(TagId),
-    AddComment(String),
-    EditComment(EventId, String),
-}
-
-#[derive(serde::Serialize)]
-struct DbDump {
-    users: HashMap<UserId, User>,
-    tags: HashMap<TagId, Tag>,
-    tasks: HashMap<TaskId, Task>,
 }
 
 #[axum_macros::debug_handler]

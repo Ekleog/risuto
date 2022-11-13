@@ -1,5 +1,6 @@
 [workspace]
 members = [
+    "risuto-api",
     "risuto-server",
 ]
 

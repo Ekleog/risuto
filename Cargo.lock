@@ -1003,6 +1003,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "risuto-api"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "serde",
+ "uuid",
+]
+
+[[package]]
 name = "risuto-server"
 version = "0.1.0"
 dependencies = [
@@ -1012,12 +1021,11 @@ dependencies = [
  "base64",
  "chrono",
  "futures",
- "serde",
+ "risuto-api",
  "sqlx",
  "tokio",
  "tracing",
  "tracing-subscriber",
- "uuid",
 ]
 
 [[package]]
