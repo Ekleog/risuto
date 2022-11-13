@@ -9,10 +9,13 @@ pkgs.stdenv.mkDerivation {
       rust-analyzer
       sqlite
       sqlx-cli
+      trunk
     ]) ++
     (with rustNightlyChannel; [
       cargo
-      rust
+      (rust.override {
+        targets = ["wasm32-unknown-unknown"];
+      })
     ])
   );
 }

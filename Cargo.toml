@@ -2,6 +2,7 @@
 members = [
     "risuto-api",
     "risuto-server",
+    "risuto-web",
 ]
 
 [profile.dev.package.sqlx-macros]
