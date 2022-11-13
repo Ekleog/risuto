@@ -1387,6 +1387,7 @@ dependencies = [
  "risuto-api",
  "tracing",
  "tracing-wasm",
+ "web-sys",
  "yew",
 ]
 
