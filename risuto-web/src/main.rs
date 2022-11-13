@@ -138,6 +138,12 @@ impl Component for App {
         html! {
             <>
                 {for loading_banner}
+                <h1>{ "Tags" }</h1>
+                <ul>
+                    {for self.db.tags.iter().map(|(id, t)| html! {
+                        <li>{ &t.name }</li>
+                    })}
+                </ul>
                 <h1>{ "Tasks" }</h1>
                 <button onclick={ctx.link().callback(|_| AppMsg::UserLogout)}>
                     { "Logout" }
