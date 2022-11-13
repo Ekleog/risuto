@@ -83,3 +83,69 @@ pub struct DbDump {
     pub tags: HashMap<TagId, Tag>,
     pub tasks: HashMap<TaskId, Task>,
 }
+
+impl Task {
+    pub fn refresh_metadata(&mut self) {
+        for evts in self.events.values() {
+            if evts.len() > 1 {
+                tracing::warn!(
+                    num_evts = evts.len(),
+                    "multiple events for task at same timestamp"
+                )
+            }
+            for e in evts {
+                match &e.contents {
+                    EventType::SetTitle(title) => self.current_title = title.clone(),
+                    EventType::Complete => self.is_done = true,
+                    EventType::Reopen => self.is_done = false,
+                    EventType::Archive => self.is_archived = true,
+                    EventType::Unarchive => self.is_archived = false,
+                    EventType::Schedule(time) => self.scheduled_for = *time,
+                    EventType::AddDepBeforeSelf(task) => {
+                        self.deps_before_self.insert(*task);
+                    }
+                    EventType::AddDepAfterSelf(task) => {
+                        self.deps_after_self.insert(*task);
+                    }
+                    EventType::RmDepBeforeSelf(task) => {
+                        self.deps_before_self.remove(task);
+                    }
+                    EventType::RmDepAfterSelf(task) => {
+                        self.deps_after_self.remove(task);
+                    }
+                    EventType::AddTag { tag, prio } => {
+                        self.current_tags.insert(*tag, *prio);
+                    }
+                    EventType::RmTag(tag) => {
+                        self.current_tags.remove(tag);
+                    }
+                    EventType::AddComment(txt) => {
+                        let mut edits = BTreeMap::new();
+                        edits.insert(e.date, vec![txt.clone()]);
+                        self.current_comments
+                            .entry(e.date)
+                            .or_insert(Vec::new())
+                            .push(edits);
+                    }
+                    EventType::EditComment(evt, txt) => {
+                        if let Some((id, evt)) = self
+                            .events
+                            .values()
+                            .flat_map(|v| {
+                                v.iter()
+                                    .filter(|e| matches!(e.contents, EventType::AddComment(_)))
+                                    .enumerate()
+                            })
+                            .find(|(_, e)| &e.id == evt)
+                        {
+                            self.current_comments.get_mut(&evt.date).unwrap()[id]
+                                .entry(e.date)
+                                .or_insert(Vec::new())
+                                .push(txt.clone());
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
