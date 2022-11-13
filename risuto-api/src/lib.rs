@@ -86,6 +86,7 @@ pub struct DbDump {
 
 impl Task {
     pub fn refresh_metadata(&mut self) {
+        self.current_title = self.initial_title.clone();
         for evts in self.events.values() {
             if evts.len() > 1 {
                 tracing::warn!(
