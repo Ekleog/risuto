@@ -83,7 +83,7 @@ async fn main() -> anyhow::Result<()> {
         .with_context(|| format!("Error opening database {:?}", db_url))?;
 
     let app = Router::new()
-        .route("/fetch-unarchived", get(fetch_unarchived))
+        .route("/api/fetch-unarchived", get(fetch_unarchived))
         .route_layer(axum::middleware::from_fn(auth))
         .layer(Extension(db));
 

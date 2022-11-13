@@ -1,66 +1,69 @@
-use std::collections::HashMap;
-
-use chrono::Utc;
 use risuto_api::*;
+use std::collections::HashMap;
 use yew::prelude::*;
 
 fn main() {
+    tracing_wasm::set_as_global_default();
     yew::start_app::<App>();
+}
+
+enum AppMsg {
+    ReceivedDb(DbDump),
 }
 
 struct App {
     db: DbDump,
+    initial_load_completed: bool,
 }
 
 impl Component for App {
-    type Message = ();
+    type Message = AppMsg;
     type Properties = ();
 
-    fn create(_ctx: &Context<Self>) -> Self {
+    fn create(ctx: &Context<Self>) -> Self {
+        ctx.link().send_future(async move {
+            let db: DbDump = reqwest::Client::new()
+                .get("http://localhost:8000/api/fetch-unarchived") // TODO
+                .basic_auth("user1", Some("pass1")) // TODO
+                .send()
+                .await
+                .unwrap() // TODO
+                .json()
+                .await
+                .unwrap(); // TODO
+            AppMsg::ReceivedDb(db)
+        });
         let users = HashMap::new();
         let tags = HashMap::new();
-        let mut tasks = HashMap::new();
-        tasks.insert(
-            TaskId(Uuid::new_v4()),
-            Task {
-                owner: UserId(Uuid::new_v4()),
-                date: Utc::now(),
-                initial_title: "Task 1".to_string(),
-                current_title: "Task 1".to_string(),
-                is_done: false,
-                is_archived: false,
-                scheduled_for: None,
-                current_tags: std::collections::HashMap::new(),
-                deps_before_self: std::collections::HashSet::new(),
-                deps_after_self: std::collections::HashSet::new(),
-                current_comments: std::collections::BTreeMap::new(),
-                events: std::collections::BTreeMap::new(),
-            },
-        );
-        tasks.insert(
-            TaskId(Uuid::new_v4()),
-            Task {
-                owner: UserId(Uuid::new_v4()),
-                date: Utc::now(),
-                initial_title: "Task 2".to_string(),
-                current_title: "Task 2 new title".to_string(),
-                is_done: false,
-                is_archived: false,
-                scheduled_for: None,
-                current_tags: std::collections::HashMap::new(),
-                deps_before_self: std::collections::HashSet::new(),
-                deps_after_self: std::collections::HashSet::new(),
-                current_comments: std::collections::BTreeMap::new(),
-                events: std::collections::BTreeMap::new(),
-            },
-        );
-        Self { db: DbDump { users, tags, tasks } }
+        let tasks = HashMap::new();
+        Self {
+            db: DbDump { users, tags, tasks },
+            initial_load_completed: false,
+        }
+    }
+
+    fn update(&mut self, _ctx: &Context<Self>, msg: Self::Message) -> bool {
+        match msg {
+            AppMsg::ReceivedDb(db) => {
+                self.db = db;
+                self.initial_load_completed = true;
+                true
+            }
+        }
     }
 
     fn view(&self, _ctx: &Context<Self>) -> Html {
-        let tasks = self.db.tasks.iter().map(|(id, task)| (*id, task.clone())).collect::<Vec<_>>();
+        let loading_banner =
+            (!self.initial_load_completed).then(|| html! { <h1>{ "Loading..." }</h1> });
+        let tasks = self
+            .db
+            .tasks
+            .iter()
+            .map(|(id, task)| (*id, task.clone()))
+            .collect::<Vec<_>>();
         html! {
             <>
+                {for loading_banner}
                 <h1>{ "Tasks" }</h1>
                 <ul class="list-group">
                     <TaskList tasks={tasks} />

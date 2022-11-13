@@ -4,28 +4,28 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 pub use uuid::Uuid;
 pub type Time = chrono::DateTime<Utc>;
 
-#[derive(Clone, Copy, Eq, Hash, PartialEq, serde::Serialize)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct UserId(pub Uuid);
 
-#[derive(serde::Serialize)]
+#[derive(Debug, serde::Deserialize, serde::Serialize)]
 pub struct User {
     pub name: String,
 }
 
-#[derive(Clone, Copy, Eq, Hash, PartialEq, serde::Serialize)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct TagId(pub Uuid);
 
-#[derive(serde::Serialize)]
+#[derive(Debug, serde::Deserialize, serde::Serialize)]
 pub struct Tag {
     pub owner: UserId,
     pub name: String,
     pub archived: bool,
 }
 
-#[derive(Clone, Copy, Eq, Hash, PartialEq, serde::Serialize)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct TaskId(pub Uuid);
 
-#[derive(Clone, Eq, PartialEq, serde::Serialize)]
+#[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct Task {
     pub owner: UserId,
     pub date: Time,
@@ -47,10 +47,10 @@ pub struct Task {
     pub events: BTreeMap<Time, Vec<Event>>,
 }
 
-#[derive(Clone, Copy, Eq, PartialEq, serde::Serialize)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct EventId(pub Uuid);
 
-#[derive(Clone, Eq, PartialEq, serde::Serialize)]
+#[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct Event {
     pub id: EventId,
     pub owner: UserId,
@@ -59,7 +59,7 @@ pub struct Event {
     pub contents: EventType,
 }
 
-#[derive(Clone, Eq, PartialEq, serde::Serialize)]
+#[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 pub enum EventType {
     SetTitle(String),
     Complete,
@@ -77,7 +77,7 @@ pub enum EventType {
     EditComment(EventId, String),
 }
 
-#[derive(serde::Serialize)]
+#[derive(Debug, serde::Deserialize, serde::Serialize)]
 pub struct DbDump {
     pub users: HashMap<UserId, User>,
     pub tags: HashMap<TagId, Tag>,
