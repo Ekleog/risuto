@@ -1,10 +1,9 @@
 use crate::LoginInfo;
-use std::rc::Rc;
 use yew::prelude::*;
 
 #[derive(Clone, PartialEq, Properties)]
 pub struct LoginProps {
-    pub info: Rc<Option<LoginInfo>>,
+    pub info: Option<LoginInfo>,
     pub on_submit: Callback<LoginInfo>,
 }
 
@@ -26,7 +25,7 @@ impl Component for Login {
     type Properties = LoginProps;
 
     fn create(ctx: &Context<Self>) -> Self {
-        let (host, user) = match &*ctx.props().info {
+        let (host, user) = match &ctx.props().info {
             Some(i) => (i.host.clone(), i.user.clone()),
             None => (String::new(), String::new()),
         };

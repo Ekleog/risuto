@@ -1,6 +1,6 @@
 use gloo_storage::{LocalStorage, Storage};
 use risuto_api::*;
-use std::{collections::HashMap, rc::Rc};
+use std::collections::HashMap;
 use yew::prelude::*;
 
 mod login;
@@ -37,7 +37,7 @@ enum AppMsg {
 
 struct App {
     login: Option<LoginInfo>,
-    logout: Rc<Option<LoginInfo>>, // info saved from login info
+    logout: Option<LoginInfo>, // info saved from login info
     db: DbDump,
     initial_load_completed: bool,
 }
@@ -70,7 +70,7 @@ impl Component for App {
         let login = LocalStorage::get("login").ok();
         let this = Self {
             login,
-            logout: Rc::new(None),
+            logout: None,
             db: DbDump {
                 users: HashMap::new(),
                 tags: HashMap::new(),
@@ -94,10 +94,10 @@ impl Component for App {
             }
             AppMsg::UserLogout => {
                 LocalStorage::delete("login");
-                self.logout = Rc::new(self.login.take().map(|mut i| {
+                self.logout = self.login.take().map(|mut i| {
                     i.pass = String::new();
                     i
-                }));
+                });
             }
             AppMsg::ReceivedDb(db) => {
                 self.db = db;
@@ -118,7 +118,7 @@ impl Component for App {
             return html! {
                 <div class="container">
                     <Login
-                        info={&self.logout}
+                        info={self.logout.clone()}
                         on_submit={ctx.link().callback(AppMsg::UserLogin)}
                     />
                 </div>
