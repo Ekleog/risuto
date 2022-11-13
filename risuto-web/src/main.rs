@@ -1,6 +1,6 @@
 use gloo_storage::{LocalStorage, Storage};
 use risuto_api::*;
-use std::collections::HashMap;
+use std::{collections::HashMap, rc::Rc};
 use yew::prelude::*;
 
 mod login;
@@ -21,7 +21,7 @@ async fn fetch_db_dump(login: &LoginInfo) -> reqwest::Result<DbDump> {
         .await
 }
 
-#[derive(Clone, serde::Deserialize, serde::Serialize)]
+#[derive(Clone, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct LoginInfo {
     host: String,
     user: String,
@@ -30,19 +30,23 @@ pub struct LoginInfo {
 
 enum AppMsg {
     UserLogin(LoginInfo),
+    UserLogout,
     ReceivedDb(DbDump),
     TaskSetDone(TaskId, bool),
 }
 
 struct App {
     login: Option<LoginInfo>,
+    logout: Rc<Option<LoginInfo>>, // info saved from login info
     db: DbDump,
     initial_load_completed: bool,
 }
 
 impl App {
     fn fetch_db_dump(&self, ctx: &Context<Self>) {
-        let login = self.login.clone()
+        let login = self
+            .login
+            .clone()
             .expect("called App::fetch_db_dump without a login set");
         ctx.link().send_future(async move {
             let db: DbDump = loop {
@@ -66,6 +70,7 @@ impl Component for App {
         let login = LocalStorage::get("login").ok();
         let this = Self {
             login,
+            logout: Rc::new(None),
             db: DbDump {
                 users: HashMap::new(),
                 tags: HashMap::new(),
@@ -73,7 +78,9 @@ impl Component for App {
             },
             initial_load_completed: false,
         };
-        this.fetch_db_dump(ctx);
+        if this.login.is_some() {
+            this.fetch_db_dump(ctx);
+        }
         this
     }
 
@@ -82,8 +89,15 @@ impl Component for App {
             AppMsg::UserLogin(login) => {
                 LocalStorage::set("login", &login)
                     .expect("failed saving login info to LocalStorage");
-                    self.login = Some(login);
+                self.login = Some(login);
                 self.fetch_db_dump(ctx);
+            }
+            AppMsg::UserLogout => {
+                LocalStorage::delete("login");
+                self.logout = Rc::new(self.login.take().map(|mut i| {
+                    i.pass = String::new();
+                    i
+                }));
             }
             AppMsg::ReceivedDb(db) => {
                 self.db = db;
@@ -103,7 +117,10 @@ impl Component for App {
         if self.login.is_none() {
             return html! {
                 <div class="container">
-                    <Login on_submit={ctx.link().callback(AppMsg::UserLogin)} />
+                    <Login
+                        info={&self.logout}
+                        on_submit={ctx.link().callback(AppMsg::UserLogin)}
+                    />
                 </div>
             };
         }
@@ -122,6 +139,9 @@ impl Component for App {
             <>
                 {for loading_banner}
                 <h1>{ "Tasks" }</h1>
+                <button onclick={ctx.link().callback(|_| AppMsg::UserLogout)}>
+                    { "Logout" }
+                </button>
                 <ul class="list-group">
                     <TaskList tasks={tasks} {on_done_change} />
                 </ul>

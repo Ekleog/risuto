@@ -1,8 +1,10 @@
 use crate::LoginInfo;
+use std::rc::Rc;
 use yew::prelude::*;
 
 #[derive(Clone, PartialEq, Properties)]
 pub struct LoginProps {
+    pub info: Rc<Option<LoginInfo>>,
     pub on_submit: Callback<LoginInfo>,
 }
 
@@ -23,10 +25,14 @@ impl Component for Login {
     type Message = LoginMsg;
     type Properties = LoginProps;
 
-    fn create(_ctx: &Context<Self>) -> Self {
+    fn create(ctx: &Context<Self>) -> Self {
+        let (host, user) = match &*ctx.props().info {
+            Some(i) => (i.host.clone(), i.user.clone()),
+            None => (String::new(), String::new()),
+        };
         Self {
-            host: String::new(),
-            user: String::new(),
+            host,
+            user,
             pass: String::new(),
         }
     }
@@ -71,6 +77,7 @@ impl Component for Login {
                         class="form-control form-control-lg"
                         id="host"
                         placeholder="https://example.org"
+                        value={self.host.clone()}
                         onchange={callback_for!(HostChanged)}
                     />
                 </div>
@@ -83,6 +90,7 @@ impl Component for Login {
                         class="form-control form-control-lg"
                         id="user"
                         placeholder="user"
+                        value={self.user.clone()}
                         onchange={callback_for!(UserChanged)}
                     />
                 </div>
@@ -95,6 +103,7 @@ impl Component for Login {
                         class="form-control form-control-lg"
                         id="pass"
                         placeholder="pass"
+                        value={self.pass.clone()}
                         onchange={callback_for!(PassChanged)}
                     />
                 </div>
