@@ -8,7 +8,7 @@ use axum::{
 };
 use chrono::Utc;
 use futures::TryStreamExt;
-use risuto_api::{DbDump, Event, EventId, EventType, Tag, TagId, Task, TaskId, User, UserId, Uuid};
+use risuto_api::{DbDump, Event, EventId, EventType, Tag, TagId, Task, TaskId, User, UserId};
 use sqlx::Row;
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
@@ -20,7 +20,7 @@ struct Auth(Option<CurrentUser>);
 
 #[derive(Clone, Debug)]
 struct CurrentUser {
-    id: Uuid,
+    id: UserId,
 }
 
 async fn auth<B: std::fmt::Debug>(
@@ -59,8 +59,7 @@ async fn authorize_current_user(db: &sqlx::PgPool, auth: &str) -> Option<Current
         return None;
     }
 
-    let user = sqlx::query_as!(
-        CurrentUser,
+    let user = sqlx::query!(
         "SELECT id FROM users WHERE name = $1 AND password = $2",
         split[0],
         split[1]
@@ -68,7 +67,7 @@ async fn authorize_current_user(db: &sqlx::PgPool, auth: &str) -> Option<Current
     .fetch_one(db)
     .await
     .ok()?;
-    Some(user)
+    Some(CurrentUser { id: UserId(user.id) })
 }
 
 #[tokio::main]
@@ -122,12 +121,12 @@ async fn fetch_unarchived(
     if !user.0.is_some() {
         return Ok(Err((StatusCode::FORBIDDEN, "Permission denied")));
     }
-    let user = user.0.unwrap().id;
+    let owner = user.0.unwrap().id;
 
     let mut conn = db.acquire().await.context("acquiring db connection")?;
 
     let users = fetch_users(&mut conn).await?;
-    let tags = fetch_tags_for_user(&mut conn, user).await?;
+    let tags = fetch_tags_for_user(&mut conn, owner).await?;
 
     sqlx::query("CREATE TEMPORARY TABLE tmp_tasks (id UUID NOT NULL)")
         .execute(&mut conn)
@@ -146,7 +145,7 @@ async fn fetch_unarchived(
             AND vta.archived = false
         ",
     )
-    .bind(user)
+    .bind(owner.0)
     .execute(&mut conn)
     .await
     .context("filling temp table with interesting task ids")?;
@@ -160,7 +159,12 @@ async fn fetch_unarchived(
 
     let tasks = fetched_tasks?;
 
-    Ok(Ok(axum::Json(DbDump { users, tags, tasks })))
+    Ok(Ok(axum::Json(DbDump {
+        owner,
+        users,
+        tags,
+        tasks,
+    })))
 }
 
 async fn fetch_users(conn: &mut sqlx::PgConnection) -> Result<HashMap<UserId, User>, AnyhowError> {
@@ -174,7 +178,7 @@ async fn fetch_users(conn: &mut sqlx::PgConnection) -> Result<HashMap<UserId, Us
 
 async fn fetch_tags_for_user(
     conn: &mut sqlx::PgConnection,
-    user: Uuid,
+    user: UserId,
 ) -> Result<HashMap<TagId, Tag>, AnyhowError> {
     Ok(sqlx::query!(
         "
@@ -185,7 +189,7 @@ async fn fetch_tags_for_user(
             WHERE perms.user_id = $1
             OR tags.owner_id = $1
         ",
-        user
+        user.0
     )
     .fetch(conn)
     .map_ok(|t| {

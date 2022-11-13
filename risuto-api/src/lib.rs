@@ -79,6 +79,7 @@ pub enum EventType {
 
 #[derive(Debug, serde::Deserialize, serde::Serialize)]
 pub struct DbDump {
+    pub owner: UserId,
     pub users: HashMap<UserId, User>,
     pub tags: HashMap<TagId, Tag>,
     pub tasks: HashMap<TaskId, Task>,
