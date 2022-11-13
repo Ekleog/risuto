@@ -1389,6 +1389,7 @@ dependencies = [
  "serde",
  "tracing",
  "tracing-wasm",
+ "uuid",
  "web-sys",
  "yew",
 ]

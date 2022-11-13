@@ -67,7 +67,9 @@ async fn authorize_current_user(db: &sqlx::PgPool, auth: &str) -> Option<Current
     .fetch_one(db)
     .await
     .ok()?;
-    Some(CurrentUser { id: UserId(user.id) })
+    Some(CurrentUser {
+        id: UserId(user.id),
+    })
 }
 
 #[tokio::main]

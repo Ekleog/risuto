@@ -12,5 +12,6 @@ risuto-api = { path = "../risuto-api" }
 serde = "1.0"
 tracing = "0.1.37"
 tracing-wasm = "0.2.1"
+uuid = "1.2"
 yew = "0.19.3"
 web-sys = "0.3.60"

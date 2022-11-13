@@ -1,6 +1,7 @@
 use gloo_storage::{LocalStorage, Storage};
 use risuto_api::*;
 use std::collections::HashMap;
+use uuid::uuid;
 use yew::prelude::*;
 
 mod login;
@@ -72,6 +73,7 @@ impl Component for App {
             login,
             logout: None,
             db: DbDump {
+                owner: UserId(uuid!("00000000-0000-0000-0000-000000000000")),
                 users: HashMap::new(),
                 tags: HashMap::new(),
                 tasks: HashMap::new(),
@@ -140,8 +142,15 @@ impl Component for App {
                 {for loading_banner}
                 <h1>{ "Tags" }</h1>
                 <ul>
-                    {for self.db.tags.iter().map(|(id, t)| html! {
-                        <li>{ &t.name }</li>
+                    {for self.db.tags.iter().map(|(_id, t)| html! {
+                        <li>
+                            { for (t.owner != self.db.owner)
+                                .then(|| format!("{}:",
+                                    self.db.users.get(&t.owner)
+                                        .expect("got a tag owned by an user that does not exist").name
+                                )) }
+                            { &t.name }
+                        </li>
                     })}
                 </ul>
                 <h1>{ "Tasks" }</h1>
