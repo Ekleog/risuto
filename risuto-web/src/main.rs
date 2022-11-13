@@ -19,6 +19,7 @@ async fn fetch_db_dump() -> reqwest::Result<DbDump> {
 
 enum AppMsg {
     ReceivedDb(DbDump),
+    TaskSetDone(TaskId, bool),
 }
 
 struct App {
@@ -58,10 +59,17 @@ impl Component for App {
                 self.initial_load_completed = true;
                 true
             }
+            AppMsg::TaskSetDone(id, done) => {
+                // TODO: RPC to set task as done
+                if let Some(t) = self.db.tasks.get_mut(&id) {
+                    t.is_done = done;
+                }
+                true
+            }
         }
     }
 
-    fn view(&self, _ctx: &Context<Self>) -> Html {
+    fn view(&self, ctx: &Context<Self>) -> Html {
         let loading_banner =
             (!self.initial_load_completed).then(|| html! { <h1>{ "Loading..." }</h1> });
         let tasks = self
@@ -70,12 +78,13 @@ impl Component for App {
             .iter()
             .map(|(id, task)| (*id, task.clone()))
             .collect::<Vec<_>>();
+        let on_done_change = ctx.link().callback(|(id, is_done)| AppMsg::TaskSetDone(id, is_done));
         html! {
             <>
                 {for loading_banner}
                 <h1>{ "Tasks" }</h1>
                 <ul class="list-group">
-                    <TaskList tasks={tasks} />
+                    <TaskList tasks={tasks} {on_done_change} />
                 </ul>
             </>
         }
@@ -85,11 +94,27 @@ impl Component for App {
 #[derive(Clone, PartialEq, Properties)]
 struct TaskListProps {
     tasks: Vec<(TaskId, Task)>,
+    on_done_change: Callback<(TaskId, bool)>,
 }
 
 #[function_component(TaskList)]
-fn task_list(TaskListProps { tasks }: &TaskListProps) -> Html {
-    tasks.iter().map(|(_, t)| html! {
-        <li class="list-group-item">{ format!("{} (owned by {})", t.current_title, t.owner.0)}</li>
-    }).collect()
+fn task_list(p: &TaskListProps) -> Html {
+    p.tasks
+        .iter()
+        .map(|(id, t)| {
+            let on_done_change = {
+                let on_done_change = p.on_done_change.clone();
+                let id = *id;
+                let is_done = t.is_done;
+                Callback::from(move |_| on_done_change.emit((id, !is_done)))
+            };
+            html! {
+                <li class="list-group-item">
+                    { &t.current_title }{ "(owned by " }{ t.owner.0 }{ ")" }
+                    {"is currently done:"}{t.is_done}
+                    <button onclick={on_done_change}>{ "Done" }</button>
+                </li>
+            }
+        })
+        .collect()
 }
