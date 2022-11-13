@@ -7,6 +7,16 @@ fn main() {
     yew::start_app::<App>();
 }
 
+async fn fetch_db_dump() -> reqwest::Result<DbDump> {
+    reqwest::Client::new()
+        .get("http://localhost:8000/api/fetch-unarchived") // TODO
+        .basic_auth("user1", Some("pass1")) // TODO
+        .send()
+        .await?
+        .json()
+        .await
+}
+
 enum AppMsg {
     ReceivedDb(DbDump),
 }
@@ -22,15 +32,14 @@ impl Component for App {
 
     fn create(ctx: &Context<Self>) -> Self {
         ctx.link().send_future(async move {
-            let db: DbDump = reqwest::Client::new()
-                .get("http://localhost:8000/api/fetch-unarchived") // TODO
-                .basic_auth("user1", Some("pass1")) // TODO
-                .send()
-                .await
-                .unwrap() // TODO
-                .json()
-                .await
-                .unwrap(); // TODO
+            let db: DbDump = loop {
+                match fetch_db_dump().await {
+                    Ok(db) => break db,
+                    Err(e) if e.is_timeout() => continue,
+                    // TODO: at least handle unauthorized error
+                    _ => panic!("failed to fetch db dump"), // TODO: should eg be a popup
+                }
+            };
             AppMsg::ReceivedDb(db)
         });
         let users = HashMap::new();
