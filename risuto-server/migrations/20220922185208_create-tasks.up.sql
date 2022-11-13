@@ -125,8 +125,11 @@ CREATE TABLE tags (
     id UUID PRIMARY KEY NOT NULL,
     owner_id UUID NOT NULL,
 
-    name VARCHAR NOT NULL UNIQUE,
+    name VARCHAR NOT NULL,
     archived BOOLEAN NOT NULL,
+
+    UNIQUE (owner_id, name),
+    CHECK (name ~ '^[a-zA-Z0-9]+$'),
 
     FOREIGN KEY (owner_id) REFERENCES users (id)
         ON DELETE CASCADE
