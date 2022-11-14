@@ -96,7 +96,7 @@ impl Component for App {
             }
             AppMsg::UserLogout => {
                 LocalStorage::delete("login");
-                let this = App::new();
+                let mut this = App::new();
                 this.logout = self.login.take().map(|mut i| {
                     i.pass = String::new();
                     i
