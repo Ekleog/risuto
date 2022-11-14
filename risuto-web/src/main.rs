@@ -32,7 +32,7 @@ enum AppMsg {
     UserLogout,
     ReceivedDb(DbDump),
     SetTag(Option<TagId>),
-    TaskSetDone(TaskId, bool),
+    NewTaskEvent(NewEvent),
 }
 
 struct App {
@@ -121,10 +121,14 @@ impl Component for App {
             AppMsg::SetTag(id) => {
                 self.tag = id;
             }
-            AppMsg::TaskSetDone(id, done) => {
+            AppMsg::NewTaskEvent(e) => {
                 // TODO: RPC to set task as done
-                if let Some(t) = self.db.tasks.get_mut(&id) {
-                    t.is_done = done;
+                match self.db.tasks.get_mut(&e.task) {
+                    None => tracing::warn!(evt=?e, "got event for task not in db"),
+                    Some(t) => {
+                        t.add_event(e.event);
+                        t.refresh_metadata();
+                    }
                 }
             }
         }
@@ -144,9 +148,12 @@ impl Component for App {
         }
         let loading_banner =
             (!self.initial_load_completed).then(|| html! { <h1>{ "Loading..." }</h1> });
-        let on_done_change = ctx
-            .link()
-            .callback(|(id, is_done)| AppMsg::TaskSetDone(id, is_done));
+        let on_done_change = {
+            let owner = self.db.owner.clone();
+            ctx.link().callback(move |(id, is_done)| {
+                AppMsg::NewTaskEvent(NewEvent::now(id, owner, EventType::SetDone(is_done)))
+            })
+        };
         let current_tag = self.tag.as_ref().and_then(|t| self.db.tags.get(t)).cloned();
         let mut tag_list = self.db.tags.iter().collect::<Vec<_>>();
         tag_list.sort_unstable_by_key(|(id, t)| {

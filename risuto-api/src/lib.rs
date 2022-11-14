@@ -9,15 +9,15 @@ pub const STUB_UUID: Uuid = uuid!("ffffffff-ffff-ffff-ffff-ffffffffffff");
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct UserId(pub Uuid);
 
+#[derive(Debug, serde::Deserialize, serde::Serialize)]
+pub struct User {
+    pub name: String,
+}
+
 impl UserId {
     pub fn stub() -> UserId {
         UserId(STUB_UUID)
     }
-}
-
-#[derive(Debug, serde::Deserialize, serde::Serialize)]
-pub struct User {
-    pub name: String,
 }
 
 #[derive(
@@ -65,54 +65,11 @@ pub struct Task {
     pub events: BTreeMap<Time, Vec<Event>>,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
-pub struct EventId(pub Uuid);
-
-#[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
-pub struct Event {
-    pub id: EventId,
-    pub owner: UserId,
-    pub date: Time,
-
-    pub contents: EventType,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
-pub enum EventType {
-    SetTitle(String),
-    SetDone(bool),
-    SetArchived(bool),
-    Schedule(Option<Time>),
-    AddDepBeforeSelf(TaskId),
-    AddDepAfterSelf(TaskId),
-    RmDepBeforeSelf(TaskId),
-    RmDepAfterSelf(TaskId),
-    AddTag { tag: TagId, prio: i64 },
-    RmTag(TagId),
-    AddComment(String),
-    EditComment(EventId, String),
-}
-
-#[derive(Debug, serde::Deserialize, serde::Serialize)]
-pub struct DbDump {
-    pub owner: UserId,
-    pub users: HashMap<UserId, User>,
-    pub tags: HashMap<TagId, Tag>,
-    pub tasks: HashMap<TaskId, Task>,
-}
-
-impl DbDump {
-    pub fn stub() -> DbDump {
-        DbDump {
-            owner: UserId::stub(),
-            users: HashMap::new(),
-            tags: HashMap::new(),
-            tasks: HashMap::new(),
-        }
-    }
-}
-
 impl Task {
+    pub fn add_event(&mut self, e: Event) {
+        self.events.entry(e.date).or_insert(Vec::new()).push(e);
+    }
+
     pub fn refresh_metadata(&mut self) {
         self.current_title = self.initial_title.clone();
         for evts in self.events.values() {
@@ -173,6 +130,73 @@ impl Task {
                     }
                 }
             }
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
+pub struct EventId(pub Uuid);
+
+#[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
+pub struct Event {
+    pub id: EventId,
+    pub owner: UserId,
+    pub date: Time,
+
+    pub contents: EventType,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
+pub enum EventType {
+    SetTitle(String),
+    SetDone(bool),
+    SetArchived(bool),
+    Schedule(Option<Time>),
+    AddDepBeforeSelf(TaskId),
+    AddDepAfterSelf(TaskId),
+    RmDepBeforeSelf(TaskId),
+    RmDepAfterSelf(TaskId),
+    AddTag { tag: TagId, prio: i64 },
+    RmTag(TagId),
+    AddComment(String),
+    EditComment(EventId, String),
+}
+
+#[derive(Debug, serde::Deserialize, serde::Serialize)]
+pub struct DbDump {
+    pub owner: UserId,
+    pub users: HashMap<UserId, User>,
+    pub tags: HashMap<TagId, Tag>,
+    pub tasks: HashMap<TaskId, Task>,
+}
+
+impl DbDump {
+    pub fn stub() -> DbDump {
+        DbDump {
+            owner: UserId::stub(),
+            users: HashMap::new(),
+            tags: HashMap::new(),
+            tasks: HashMap::new(),
+        }
+    }
+}
+
+#[derive(Debug, serde::Deserialize, serde::Serialize)]
+pub struct NewEvent {
+    pub task: TaskId,
+    pub event: Event,
+}
+
+impl NewEvent {
+    pub fn now(task: TaskId, owner: UserId, contents: EventType) -> NewEvent {
+        NewEvent {
+            task,
+            event: Event {
+                id: EventId(Uuid::new_v4()),
+                owner,
+                date: Utc::now(),
+                contents,
+            },
         }
     }
 }

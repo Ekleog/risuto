@@ -291,7 +291,7 @@ async fn fetch_tasks_from_tmp_tasks_table(
                     let owner = $e
                         .try_get("owner_id")
                         .context("retrieving owner_id field")?;
-                    t.events.entry(date).or_insert(Vec::new()).push(Event {
+                    t.add_event(Event {
                         id: EventId(id),
                         owner: UserId(owner),
                         date,
