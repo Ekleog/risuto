@@ -7,7 +7,7 @@ pkgs.stdenv.mkDerivation {
       cacert
       mdbook
       rust-analyzer
-      sqlite
+      nodePackages.sass
       sqlx-cli
       trunk
     ]) ++
