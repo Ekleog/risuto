@@ -255,16 +255,28 @@ fn task_list(p: &TaskListProps) -> Html {
             };
             let done_change_button = if t.is_done {
                 html! {
-                    <button onclick={on_done_change}>{ "Not done" }</button>
+                    <button
+                        type="button"
+                        class="btn bi-btn bi-arrow-counterclockwise"
+                        aria-label="Mark undone"
+                        onclick={on_done_change}
+                    >
+                    </button>
                 }
             } else {
                 html! {
-                    <button onclick={on_done_change} type="button" aria-label="Mark done">{ "Done" }</button>
+                    <button
+                        type="button"
+                        class="btn bi-btn bi-check-lg"
+                        aria-label="Mark done"
+                        onclick={on_done_change}
+                    >
+                    </button>
                 }
             };
             html! {
-                <li class="list-group-item">
-                    <span class="m-3">{ &t.current_title }</span>
+                <li class="list-group-item d-flex align-items-center">
+                    <span class="flex-grow-1">{ &t.current_title }</span>
                     { done_change_button }
                 </li>
             }
