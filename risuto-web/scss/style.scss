@@ -4,6 +4,7 @@ $body-bg: $black;
 $body-color: $gray-200;
 
 @import "../vendor/bootstrap-5.2.2/scss/bootstrap";
+@import "../vendor/bootstrap-icons-1.10.2/bootstrap-icons";
 
 .sidebar {
     background-color: $gray-900;
