@@ -227,7 +227,7 @@ impl Component for App {
                         <button onclick={ctx.link().callback(|_| AppMsg::UserLogout)}>
                             { "Logout" }
                         </button>
-                        <ul class="list-group">
+                        <ul class="task-list list-group">
                             <TaskList tasks={tasks} {on_done_change} />
                         </ul>
                     </main>
@@ -253,11 +253,19 @@ fn task_list(p: &TaskListProps) -> Html {
                 let is_done = t.is_done;
                 p.on_done_change.reform(move |_| (id, !is_done))
             };
+            let done_change_button = if t.is_done {
+                html! {
+                    <button onclick={on_done_change}>{ "Not done" }</button>
+                }
+            } else {
+                html! {
+                    <button onclick={on_done_change} type="button" aria-label="Mark done">{ "Done" }</button>
+                }
+            };
             html! {
                 <li class="list-group-item">
-                    { &t.current_title }{ "(owned by " }{ t.owner.0 }{ ")" }
-                    {"is currently done:"}{t.is_done}
-                    <button onclick={on_done_change}>{ "Done" }</button>
+                    <span class="m-3">{ &t.current_title }</span>
+                    { done_change_button }
                 </li>
             }
         })
