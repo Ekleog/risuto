@@ -1,11 +1,19 @@
 use chrono::Utc;
 use std::collections::{BTreeMap, HashMap, HashSet};
 
-pub use uuid::Uuid;
+pub use uuid::{uuid, Uuid};
 pub type Time = chrono::DateTime<Utc>;
+
+pub const STUB_UUID: Uuid = uuid!("ffffffff-ffff-ffff-ffff-ffffffffffff");
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct UserId(pub Uuid);
+
+impl UserId {
+    pub fn stub() -> UserId {
+        UserId(STUB_UUID)
+    }
+}
 
 #[derive(Debug, serde::Deserialize, serde::Serialize)]
 pub struct User {
@@ -16,6 +24,12 @@ pub struct User {
     Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, serde::Deserialize, serde::Serialize,
 )]
 pub struct TagId(pub Uuid);
+
+impl TagId {
+    pub fn stub() -> TagId {
+        TagId(STUB_UUID)
+    }
+}
 
 #[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
 pub struct Tag {
@@ -87,6 +101,17 @@ pub struct DbDump {
     pub users: HashMap<UserId, User>,
     pub tags: HashMap<TagId, Tag>,
     pub tasks: HashMap<TaskId, Task>,
+}
+
+impl DbDump {
+    pub fn stub() -> DbDump {
+        DbDump {
+            owner: UserId::stub(),
+            users: HashMap::new(),
+            tags: HashMap::new(),
+            tasks: HashMap::new(),
+        }
+    }
 }
 
 impl Task {

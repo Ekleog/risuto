@@ -1,7 +1,5 @@
 use gloo_storage::{LocalStorage, Storage};
 use risuto_api::*;
-use std::collections::HashMap;
-use uuid::uuid;
 use yew::prelude::*;
 
 mod login;
@@ -21,8 +19,6 @@ async fn fetch_db_dump(login: &LoginInfo) -> reqwest::Result<DbDump> {
         .json()
         .await
 }
-
-const STUB_UUID: Uuid = uuid!("ffffffff-ffff-ffff-ffff-ffffffffffff");
 
 #[derive(Clone, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct LoginInfo {
@@ -76,14 +72,9 @@ impl Component for App {
         let this = Self {
             login,
             logout: None,
-            db: DbDump {
-                owner: UserId(STUB_UUID),
-                users: HashMap::new(),
-                tags: HashMap::new(),
-                tasks: HashMap::new(),
-            },
+            db: DbDump::stub(),
             initial_load_completed: false,
-            tag: Some(TagId(STUB_UUID)),
+            tag: Some(TagId::stub()),
         };
         if this.login.is_some() {
             this.fetch_db_dump(ctx);
@@ -105,11 +96,14 @@ impl Component for App {
                     i.pass = String::new();
                     i
                 });
+                self.db = DbDump::stub();
+                self.initial_load_completed = false;
+                self.tag = Some(TagId::stub());
             }
             AppMsg::ReceivedDb(db) => {
                 self.db = db;
                 self.initial_load_completed = true;
-                if self.tag == Some(TagId(STUB_UUID)) {
+                if self.tag == Some(TagId::stub()) {
                     self.tag = Some(
                         self.db
                             .tags
