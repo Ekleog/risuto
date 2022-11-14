@@ -1,0 +1,19 @@
+@import "bootstrap-colors"; // TODO: there must be a way of not having to copy-paste all that...
+
+$body-bg: $black;
+$body-color: $gray-200;
+
+@import "../vendor/bootstrap-5.2.2/scss/bootstrap";
+
+.sidebar {
+    background-color: $gray-900;
+    height: 100vh;
+}
+
+.sidebar a {
+    color: $body-color;
+}
+
+.sidebar .nav-item .active {
+    background-color: $gray-800;
+}

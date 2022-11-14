@@ -181,7 +181,7 @@ impl Component for App {
                     false => "nav-link",
                 };
                 html! {
-                    <li class="nav-item">
+                    <li class="nav-item border-bottom p-2">
                         <a
                             class={ a_class }
                             href={format!("#tag-{}", tag)}
@@ -218,7 +218,7 @@ impl Component for App {
                 <div class="row">
                     <nav class="col-md-2 sidebar">
                         <h1>{ "Tags" }</h1>
-                        <ul class="nav flex-column nav-pills">
+                        <ul class="nav flex-column">
                             {for tag_list}
                         </ul>
                     </nav>
