@@ -151,10 +151,23 @@ impl Component for App {
             .link()
             .callback(|(id, is_done)| AppMsg::TaskSetDone(id, is_done));
         let current_tag = self.tag.as_ref().and_then(|t| self.db.tags.get(t)).cloned();
-        let tag_list = self
-            .db
-            .tags
-            .iter()
+        let mut tag_list = self.db.tags.iter().collect::<Vec<_>>();
+        tag_list.sort_unstable_by_key(|(id, t)| {
+            let is_tag_today = t.name == "today";
+            let is_owner_me = t.owner == self.db.owner;
+            let owner_name = self
+                .db
+                .users
+                .get(&t.owner)
+                .expect("tag owned by unknown user")
+                .name
+                .clone();
+            let name = t.name.clone();
+            let id = (*id).clone();
+            (!is_tag_today, !is_owner_me, owner_name, name, id)
+        });
+        let tag_list = tag_list
+            .into_iter()
             .map(|(id, t)| (Some(id.clone()), t.name.clone()))
             .chain(std::iter::once((None, String::from(":untagged"))))
             .map(|(id, tag)| {
