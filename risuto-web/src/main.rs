@@ -22,6 +22,8 @@ async fn fetch_db_dump(login: &LoginInfo) -> reqwest::Result<DbDump> {
         .await
 }
 
+const STUB_UUID: Uuid = uuid!("ffffffff-ffff-ffff-ffff-ffffffffffff");
+
 #[derive(Clone, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct LoginInfo {
     host: String,
@@ -33,6 +35,7 @@ enum AppMsg {
     UserLogin(LoginInfo),
     UserLogout,
     ReceivedDb(DbDump),
+    SetTag(Option<TagId>),
     TaskSetDone(TaskId, bool),
 }
 
@@ -41,6 +44,7 @@ struct App {
     logout: Option<LoginInfo>, // info saved from login info
     db: DbDump,
     initial_load_completed: bool,
+    tag: Option<TagId>,
 }
 
 impl App {
@@ -73,12 +77,13 @@ impl Component for App {
             login,
             logout: None,
             db: DbDump {
-                owner: UserId(uuid!("00000000-0000-0000-0000-000000000000")),
+                owner: UserId(STUB_UUID),
                 users: HashMap::new(),
                 tags: HashMap::new(),
                 tasks: HashMap::new(),
             },
             initial_load_completed: false,
+            tag: Some(TagId(STUB_UUID)),
         };
         if this.login.is_some() {
             this.fetch_db_dump(ctx);
@@ -104,6 +109,20 @@ impl Component for App {
             AppMsg::ReceivedDb(db) => {
                 self.db = db;
                 self.initial_load_completed = true;
+                if self.tag == Some(TagId(STUB_UUID)) {
+                    self.tag = Some(
+                        self.db
+                            .tags
+                            .iter()
+                            .find(|(_, t)| t.name == "today")
+                            .expect("found no tag named 'today'")
+                            .0
+                            .clone(),
+                    );
+                }
+            }
+            AppMsg::SetTag(id) => {
+                self.tag = id;
             }
             AppMsg::TaskSetDone(id, done) => {
                 // TODO: RPC to set task as done
@@ -137,16 +156,30 @@ impl Component for App {
         let on_done_change = ctx
             .link()
             .callback(|(id, is_done)| AppMsg::TaskSetDone(id, is_done));
+        let current_tag = self.tag.as_ref().and_then(|t| self.db.tags.get(t)).cloned();
+        let tag_list = self.db.tags.iter().map(|(id, t)| {
+            let id = id.clone();
+            html! {
+                <li>
+                    <button onclick={ctx.link().callback(move |_| AppMsg::SetTag(Some(id)))}>
+                        {&t.name}
+                    </button>
+                </li>
+            }
+        });
         html! {
             <>
                 {for loading_banner}
                 <h1>{ "Tags" }</h1>
                 <ul>
-                    {for self.db.tags.iter().map(|(_id, t)| html! {
-                        <li>{ &t.name }</li>
-                    })}
+                    {for tag_list}
+                    <li>
+                        <button onclick={ctx.link().callback(|_| AppMsg::SetTag(None))}>
+                            { ":untagged" }
+                        </button>
+                    </li>
                 </ul>
-                <h1>{ "Tasks" }</h1>
+                <h1>{ "Tasks for tag " }{ current_tag.map(|t| t.name).unwrap_or_else(|| String::from(":untagged")) }</h1>
                 <button onclick={ctx.link().callback(|_| AppMsg::UserLogout)}>
                     { "Logout" }
                 </button>

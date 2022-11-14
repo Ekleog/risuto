@@ -15,7 +15,7 @@ pub struct User {
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct TagId(pub Uuid);
 
-#[derive(Debug, serde::Deserialize, serde::Serialize)]
+#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
 pub struct Tag {
     pub owner: UserId,
     pub name: String,
