@@ -147,12 +147,6 @@ impl Component for App {
         }
         let loading_banner =
             (!self.initial_load_completed).then(|| html! { <h1>{ "Loading..." }</h1> });
-        let tasks = self
-            .db
-            .tasks
-            .iter()
-            .map(|(id, task)| (*id, task.clone()))
-            .collect::<Vec<_>>();
         let on_done_change = ctx
             .link()
             .callback(|(id, is_done)| AppMsg::TaskSetDone(id, is_done));
@@ -167,6 +161,21 @@ impl Component for App {
                 </li>
             }
         });
+        let tasks = self.db.tasks.iter();
+        let tasks: Vec<_> = if let Some(tag) = self.tag {
+            let mut tasks = tasks
+                .filter_map(|(id, task)| task.current_tags.get(&tag).map(|prio| (prio, *id, task.clone())))
+                .collect::<Vec<_>>();
+            tasks.sort_unstable_by_key(|(prio, id, _)| (**prio, *id));
+            tasks.into_iter()
+                .map(|(_prio, id, task)| (id, task))
+                .collect()
+        } else {
+            tasks
+                .filter(|(_, task)| task.current_tags.len() == 0)
+                .map(|(id, task)| (*id, task.clone()))
+                .collect()
+        };
         html! {
             <>
                 {for loading_banner}

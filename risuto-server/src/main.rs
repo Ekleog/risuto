@@ -182,6 +182,7 @@ async fn fetch_tags_for_user(
     conn: &mut sqlx::PgConnection,
     user: UserId,
 ) -> Result<HashMap<TagId, Tag>, AnyhowError> {
+    // TODO: also report which permissions are available to the user
     Ok(sqlx::query!(
         "
             SELECT
