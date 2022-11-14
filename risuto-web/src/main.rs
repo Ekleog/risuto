@@ -222,7 +222,7 @@ impl Component for App {
                             {for tag_list}
                         </ul>
                     </nav>
-                    <main>
+                    <main class="col-md-9">
                         <h1>{ "Tasks for tag " }{ current_tag.map(|t| t.name).unwrap_or_else(|| String::from(":untagged")) }</h1>
                         <button onclick={ctx.link().callback(|_| AppMsg::UserLogout)}>
                             { "Logout" }
