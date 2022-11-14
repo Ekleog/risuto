@@ -201,7 +201,7 @@ impl Component for App {
                         .map(|prio| (prio, *id, task.clone()))
                 })
                 .collect::<Vec<_>>();
-            tasks.sort_unstable_by_key(|(prio, id, _)| (**prio, *id));
+            tasks.sort_unstable_by_key(|(meta, id, _)| (meta.priority, *id));
             tasks
                 .into_iter()
                 .map(|(_prio, id, task)| (id, task))

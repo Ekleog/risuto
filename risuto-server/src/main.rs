@@ -388,12 +388,13 @@ async fn fetch_tasks_from_tmp_tasks_table(
     );
 
     query_events!(
-        fields: "e.task_id, e.tag_id, e.priority",
+        fields: "e.task_id, e.tag_id, e.priority, e.backlog",
         "add_tag_events",
         "task_id",
         |e| EventType::AddTag {
             tag: TagId(e.try_get("tag_id").context("retrieving tag_id field")?),
-            prio: e.try_get("priority").context("retrieving prio field")?
+            prio: e.try_get("priority").context("retrieving prio field")?,
+            backlog: e.try_get("backlog").context("retrieving backlog field")?,
         },
     );
 

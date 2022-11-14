@@ -38,6 +38,15 @@ pub struct Tag {
     pub archived: bool,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
+pub struct TaskInTag {
+    // higher is lower in the tag list
+    pub priority: i64,
+
+    /// if true, this task is in this tag's backlog
+    pub backlog: bool,
+}
+
 #[derive(
     Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, serde::Deserialize, serde::Serialize,
 )]
@@ -54,7 +63,7 @@ pub struct Task {
     pub is_done: bool,
     pub is_archived: bool,
     pub scheduled_for: Option<Time>,
-    pub current_tags: HashMap<TagId, i64>,
+    pub current_tags: HashMap<TagId, TaskInTag>,
 
     pub deps_before_self: HashSet<TaskId>,
     pub deps_after_self: HashSet<TaskId>,
@@ -97,8 +106,18 @@ impl Task {
                     EventType::RmDepAfterSelf(task) => {
                         self.deps_after_self.remove(task);
                     }
-                    EventType::AddTag { tag, prio } => {
-                        self.current_tags.insert(*tag, *prio);
+                    EventType::AddTag {
+                        tag,
+                        prio,
+                        backlog,
+                    } => {
+                        self.current_tags.insert(
+                            *tag,
+                            TaskInTag {
+                                priority: *prio,
+                                backlog: *backlog,
+                            },
+                        );
                     }
                     EventType::RmTag(tag) => {
                         self.current_tags.remove(tag);
@@ -156,7 +175,7 @@ pub enum EventType {
     AddDepAfterSelf(TaskId),
     RmDepBeforeSelf(TaskId),
     RmDepAfterSelf(TaskId),
-    AddTag { tag: TagId, prio: i64 },
+    AddTag { tag: TagId, prio: i64, backlog: bool },
     RmTag(TagId),
     AddComment(String),
     EditComment(EventId, String),
