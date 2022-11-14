@@ -44,6 +44,16 @@ struct App {
 }
 
 impl App {
+    fn new() -> App {
+        App {
+            login: None,
+            logout: None,
+            db: DbDump::stub(),
+            initial_load_completed: false,
+            tag: Some(TagId::stub()),
+        }
+    }
+
     fn fetch_db_dump(&self, ctx: &Context<Self>) {
         let login = self
             .login
@@ -68,14 +78,8 @@ impl Component for App {
     type Properties = ();
 
     fn create(ctx: &Context<Self>) -> Self {
-        let login = LocalStorage::get("login").ok();
-        let this = Self {
-            login,
-            logout: None,
-            db: DbDump::stub(),
-            initial_load_completed: false,
-            tag: Some(TagId::stub()),
-        };
+        let mut this = App::new();
+        this.login = LocalStorage::get("login").ok();
         if this.login.is_some() {
             this.fetch_db_dump(ctx);
         }
@@ -92,16 +96,12 @@ impl Component for App {
             }
             AppMsg::UserLogout => {
                 LocalStorage::delete("login");
-                *self = App {
-                    login: None,
-                    logout: self.login.take().map(|mut i| {
-                        i.pass = String::new();
-                        i
-                    }), // info saved from login info
-                    db: DbDump::stub(),
-                    initial_load_completed: false,
-                    tag: Some(TagId::stub()),
-                };
+                let this = App::new();
+                this.logout = self.login.take().map(|mut i| {
+                    i.pass = String::new();
+                    i
+                }); // info saved from login info
+                *self = this;
             }
             AppMsg::ReceivedDb(db) => {
                 self.db = db;
