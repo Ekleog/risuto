@@ -1,6 +1,9 @@
 # TODO: add --quiet flag to sass when trunk supports it, to silence bootstrap
 # warnings
 
+[watch]
+watch = [".", "../risuto-api"]
+
 [[proxy]]
 backend = "http://localhost:3000/api"
 
