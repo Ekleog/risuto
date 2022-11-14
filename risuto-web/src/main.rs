@@ -198,17 +198,23 @@ impl Component for App {
         html! {
             <div class="container-fluid">
                 {for loading_banner}
-                <h1>{ "Tags" }</h1>
-                <ul class="nav flex-column nav-pills">
-                    {for tag_list}
-                </ul>
-                <h1>{ "Tasks for tag " }{ current_tag.map(|t| t.name).unwrap_or_else(|| String::from(":untagged")) }</h1>
-                <button onclick={ctx.link().callback(|_| AppMsg::UserLogout)}>
-                    { "Logout" }
-                </button>
-                <ul class="list-group">
-                    <TaskList tasks={tasks} {on_done_change} />
-                </ul>
+                <div class="row">
+                    <nav class="col-md-2 sidebar">
+                        <h1>{ "Tags" }</h1>
+                        <ul class="nav flex-column nav-pills">
+                            {for tag_list}
+                        </ul>
+                    </nav>
+                    <main>
+                        <h1>{ "Tasks for tag " }{ current_tag.map(|t| t.name).unwrap_or_else(|| String::from(":untagged")) }</h1>
+                        <button onclick={ctx.link().callback(|_| AppMsg::UserLogout)}>
+                            { "Logout" }
+                        </button>
+                        <ul class="list-group">
+                            <TaskList tasks={tasks} {on_done_change} />
+                        </ul>
+                    </main>
+                </div>
             </div>
         }
     }
