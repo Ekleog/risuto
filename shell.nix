@@ -6,6 +6,8 @@ pkgs.stdenv.mkDerivation {
     (with pkgs; [
       cacert
       mdbook
+      openssl
+      pkgconfig
       rust-analyzer
       nodePackages.sass
       sqlx-cli
