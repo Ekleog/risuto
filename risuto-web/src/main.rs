@@ -151,23 +151,42 @@ impl Component for App {
             .link()
             .callback(|(id, is_done)| AppMsg::TaskSetDone(id, is_done));
         let current_tag = self.tag.as_ref().and_then(|t| self.db.tags.get(t)).cloned();
-        let tag_list = self.db.tags.iter().map(|(id, t)| {
-            let id = id.clone();
-            html! {
-                <li>
-                    <button onclick={ctx.link().callback(move |_| AppMsg::SetTag(Some(id)))}>
-                        {&t.name}
-                    </button>
-                </li>
-            }
-        });
+        let tag_list = self
+            .db
+            .tags
+            .iter()
+            .map(|(id, t)| (Some(id.clone()), t.name.clone()))
+            .chain(std::iter::once((None, String::from(":untagged"))))
+            .map(|(id, tag)| {
+                let id = id.clone();
+                let a_class = match id == self.tag {
+                    true => "nav-link active",
+                    false => "nav-link",
+                };
+                html! {
+                    <li class="nav-item">
+                        <a
+                            class={ a_class }
+                            href={format!("#tag-{}", tag)}
+                            onclick={ctx.link().callback(move |_| AppMsg::SetTag(id))}
+                        >
+                            { tag }
+                        </a>
+                    </li>
+                }
+            });
         let tasks = self.db.tasks.iter();
         let tasks: Vec<_> = if let Some(tag) = self.tag {
             let mut tasks = tasks
-                .filter_map(|(id, task)| task.current_tags.get(&tag).map(|prio| (prio, *id, task.clone())))
+                .filter_map(|(id, task)| {
+                    task.current_tags
+                        .get(&tag)
+                        .map(|prio| (prio, *id, task.clone()))
+                })
                 .collect::<Vec<_>>();
             tasks.sort_unstable_by_key(|(prio, id, _)| (**prio, *id));
-            tasks.into_iter()
+            tasks
+                .into_iter()
                 .map(|(_prio, id, task)| (id, task))
                 .collect()
         } else {
@@ -177,16 +196,11 @@ impl Component for App {
                 .collect()
         };
         html! {
-            <>
+            <div class="container-fluid">
                 {for loading_banner}
                 <h1>{ "Tags" }</h1>
-                <ul>
+                <ul class="nav flex-column nav-pills">
                     {for tag_list}
-                    <li>
-                        <button onclick={ctx.link().callback(|_| AppMsg::SetTag(None))}>
-                            { ":untagged" }
-                        </button>
-                    </li>
                 </ul>
                 <h1>{ "Tasks for tag " }{ current_tag.map(|t| t.name).unwrap_or_else(|| String::from(":untagged")) }</h1>
                 <button onclick={ctx.link().callback(|_| AppMsg::UserLogout)}>
@@ -195,7 +209,7 @@ impl Component for App {
                 <ul class="list-group">
                     <TaskList tasks={tasks} {on_done_change} />
                 </ul>
-            </>
+            </div>
         }
     }
 }
