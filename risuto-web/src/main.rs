@@ -92,13 +92,16 @@ impl Component for App {
             }
             AppMsg::UserLogout => {
                 LocalStorage::delete("login");
-                self.logout = self.login.take().map(|mut i| {
-                    i.pass = String::new();
-                    i
-                });
-                self.db = DbDump::stub();
-                self.initial_load_completed = false;
-                self.tag = Some(TagId::stub());
+                *self = App {
+                    login: None,
+                    logout: self.login.take().map(|mut i| {
+                        i.pass = String::new();
+                        i
+                    }), // info saved from login info
+                    db: DbDump::stub(),
+                    initial_load_completed: false,
+                    tag: Some(TagId::stub()),
+                };
             }
             AppMsg::ReceivedDb(db) => {
                 self.db = db;
