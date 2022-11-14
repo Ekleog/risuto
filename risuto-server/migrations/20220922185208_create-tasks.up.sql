@@ -23,12 +23,13 @@ CREATE TABLE set_title_events (
         ON DELETE CASCADE
 );
 
-CREATE TABLE complete_task_events (
+CREATE TABLE set_task_done_events (
     id UUID PRIMARY KEY NOT NULL,
     owner_id UUID NOT NULL,
     date TIMESTAMP NOT NULL,
 
     task_id UUID NOT NULL,
+    now_done BOOLEAN NOT NULL,
 
     FOREIGN KEY (owner_id) REFERENCES users (id)
         ON DELETE CASCADE,
@@ -36,38 +37,13 @@ CREATE TABLE complete_task_events (
         ON DELETE CASCADE
 );
 
-CREATE TABLE reopen_task_events (
+CREATE TABLE set_task_archived_events (
     id UUID PRIMARY KEY NOT NULL,
     owner_id UUID NOT NULL,
     date TIMESTAMP NOT NULL,
 
     task_id UUID NOT NULL,
-
-    FOREIGN KEY (owner_id) REFERENCES users (id)
-        ON DELETE CASCADE,
-    FOREIGN KEY (task_id) REFERENCES tasks (id)
-        ON DELETE CASCADE
-);
-
-CREATE TABLE archive_task_events (
-    id UUID PRIMARY KEY NOT NULL,
-    owner_id UUID NOT NULL,
-    date TIMESTAMP NOT NULL,
-
-    task_id UUID NOT NULL,
-
-    FOREIGN KEY (owner_id) REFERENCES users (id)
-        ON DELETE CASCADE,
-    FOREIGN KEY (task_id) REFERENCES tasks (id)
-        ON DELETE CASCADE
-);
-
-CREATE TABLE unarchive_task_events (
-    id UUID PRIMARY KEY NOT NULL,
-    owner_id UUID NOT NULL,
-    date TIMESTAMP NOT NULL,
-
-    task_id UUID NOT NULL,
+    now_archived BOOLEAN NOT NULL,
 
     FOREIGN KEY (owner_id) REFERENCES users (id)
         ON DELETE CASCADE,

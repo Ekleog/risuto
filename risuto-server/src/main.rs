@@ -327,31 +327,17 @@ async fn fetch_tasks_from_tmp_tasks_table(
     );
 
     query_events!(
-        fields: "e.task_id",
-        "complete_task_events",
+        fields: "e.task_id, e.now_done",
+        "set_task_done_events",
         "task_id",
-        |e| EventType::Complete,
+        |e| EventType::SetDone(e.try_get("now_done").context("retrieving now_done field")?),
     );
 
     query_events!(
-        fields: "e.task_id",
-        "reopen_task_events",
+        fields: "e.task_id, e.now_archived",
+        "set_task_archived_events",
         "task_id",
-        |e| EventType::Reopen,
-    );
-
-    query_events!(
-        fields: "e.task_id",
-        "archive_task_events",
-        "task_id",
-        |e| EventType::Archive,
-    );
-
-    query_events!(
-        fields: "e.task_id",
-        "unarchive_task_events",
-        "task_id",
-        |e| EventType::Unarchive,
+        |e| EventType::SetArchived(e.try_get("now_archived").context("retrieving now_archived field")?),
     );
 
     query_events!(

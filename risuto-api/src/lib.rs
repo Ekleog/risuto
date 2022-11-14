@@ -80,10 +80,8 @@ pub struct Event {
 #[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 pub enum EventType {
     SetTitle(String),
-    Complete,
-    Reopen,
-    Archive,
-    Unarchive,
+    SetDone(bool),
+    SetArchived(bool),
     Schedule(Option<Time>),
     AddDepBeforeSelf(TaskId),
     AddDepAfterSelf(TaskId),
@@ -127,10 +125,8 @@ impl Task {
             for e in evts {
                 match &e.contents {
                     EventType::SetTitle(title) => self.current_title = title.clone(),
-                    EventType::Complete => self.is_done = true,
-                    EventType::Reopen => self.is_done = false,
-                    EventType::Archive => self.is_archived = true,
-                    EventType::Unarchive => self.is_archived = false,
+                    EventType::SetDone(now_done) => self.is_done = *now_done,
+                    EventType::SetArchived(now_archived) => self.is_archived = *now_archived,
                     EventType::Schedule(time) => self.scheduled_for = *time,
                     EventType::AddDepBeforeSelf(task) => {
                         self.deps_before_self.insert(*task);
