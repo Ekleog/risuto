@@ -3,8 +3,8 @@ use axum::{
     http::{self, Request, StatusCode},
     middleware::Next,
     response::Response,
-    routing::get,
-    Extension, Router,
+    routing::{get, post},
+    Extension, Json, Router,
 };
 use risuto_api::{DbDump, UserId};
 use std::net::SocketAddr;
@@ -81,6 +81,7 @@ async fn main() -> anyhow::Result<()> {
 
     let app = Router::new()
         .route("/api/fetch-unarchived", get(fetch_unarchived))
+        .route("/api/submit-event", post(submit_event))
         .route_layer(axum::middleware::from_fn(auth))
         .layer(Extension(db));
 
@@ -111,19 +112,45 @@ impl axum::response::IntoResponse for AnyhowError {
     }
 }
 
+pub struct PermissionDenied;
+
+impl axum::response::IntoResponse for PermissionDenied {
+    fn into_response(self) -> axum::response::Response {
+        (StatusCode::FORBIDDEN, "Permission denied").into_response()
+    }
+}
+
 async fn fetch_unarchived(
     Extension(user): Extension<Auth>,
     Extension(db): Extension<sqlx::PgPool>,
-) -> Result<Result<axum::Json<DbDump>, (StatusCode, &'static str)>, AnyhowError> {
+) -> Result<Result<Json<DbDump>, PermissionDenied>, AnyhowError> {
     match user.0 {
-        None => Ok(Err((StatusCode::FORBIDDEN, "Permission denied"))),
-        Some(owner) => {
+        None => Ok(Err(PermissionDenied)),
+        Some(user) => {
             let mut conn = db.acquire().await.context("acquiring db connection")?;
-            Ok(Ok(axum::Json(
-                db::fetch_dump_unarchived(&mut conn, owner.id)
+            Ok(Ok(Json(
+                db::fetch_dump_unarchived(&mut conn, user.id)
                     .await
-                    .with_context(|| format!("fetching db dump for {:?}", owner))?,
+                    .with_context(|| format!("fetching db dump for {:?}", user))?,
             )))
+        }
+    }
+}
+
+async fn submit_event(
+    Json(e): Json<risuto_api::NewEvent>,
+    Extension(user): Extension<Auth>,
+    Extension(db): Extension<sqlx::PgPool>,
+) -> Result<Result<(), PermissionDenied>, AnyhowError> {
+    match user.0 {
+        None => Ok(Err(PermissionDenied)),
+        Some(user) if user.id != e.event.owner => Ok(Err(PermissionDenied)),
+        Some(_) => {
+            let mut conn = db.acquire().await.context("acquiring db connection")?;
+            // TODO: websocket stuff
+            Ok(db::submit_event(&mut conn, e)
+                .await
+                .context("submitting event to db")?)
         }
     }
 }

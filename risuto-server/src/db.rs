@@ -1,9 +1,14 @@
 use anyhow::Context;
 use chrono::Utc;
 use futures::TryStreamExt;
-use risuto_api::{DbDump, Event, EventId, EventType, Tag, TagId, Task, TaskId, User, UserId};
+use risuto_api::{
+    AuthCheck, AuthInfo, DbDump, Event, EventId, EventType, NewEvent, Tag, TagId, Task, TaskId,
+    User, UserId,
+};
 use sqlx::Row;
 use std::collections::{BTreeMap, HashMap, HashSet};
+
+use crate::PermissionDenied;
 
 pub async fn fetch_dump_unarchived(
     conn: &mut sqlx::PgConnection,
@@ -323,4 +328,217 @@ async fn fetch_tasks_from_tmp_tasks_table(
     }
 
     Ok(tasks)
+}
+
+pub async fn auth_info_for(
+    conn: &mut sqlx::PgConnection,
+    user: UserId,
+    task: TaskId,
+) -> anyhow::Result<AuthInfo> {
+    let auth = sqlx::query!(
+        r#"
+            SELECT
+                can_edit AS "can_edit!",
+                can_triage AS "can_triage!",
+                can_relabel_to_any AS "can_relabel_to_any!",
+                can_comment AS "can_comment!"
+            FROM v_tasks_users
+            WHERE task_id = $1
+            AND user_id = $2
+        "#,
+        task.0,
+        user.0
+    )
+    .fetch_all(&mut *conn)
+    .await
+    .with_context(|| {
+        format!(
+            "checking permissions for user {:?} on task {:?}",
+            user, task
+        )
+    })?;
+    match &auth[..] {
+        [] => Ok(AuthInfo {
+            can_read: false,
+            can_edit: false,
+            can_triage: false,
+            can_relabel_to_any: false,
+            can_comment: false,
+        }),
+        [r] => Ok(AuthInfo {
+            can_read: true,
+            can_edit: r.can_edit,
+            can_triage: r.can_triage,
+            can_relabel_to_any: r.can_relabel_to_any,
+            can_comment: r.can_comment,
+        }),
+        _ => Err(anyhow::anyhow!(
+            "v_tasks_users had multiple lines for task {:?} and user {:?}",
+            task,
+            user
+        )),
+    }
+}
+
+pub async fn list_tags_on(
+    conn: &mut sqlx::PgConnection,
+    task: TaskId,
+) -> anyhow::Result<Vec<TagId>> {
+    Ok(sqlx::query!(
+        r#"SELECT tag_id AS "tag_id!" FROM v_tasks_tags WHERE task_id = $1"#,
+        task.0
+    )
+    .map(|r| TagId(r.tag_id))
+    .fetch_all(conn)
+    .await?)
+}
+
+pub async fn get_comment_owner(
+    conn: &mut sqlx::PgConnection,
+    event: EventId,
+) -> anyhow::Result<UserId> {
+    Ok(UserId(
+        sqlx::query!(
+            "SELECT owner_id FROM add_comment_events WHERE id = $1",
+            event.0
+        )
+        .fetch_one(conn)
+        .await?
+        .owner_id,
+    ))
+}
+
+pub async fn is_comment_first(
+    conn: &mut sqlx::PgConnection,
+    task: TaskId,
+    event: EventId,
+) -> anyhow::Result<bool> {
+    Ok(sqlx::query!(
+        "SELECT id FROM add_comment_events WHERE task_id = $1 ORDER BY date LIMIT 1",
+        task.0
+    )
+    .fetch_one(conn)
+    .await?
+    .id == event.0)
+}
+
+pub async fn submit_event(
+    conn: &mut sqlx::PgConnection,
+    e: NewEvent,
+) -> anyhow::Result<Result<(), PermissionDenied>> {
+    // Check authorization
+    let mut auth = e.is_authorized(
+        &auth_info_for(&mut *conn, e.event.owner, e.task)
+            .await
+            .with_context(|| format!("fetching auth info for {:?} {:?}", e.event.owner, e.task))?,
+    );
+    loop {
+        match auth.clone() {
+            AuthCheck::Done(true) => break,
+            AuthCheck::Done(false) => return Ok(Err(PermissionDenied)),
+            AuthCheck::IfCanTriage(task) => auth.feed_auth_info_for(
+                task,
+                &auth_info_for(&mut *conn, e.event.owner, task)
+                    .await
+                    .with_context(|| {
+                        format!("fetching auth info for {:?} {:?}", e.event.owner, e.task)
+                    })?,
+            ),
+            AuthCheck::IfTagInTagsFor(tag, task) => auth.feed_tag_in_tags_for(
+                tag,
+                task,
+                list_tags_on(&mut *conn, task)
+                    .await
+                    .with_context(|| format!("fetching tags on {:?}", task))?
+                    .contains(&tag),
+            ),
+            AuthCheck::IfIsCommentOwner(comm) => auth.feed_is_comment_owner(
+                comm,
+                get_comment_owner(&mut *conn, comm)
+                    .await
+                    .with_context(|| format!("getting comment owner of {:?}", comm))?
+                    == e.event.owner,
+            ),
+            AuthCheck::IfIsCommentFirstOr(task, comm, _) => auth.feed_is_comment_first(
+                task,
+                comm,
+                is_comment_first(&mut *conn, task, comm)
+                    .await
+                    .with_context(|| {
+                        format!(
+                            "checking if comment {:?} is the first of task {:?}",
+                            comm, task
+                        )
+                    })?,
+            ),
+        }
+    }
+
+    let event_id = e.event.id;
+
+    macro_rules! insert_event {
+        ($table:expr, $repeat:expr, $( $v:expr ),*) => {{
+            sqlx::query(
+                concat!(
+                    "INSERT INTO ",
+                    $table,
+                    " VALUES ($1, $2, $3, ",
+                    $repeat,
+                    ")",
+                )
+            )
+            $(.bind($v))*
+            .execute(&mut *conn)
+            .await
+            .with_context(|| format!("inserting {} {:?}", $table, event_id))?
+        }}
+    }
+
+    let res = match e.event.contents {
+        EventType::SetTitle(t) => insert_event!("set_title_events", "$4, $5", e.task.0, t),
+        EventType::SetDone(d) => insert_event!("set_task_done_events", "$4, $5", e.task.0, d),
+        EventType::SetArchived(a) => {
+            insert_event!("set_task_archived_events", "$4, $5", e.task.0, a)
+        }
+        EventType::Schedule(d) => insert_event!(
+            "schedule_events",
+            "$4, $5",
+            e.task.0,
+            d.map(|d| d.naive_utc())
+        ),
+        EventType::AddDepBeforeSelf(o) => {
+            insert_event!("add_dependency_events", "$4, $5", o.0, e.task.0)
+        }
+        EventType::AddDepAfterSelf(o) => {
+            insert_event!("add_dependency_events", "$4, $5", e.task.0, o.0)
+        }
+        EventType::RmDepBeforeSelf(o) => {
+            insert_event!("remove_dependency_events", "$4, $5", o.0, e.task.0)
+        }
+        EventType::RmDepAfterSelf(o) => {
+            insert_event!("remove_dependency_events", "$4, $5", e.task.0, o.0)
+        }
+        EventType::AddTag { tag, prio, backlog } => insert_event!(
+            "add_tag_events",
+            "$4, $5, $6, $7",
+            e.task.0,
+            tag.0,
+            prio,
+            backlog
+        ),
+        EventType::RmTag(tag) => insert_event!("remove_tag_events", "$4, $5", e.task.0, tag.0),
+        EventType::AddComment(txt) => insert_event!("add_comment_events", "$4, $5", e.task.0, txt),
+        EventType::EditComment(comm, txt) => {
+            insert_event!("edit_comment_events", "$4, $5", comm.0, txt)
+        }
+    };
+
+    anyhow::ensure!(
+        res.rows_affected() == 1,
+        "insertion of event {:?} affected {} rows",
+        event_id,
+        res.rows_affected()
+    );
+
+    Ok(Ok(()))
 }
