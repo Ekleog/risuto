@@ -2,10 +2,16 @@ CREATE TABLE perms (
     tag_id UUID NOT NULL,
     user_id UUID NOT NULL,
 
-    -- can always read tasks when a row exists
-    can_tag BOOLEAN NOT NULL, -- add/remove tasks that user_id owns to tag
-    can_comment BOOLEAN NOT NULL, -- add comments to task
-    can_close BOOLEAN NOT NULL, -- close a task as done
+    -- can always read tasks whenever a row exists here
+    can_edit BOOLEAN NOT NULL,
+        -- SetTitle, EditComment for first comment
+    can_triage BOOLEAN NOT NULL,
+        -- SetDone, SetArchived, Schedule, Add/Rm-Dep-Before/After-Self
+        -- AddTag for tags that are already on the task (setting prio/backlog)
+    can_relabel_to_any BOOLEAN NOT NULL,
+        -- Add/Rm-Tag for all tags (beware privilege escalation)
+    can_comment BOOLEAN NOT NULL,
+        -- AddComment to a date after the first comment
 
     PRIMARY KEY (tag_id, user_id),
     FOREIGN KEY (tag_id) REFERENCES tags (id)
