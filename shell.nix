@@ -6,18 +6,18 @@ pkgs.stdenv.mkDerivation {
     (with pkgs; [
       cacert
       mdbook
+      nodePackages.sass
       openssl
       pkgconfig
-      rust-analyzer
-      nodePackages.sass
+      rust-analyzer-nightly
       sqlx-cli
       trunk
-    ]) ++
-    (with rustNightlyChannel; [
-      cargo
-      (rust.override {
-        targets = ["wasm32-unknown-unknown"];
-      })
+
+      (fenix.combine (with fenix; [
+        minimal.cargo
+        minimal.rustc
+        targets.wasm32-unknown-unknown.latest.rust-std
+      ]))
     ])
   );
 }
