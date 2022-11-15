@@ -106,11 +106,7 @@ impl Task {
                     EventType::RmDepAfterSelf(task) => {
                         self.deps_after_self.remove(task);
                     }
-                    EventType::AddTag {
-                        tag,
-                        prio,
-                        backlog,
-                    } => {
+                    EventType::AddTag { tag, prio, backlog } => {
                         self.current_tags.insert(
                             *tag,
                             TaskInTag {
@@ -175,7 +171,11 @@ pub enum EventType {
     AddDepAfterSelf(TaskId),
     RmDepBeforeSelf(TaskId),
     RmDepAfterSelf(TaskId),
-    AddTag { tag: TagId, prio: i64, backlog: bool },
+    AddTag {
+        tag: TagId,
+        prio: i64,
+        backlog: bool,
+    },
     RmTag(TagId),
     AddComment(String),
     EditComment(EventId, String),
@@ -200,6 +200,14 @@ impl DbDump {
     }
 }
 
+pub struct AuthInfo {
+    pub can_read: bool,
+    pub can_edit: bool,
+    pub can_triage: bool,
+    pub can_relabel_to_any: bool,
+    pub can_comment: bool,
+}
+
 #[derive(Debug, serde::Deserialize, serde::Serialize)]
 pub struct NewEvent {
     pub task: TaskId,
@@ -216,6 +224,76 @@ impl NewEvent {
                 date: Utc::now(),
                 contents,
             },
+        }
+    }
+
+    /// Takes AuthInfo as the authorization status for the user for self.task
+    // TODO: refactor as an async fn that takes in 4 async callbacks
+    pub fn is_authorized(&self, auth: &AuthInfo) -> AuthCheck {
+        match self.event.contents {
+            EventType::SetTitle(_) => AuthCheck::Done(auth.can_edit),
+            EventType::SetDone(_) | EventType::SetArchived(_) | EventType::Schedule(_) => {
+                AuthCheck::Done(auth.can_triage)
+            }
+            EventType::AddDepBeforeSelf(o)
+            | EventType::AddDepAfterSelf(o)
+            | EventType::RmDepBeforeSelf(o)
+            | EventType::RmDepAfterSelf(o) => match auth.can_triage {
+                false => AuthCheck::Done(false),
+                true => AuthCheck::IfCanTriage(o),
+            },
+            EventType::AddTag { tag, .. } => match (auth.can_relabel_to_any, auth.can_triage) {
+                (true, _) => AuthCheck::Done(true),
+                (false, false) => AuthCheck::Done(false),
+                (false, true) => AuthCheck::IfTagInTagsFor(tag, self.task),
+            },
+            EventType::RmTag(_) => AuthCheck::Done(auth.can_relabel_to_any),
+            EventType::AddComment(_) => AuthCheck::Done(auth.can_comment),
+            EventType::EditComment(comm, _) => match auth.can_edit {
+                true => AuthCheck::IfIsCommentFirstOr(
+                    self.task,
+                    comm,
+                    Box::new(AuthCheck::IfIsCommentOwner(comm)),
+                ),
+                false => AuthCheck::IfIsCommentOwner(comm),
+            },
+        }
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum AuthCheck {
+    Done(bool),
+    IfCanTriage(TaskId),
+    IfTagInTagsFor(TagId, TaskId),
+    IfIsCommentOwner(EventId),
+    IfIsCommentFirstOr(TaskId, EventId, Box<AuthCheck>),
+}
+
+impl AuthCheck {
+    pub fn feed_auth_info_for(&mut self, task: TaskId, auth: &AuthInfo) {
+        assert_eq!(*self, AuthCheck::IfCanTriage(task));
+        *self = AuthCheck::Done(auth.can_triage);
+    }
+
+    pub fn feed_tag_in_tags_for(&mut self, tag: TagId, task: TaskId, tag_is_in_tags_for: bool) {
+        assert_eq!(*self, AuthCheck::IfTagInTagsFor(tag, task));
+        *self = AuthCheck::Done(tag_is_in_tags_for);
+    }
+
+    pub fn feed_is_comment_owner(&mut self, comm: EventId, is_comment_owner: bool) {
+        assert_eq!(*self, AuthCheck::IfIsCommentOwner(comm));
+        *self = AuthCheck::Done(is_comment_owner);
+    }
+
+    pub fn feed_is_comment_first(&mut self, task: TaskId, comm: EventId, is_comment_first: bool) {
+        let next = match self {
+            AuthCheck::IfIsCommentFirstOr(t, c, next) if *t == task && *c == comm => *next.clone(),
+            _ => panic!("{:?} {:?} to {:?}", task, comm, self),
+        };
+        match is_comment_first {
+            true => *self = AuthCheck::Done(true),
+            false => *self = next,
         }
     }
 }
