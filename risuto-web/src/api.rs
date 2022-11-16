@@ -77,6 +77,7 @@ async fn send_event(client: &reqwest::Client, login: &LoginInfo, event: NewEvent
             .await;
         match res {
             // TODO: panicking on server message is Bad(tm)
+            // TODO: at least handle 403 forbidden answers
             Ok(r) if r.status().is_success() => break,
             Ok(r) => panic!("got non-successful response to event submission: {:?}", r),
             Err(e) if e.is_timeout() => continue,

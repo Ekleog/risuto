@@ -101,7 +101,8 @@ impl Component for App {
             }
             AppMsg::UserLogout => {
                 LocalStorage::delete("login");
-                // TODO: also clear saved outgoing queue, and warn the user upon logout that unsynced changes will be lost
+                LocalStorage::delete("queue");
+                // TODO: warn the user upon logout that unsynced changes will be lost
                 let mut this = App::new();
                 this.logout = self.login.take().map(|i| LoginInfo {
                     host: i.info.host,
@@ -129,6 +130,8 @@ impl Component for App {
                 self.tag = id;
             }
             AppMsg::NewTaskEvent(e) => {
+                // TODO: validate user is allowed to send this event
+                // (at least a panic is better than a localstorage queue being borken due to 403 failures)
                 self.login
                     .as_mut()
                     .expect("got NewTaskEvent without a login configured")
