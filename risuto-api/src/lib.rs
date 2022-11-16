@@ -1,3 +1,5 @@
+use anyhow::Context;
+use async_trait::async_trait;
 use chrono::Utc;
 use std::collections::{BTreeMap, HashMap, HashSet};
 
@@ -209,91 +211,124 @@ pub struct AuthInfo {
 }
 
 #[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
+pub enum NewEventContents {
+    SetTitle {
+        task: TaskId,
+        title: String,
+    },
+    SetDone {
+        task: TaskId,
+        now_done: bool,
+    },
+    SetArchived {
+        task: TaskId,
+        now_archived: bool,
+    },
+    Schedule {
+        task: TaskId,
+        scheduled_date: Option<Time>,
+    },
+    AddDep {
+        first: TaskId,
+        then: TaskId,
+    },
+    RmDep {
+        first: TaskId,
+        then: TaskId,
+    },
+    AddTag {
+        task: TaskId,
+        tag: TagId,
+        prio: i64,
+        backlog: bool,
+    },
+    RmTag {
+        task: TaskId,
+        tag: TagId,
+    },
+    AddComment {
+        task: TaskId,
+        text: String,
+    },
+    EditComment {
+        comment: EventId,
+        text: String,
+    },
+}
+
+#[async_trait]
+pub trait Db {
+    async fn auth_info_for(&mut self, t: TaskId) -> anyhow::Result<AuthInfo>;
+    async fn list_tags_for(&mut self, t: TaskId) -> anyhow::Result<Vec<TagId>>;
+    async fn get_comment_owner(&mut self, e: EventId) -> anyhow::Result<UserId>;
+    async fn get_task_for_comment(&mut self, comment: EventId) -> anyhow::Result<TaskId>;
+    async fn is_first_comment(&mut self, comment: EventId) -> anyhow::Result<bool>;
+}
+
+#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
 pub struct NewEvent {
-    pub task: TaskId,
-    pub event: Event,
+    pub id: EventId,
+    pub owner: UserId,
+    pub date: Time,
+    pub contents: NewEventContents,
 }
 
 impl NewEvent {
-    pub fn now(task: TaskId, owner: UserId, contents: EventType) -> NewEvent {
+    pub fn now(owner: UserId, contents: NewEventContents) -> NewEvent {
         NewEvent {
-            task,
-            event: Event {
-                id: EventId(Uuid::new_v4()),
-                owner,
-                date: Utc::now(),
-                contents,
-            },
+            id: EventId(Uuid::new_v4()),
+            owner,
+            date: Utc::now(),
+            contents,
         }
     }
 
     /// Takes AuthInfo as the authorization status for the user for self.task
     // TODO: refactor as an async fn that takes in 4 async callbacks
-    pub fn is_authorized(&self, auth: &AuthInfo) -> AuthCheck {
-        match self.event.contents {
-            EventType::SetTitle(_) => AuthCheck::Done(auth.can_edit),
-            EventType::SetDone(_) | EventType::SetArchived(_) | EventType::Schedule(_) => {
-                AuthCheck::Done(auth.can_triage)
+    pub async fn is_authorized<D: Db>(&self, db: &mut D) -> anyhow::Result<bool> {
+        macro_rules! auth {
+            ($t:expr) => {{
+                let t = $t;
+                db.auth_info_for(t)
+                    .await
+                    .with_context(|| format!("fetching auth info for task {:?}", t))?
+            }};
+        }
+        Ok(match self.contents {
+            NewEventContents::SetTitle { task, .. } => auth!(task).can_edit,
+            NewEventContents::SetDone { task, .. }
+            | NewEventContents::SetArchived { task, .. }
+            | NewEventContents::Schedule { task, .. } => auth!(task).can_triage,
+            NewEventContents::AddDep { first, then } | NewEventContents::RmDep { first, then } => {
+                auth!(first).can_triage && auth!(then).can_triage
             }
-            EventType::AddDepBeforeSelf(o)
-            | EventType::AddDepAfterSelf(o)
-            | EventType::RmDepBeforeSelf(o)
-            | EventType::RmDepAfterSelf(o) => match auth.can_triage {
-                false => AuthCheck::Done(false),
-                true => AuthCheck::IfCanTriage(o),
-            },
-            EventType::AddTag { tag, .. } => match (auth.can_relabel_to_any, auth.can_triage) {
-                (true, _) => AuthCheck::Done(true),
-                (false, false) => AuthCheck::Done(false),
-                (false, true) => AuthCheck::IfTagInTagsFor(tag, self.task),
-            },
-            EventType::RmTag(_) => AuthCheck::Done(auth.can_relabel_to_any),
-            EventType::AddComment(_) => AuthCheck::Done(auth.can_comment),
-            EventType::EditComment(comm, _) => match auth.can_edit {
-                true => AuthCheck::IfIsCommentFirstOr(
-                    self.task,
-                    comm,
-                    Box::new(AuthCheck::IfIsCommentOwner(comm)),
-                ),
-                false => AuthCheck::IfIsCommentOwner(comm),
-            },
-        }
-    }
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum AuthCheck {
-    Done(bool),
-    IfCanTriage(TaskId),
-    IfTagInTagsFor(TagId, TaskId),
-    IfIsCommentOwner(EventId),
-    IfIsCommentFirstOr(TaskId, EventId, Box<AuthCheck>),
-}
-
-impl AuthCheck {
-    pub fn feed_auth_info_for(&mut self, task: TaskId, auth: &AuthInfo) {
-        assert_eq!(*self, AuthCheck::IfCanTriage(task));
-        *self = AuthCheck::Done(auth.can_triage);
-    }
-
-    pub fn feed_tag_in_tags_for(&mut self, tag: TagId, task: TaskId, tag_is_in_tags_for: bool) {
-        assert_eq!(*self, AuthCheck::IfTagInTagsFor(tag, task));
-        *self = AuthCheck::Done(tag_is_in_tags_for);
-    }
-
-    pub fn feed_is_comment_owner(&mut self, comm: EventId, is_comment_owner: bool) {
-        assert_eq!(*self, AuthCheck::IfIsCommentOwner(comm));
-        *self = AuthCheck::Done(is_comment_owner);
-    }
-
-    pub fn feed_is_comment_first(&mut self, task: TaskId, comm: EventId, is_comment_first: bool) {
-        let next = match self {
-            AuthCheck::IfIsCommentFirstOr(t, c, next) if *t == task && *c == comm => *next.clone(),
-            _ => panic!("{:?} {:?} to {:?}", task, comm, self),
-        };
-        match is_comment_first {
-            true => *self = AuthCheck::Done(true),
-            false => *self = next,
-        }
+            NewEventContents::AddTag { task, tag, .. } => {
+                let auth = auth!(task);
+                auth.can_relabel_to_any
+                    || (auth.can_triage
+                        && db
+                            .list_tags_for(task)
+                            .await
+                            .with_context(|| format!("listing tags for task {:?}", task))?
+                            .contains(&tag))
+            }
+            NewEventContents::RmTag { task, .. } => auth!(task).can_relabel_to_any,
+            NewEventContents::AddComment { task, .. } => auth!(task).can_comment,
+            NewEventContents::EditComment { comment, .. } => {
+                let is_comment_owner = self.owner
+                    == db
+                        .get_comment_owner(comment)
+                        .await
+                        .with_context(|| format!("getting owner of comment {:?}", comment))?;
+                let task = db
+                    .get_task_for_comment(comment)
+                    .await
+                    .with_context(|| format!("getting task for comment {:?}", comment))?;
+                let is_first_comment = db.is_first_comment(comment).await.with_context(|| {
+                    format!("checking if comment {:?} is first comment", comment)
+                })?;
+                is_comment_owner || (auth!(task).can_edit && is_first_comment)
+            }
+        })
     }
 }
