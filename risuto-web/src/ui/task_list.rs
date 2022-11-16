@@ -1,7 +1,6 @@
 use risuto_api::{Task, TaskId};
 use yew::prelude::*;
 
-
 #[derive(Clone, PartialEq, Properties)]
 pub struct TaskListProps {
     pub tasks: Vec<(TaskId, Task)>,

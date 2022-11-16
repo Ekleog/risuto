@@ -167,26 +167,6 @@ impl Component for App {
             })
         };
         let current_tag = self.tag.as_ref().and_then(|t| self.db.tags.get(t)).cloned();
-        let mut tags = self
-            .db
-            .tags
-            .iter()
-            .map(|(id, t)| (*id, t.clone()))
-            .collect::<Vec<_>>();
-        tags.sort_unstable_by_key(|(id, t)| {
-            let is_tag_today = t.name == "today";
-            let is_owner_me = t.owner == self.db.owner;
-            let owner_name = self
-                .db
-                .users
-                .get(&t.owner)
-                .expect("tag owned by unknown user")
-                .name
-                .clone();
-            let name = t.name.clone();
-            let id = (*id).clone();
-            (!is_tag_today, !is_owner_me, owner_name, name, id)
-        });
         let tasks = self.db.tasks.iter();
         let tasks: Vec<_> = if let Some(tag) = self.tag {
             let mut tasks = tasks
@@ -214,7 +194,8 @@ impl Component for App {
                     <nav class="col-md-2 sidebar">
                         <h1>{ "Tags" }</h1>
                         <ui::TagList
-                            tags={tags}
+                            tags={self.db.tags.clone()}
+                            current_user={self.db.owner}
                             active={self.tag}
                             on_select_tag={ctx.link().callback(|id| AppMsg::SetTag(id))}
                         />
