@@ -167,8 +167,13 @@ impl Component for App {
             })
         };
         let current_tag = self.tag.as_ref().and_then(|t| self.db.tags.get(t)).cloned();
-        let mut tag_list = self.db.tags.iter().collect::<Vec<_>>();
-        tag_list.sort_unstable_by_key(|(id, t)| {
+        let mut tags = self
+            .db
+            .tags
+            .iter()
+            .map(|(id, t)| (*id, t.clone()))
+            .collect::<Vec<_>>();
+        tags.sort_unstable_by_key(|(id, t)| {
             let is_tag_today = t.name == "today";
             let is_owner_me = t.owner == self.db.owner;
             let owner_name = self
@@ -182,28 +187,6 @@ impl Component for App {
             let id = (*id).clone();
             (!is_tag_today, !is_owner_me, owner_name, name, id)
         });
-        let tag_list = tag_list
-            .into_iter()
-            .map(|(id, t)| (Some(id.clone()), t.name.clone()))
-            .chain(std::iter::once((None, String::from(":untagged"))))
-            .map(|(id, tag)| {
-                let id = id.clone();
-                let a_class = match id == self.tag {
-                    true => "nav-link active",
-                    false => "nav-link",
-                };
-                html! {
-                    <li class="nav-item border-bottom p-2">
-                        <a
-                            class={ a_class }
-                            href={format!("#tag-{}", tag)}
-                            onclick={ctx.link().callback(move |_| AppMsg::SetTag(id))}
-                        >
-                            { tag }
-                        </a>
-                    </li>
-                }
-            });
         let tasks = self.db.tasks.iter();
         let tasks: Vec<_> = if let Some(tag) = self.tag {
             let mut tasks = tasks
@@ -230,9 +213,11 @@ impl Component for App {
                 <div class="row">
                     <nav class="col-md-2 sidebar">
                         <h1>{ "Tags" }</h1>
-                        <ul class="nav flex-column">
-                            { for tag_list }
-                        </ul>
+                        <ui::TagList
+                            tags={tags}
+                            active={self.tag}
+                            on_select_tag={ctx.link().callback(|id| AppMsg::SetTag(id))}
+                        />
                     </nav>
                     <main class="col-md-9 m-5">
                         <h1>{ "Tasks for tag " }{ current_tag.map(|t| t.name).unwrap_or_else(|| String::from(":untagged")) }</h1>
