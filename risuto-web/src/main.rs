@@ -135,11 +135,13 @@ impl Component for App {
                     .event_submitter
                     .unbounded_send(e.clone())
                     .expect("failed sending local event to event submitter");
-                match self.db.tasks.get_mut(&e.task) {
-                    None => tracing::warn!(evt=?e, "got event for task not in db"),
-                    Some(t) => {
-                        t.add_event(e.event);
-                        t.refresh_metadata();
+                for (t, e) in e.untrusted_task_event_list().into_iter() {
+                    match self.db.tasks.get_mut(&t) {
+                        None => tracing::warn!(evt=?e, "got event for task not in db"),
+                        Some(t) => {
+                            t.add_event(e);
+                            t.refresh_metadata();
+                        }
                     }
                 }
             }
@@ -162,8 +164,11 @@ impl Component for App {
             (!self.initial_load_completed).then(|| html! { <h1>{ "Loading..." }</h1> });
         let on_done_change = {
             let owner = self.db.owner.clone();
-            ctx.link().callback(move |(id, is_done)| {
-                AppMsg::NewTaskEvent(NewEvent::now(id, owner, EventType::SetDone(is_done)))
+            ctx.link().callback(move |(task, now_done)| {
+                AppMsg::NewTaskEvent(NewEvent::now(
+                    owner,
+                    NewEventContents::SetDone { task, now_done },
+                ))
             })
         };
         let current_tag = self.tag.as_ref().and_then(|t| self.db.tags.get(t)).cloned();

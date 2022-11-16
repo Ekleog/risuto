@@ -1,4 +1,5 @@
 use anyhow::Context;
+use arrayvec::ArrayVec;
 use async_trait::async_trait;
 use chrono::Utc;
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -251,6 +252,7 @@ pub enum NewEventContents {
         text: String,
     },
     EditComment {
+        untrusted_task: TaskId,
         comment: EventId,
         text: String,
     },
@@ -281,6 +283,72 @@ impl NewEvent {
             date: Utc::now(),
             contents,
         }
+    }
+
+    pub fn untrusted_task_event_list(&self) -> ArrayVec<(TaskId, Event), 2> {
+        let mut res = ArrayVec::new();
+        macro_rules! event {
+            ($task_id:expr, $type:expr) => {
+                res.push((
+                    $task_id,
+                    Event {
+                        id: self.id,
+                        owner: self.owner,
+                        date: self.date,
+                        contents: $type,
+                    },
+                ))
+            };
+        }
+        match &self.contents {
+            NewEventContents::SetTitle { task, title } => {
+                event!(*task, EventType::SetTitle(title.clone()))
+            }
+            NewEventContents::SetDone { task, now_done } => {
+                event!(*task, EventType::SetDone(*now_done))
+            }
+            NewEventContents::SetArchived { task, now_archived } => {
+                event!(*task, EventType::SetArchived(*now_archived))
+            }
+            NewEventContents::Schedule {
+                task,
+                scheduled_date,
+            } => event!(*task, EventType::Schedule(*scheduled_date)),
+            NewEventContents::AddDep { first, then } => {
+                event!(*first, EventType::AddDepAfterSelf(*then));
+                event!(*then, EventType::AddDepBeforeSelf(*then));
+            }
+            NewEventContents::RmDep { first, then } => {
+                event!(*first, EventType::RmDepAfterSelf(*then));
+                event!(*then, EventType::RmDepBeforeSelf(*then));
+            }
+            NewEventContents::AddTag {
+                task,
+                tag,
+                prio,
+                backlog,
+            } => event!(
+                *task,
+                EventType::AddTag {
+                    tag: *tag,
+                    prio: *prio,
+                    backlog: *backlog
+                }
+            ),
+            NewEventContents::RmTag { task, tag } => event!(*task, EventType::RmTag(*tag)),
+            NewEventContents::AddComment { task, text } => {
+                event!(*task, EventType::AddComment(text.clone()))
+            }
+            NewEventContents::EditComment {
+                untrusted_task,
+                comment,
+                text,
+            } => event!(
+                *untrusted_task,
+                EventType::EditComment(*comment, text.clone())
+            ),
+        }
+        res
     }
 
     /// Takes AuthInfo as the authorization status for the user for self.task
