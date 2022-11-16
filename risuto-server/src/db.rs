@@ -487,6 +487,9 @@ pub async fn submit_event(
                     ")",
                 )
             )
+            .bind(e.event.id.0)
+            .bind(e.event.owner.0)
+            .bind(e.event.date)
             $(.bind($v))*
             .execute(&mut *conn)
             .await
