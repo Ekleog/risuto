@@ -7,6 +7,10 @@ $primary: $red;
 @import "../vendor/bootstrap-5.2.2/scss/bootstrap";
 @import "../vendor/bootstrap-icons-1.10.2/bootstrap-icons";
 
+.login-form .input-group-text {
+    background-color: $gray-900;
+}
+
 .sidebar {
     background-color: $gray-900;
     height: 100vh;

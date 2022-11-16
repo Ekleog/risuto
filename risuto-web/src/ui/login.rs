@@ -43,6 +43,7 @@ impl Component for Login {
             LoginMsg::UserChanged(u) => self.user = u,
             LoginMsg::PassChanged(p) => self.pass = p,
             LoginMsg::SubmitClicked => {
+                // TODO: hash password, validate login
                 ctx.props().on_submit.emit(LoginInfo {
                     host: self.host.clone(),
                     user: self.user.clone(),
@@ -67,11 +68,9 @@ impl Component for Login {
             <div class="text-center my-4">
                 <h1>{ "Login" }</h1>
             </div>
-            <form>
+            <form class="login-form">
                 <div class="input-group mb-3">
-                    <div class="input-group-prepend">
-                        <label class="input-group-text" for="host">{ "Host" }</label>
-                    </div>
+                    <label class="input-group-text col-xl-1" for="host">{ "Host" }</label>
                     <input
                         type="url"
                         class="form-control form-control-lg"
@@ -82,9 +81,7 @@ impl Component for Login {
                     />
                 </div>
                 <div class="input-group mb-3">
-                    <div class="input-group-prepend">
-                        <label class="input-group-text" for="user">{ "Username" }</label>
-                    </div>
+                    <label class="input-group-text col-xl-1" for="user">{ "Username" }</label>
                     <input
                         type="text"
                         class="form-control form-control-lg"
@@ -95,9 +92,7 @@ impl Component for Login {
                     />
                 </div>
                 <div class="input-group mb-3">
-                    <div class="input-group-prepend">
-                        <label class="input-group-text" for="pass">{ "Password" }</label>
-                    </div>
+                    <label class="input-group-text col-xl-1" for="pass">{ "Password" }</label>
                     <input
                         type="password"
                         class="form-control form-control-lg"
