@@ -1,5 +1,6 @@
-use crate::LoginInfo;
 use yew::prelude::*;
+
+use crate::LoginInfo;
 
 #[derive(Clone, PartialEq, Properties)]
 pub struct LoginProps {
