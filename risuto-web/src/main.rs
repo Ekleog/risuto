@@ -297,12 +297,18 @@ async fn handle_event_submissions(
     queue: mpsc::UnboundedReceiver<NewEvent>,
 ) {
     let mut queue = queue.fuse();
-    let mut to_send = LocalStorage::get("queue").ok().unwrap_or(VecDeque::new());
+    let mut to_send = LocalStorage::get("queue").ok().unwrap_or(VecDeque::<NewEvent>::new());
     // TODO: to_send should be exposed from the UI
     let mut currently_sending = false;
     let mut current_send =
         (Box::pin(future::pending()) as Pin<Box<dyn Future<Output = ()>>>).fuse();
     loop {
+        if !currently_sending && !to_send.is_empty() {
+            current_send = (Box::pin(send_event(&client, &login, to_send[0].clone()))
+                as Pin<Box<dyn Future<Output = ()>>>)
+                .fuse();
+            currently_sending = true;
+        }
         select! {
             e = queue.next() => {
                 match e {
@@ -320,12 +326,6 @@ async fn handle_event_submissions(
                     .expect("failed saving queue to local storage");
                 currently_sending = false;
             }
-        }
-        if !currently_sending && !to_send.is_empty() {
-            current_send = (Box::pin(send_event(&client, &login, to_send[0].clone()))
-                as Pin<Box<dyn Future<Output = ()>>>)
-                .fuse();
-            currently_sending = true;
         }
     }
 }
