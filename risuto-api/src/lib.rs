@@ -264,7 +264,7 @@ pub trait Db {
     async fn list_tags_for(&mut self, t: TaskId) -> anyhow::Result<Vec<TagId>>;
     async fn get_comment_owner(&mut self, e: EventId) -> anyhow::Result<UserId>;
     async fn get_task_for_comment(&mut self, comment: EventId) -> anyhow::Result<TaskId>;
-    async fn is_first_comment(&mut self, comment: EventId) -> anyhow::Result<bool>;
+    async fn is_first_comment(&mut self, task: TaskId, comment: EventId) -> anyhow::Result<bool>;
 }
 
 #[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
@@ -392,9 +392,10 @@ impl NewEvent {
                     .get_task_for_comment(comment)
                     .await
                     .with_context(|| format!("getting task for comment {:?}", comment))?;
-                let is_first_comment = db.is_first_comment(comment).await.with_context(|| {
-                    format!("checking if comment {:?} is first comment", comment)
-                })?;
+                let is_first_comment =
+                    db.is_first_comment(task, comment).await.with_context(|| {
+                        format!("checking if comment {:?} is first comment", comment)
+                    })?;
                 is_comment_owner || (auth!(task).can_edit && is_first_comment)
             }
         })

@@ -1,14 +1,113 @@
 use anyhow::Context;
+use axum::async_trait;
 use chrono::Utc;
 use futures::TryStreamExt;
 use risuto_api::{
-    AuthCheck, AuthInfo, DbDump, Event, EventId, EventType, NewEvent, Tag, TagId, Task, TaskId,
-    User, UserId,
+    AuthInfo, DbDump, Event, EventId, EventType, NewEvent, NewEventContents, Tag, TagId, Task,
+    TaskId, User, UserId,
 };
 use sqlx::Row;
 use std::collections::{BTreeMap, HashMap, HashSet};
 
 use crate::PermissionDenied;
+
+struct PostgresDb<'a> {
+    conn: &'a mut sqlx::PgConnection,
+    user: UserId,
+}
+
+#[async_trait]
+impl<'a> risuto_api::Db for PostgresDb<'a> {
+    async fn auth_info_for(&mut self, task: TaskId) -> anyhow::Result<AuthInfo> {
+        let auth = sqlx::query!(
+            r#"
+                SELECT
+                    can_edit AS "can_edit!",
+                    can_triage AS "can_triage!",
+                    can_relabel_to_any AS "can_relabel_to_any!",
+                    can_comment AS "can_comment!"
+                FROM v_tasks_users
+                WHERE task_id = $1
+                AND user_id = $2
+            "#,
+            task.0,
+            self.user.0
+        )
+        .fetch_all(&mut *self.conn)
+        .await
+        .with_context(|| {
+            format!(
+                "checking permissions for user {:?} on task {:?}",
+                self.user, task
+            )
+        })?;
+        match &auth[..] {
+            [] => Ok(AuthInfo {
+                can_read: false,
+                can_edit: false,
+                can_triage: false,
+                can_relabel_to_any: false,
+                can_comment: false,
+            }),
+            [r] => Ok(AuthInfo {
+                can_read: true,
+                can_edit: r.can_edit,
+                can_triage: r.can_triage,
+                can_relabel_to_any: r.can_relabel_to_any,
+                can_comment: r.can_comment,
+            }),
+            _ => Err(anyhow::anyhow!(
+                "v_tasks_users had multiple lines for task {:?} and user {:?}",
+                task,
+                self.user
+            )),
+        }
+    }
+
+    async fn list_tags_for(&mut self, task: TaskId) -> anyhow::Result<Vec<TagId>> {
+        Ok(sqlx::query!(
+            r#"SELECT tag_id AS "tag_id!" FROM v_tasks_tags WHERE task_id = $1"#,
+            task.0
+        )
+        .map(|r| TagId(r.tag_id))
+        .fetch_all(&mut *self.conn)
+        .await?)
+    }
+
+    async fn get_comment_owner(&mut self, event: EventId) -> anyhow::Result<UserId> {
+        Ok(UserId(
+            sqlx::query!(
+                "SELECT owner_id FROM add_comment_events WHERE id = $1",
+                event.0
+            )
+            .fetch_one(&mut *self.conn)
+            .await?
+            .owner_id,
+        ))
+    }
+
+    async fn get_task_for_comment(&mut self, comment: EventId) -> anyhow::Result<TaskId> {
+        Ok(TaskId(
+            sqlx::query!(
+                "SELECT task_id FROM add_comment_events WHERE id = $1",
+                comment.0
+            )
+            .fetch_one(&mut *self.conn)
+            .await?
+            .task_id,
+        ))
+    }
+
+    async fn is_first_comment(&mut self, task: TaskId, comment: EventId) -> anyhow::Result<bool> {
+        Ok(sqlx::query!(
+            "SELECT id FROM add_comment_events WHERE task_id = $1 ORDER BY date LIMIT 1",
+            task.0
+        )
+        .fetch_one(&mut *self.conn)
+        .await?
+        .id == comment.0)
+    }
+}
 
 pub async fn fetch_dump_unarchived(
     conn: &mut sqlx::PgConnection,
@@ -330,151 +429,24 @@ async fn fetch_tasks_from_tmp_tasks_table(
     Ok(tasks)
 }
 
-pub async fn auth_info_for(
-    conn: &mut sqlx::PgConnection,
-    user: UserId,
-    task: TaskId,
-) -> anyhow::Result<AuthInfo> {
-    let auth = sqlx::query!(
-        r#"
-            SELECT
-                can_edit AS "can_edit!",
-                can_triage AS "can_triage!",
-                can_relabel_to_any AS "can_relabel_to_any!",
-                can_comment AS "can_comment!"
-            FROM v_tasks_users
-            WHERE task_id = $1
-            AND user_id = $2
-        "#,
-        task.0,
-        user.0
-    )
-    .fetch_all(&mut *conn)
-    .await
-    .with_context(|| {
-        format!(
-            "checking permissions for user {:?} on task {:?}",
-            user, task
-        )
-    })?;
-    match &auth[..] {
-        [] => Ok(AuthInfo {
-            can_read: false,
-            can_edit: false,
-            can_triage: false,
-            can_relabel_to_any: false,
-            can_comment: false,
-        }),
-        [r] => Ok(AuthInfo {
-            can_read: true,
-            can_edit: r.can_edit,
-            can_triage: r.can_triage,
-            can_relabel_to_any: r.can_relabel_to_any,
-            can_comment: r.can_comment,
-        }),
-        _ => Err(anyhow::anyhow!(
-            "v_tasks_users had multiple lines for task {:?} and user {:?}",
-            task,
-            user
-        )),
-    }
-}
-
-pub async fn list_tags_on(
-    conn: &mut sqlx::PgConnection,
-    task: TaskId,
-) -> anyhow::Result<Vec<TagId>> {
-    Ok(sqlx::query!(
-        r#"SELECT tag_id AS "tag_id!" FROM v_tasks_tags WHERE task_id = $1"#,
-        task.0
-    )
-    .map(|r| TagId(r.tag_id))
-    .fetch_all(conn)
-    .await?)
-}
-
-pub async fn get_comment_owner(
-    conn: &mut sqlx::PgConnection,
-    event: EventId,
-) -> anyhow::Result<UserId> {
-    Ok(UserId(
-        sqlx::query!(
-            "SELECT owner_id FROM add_comment_events WHERE id = $1",
-            event.0
-        )
-        .fetch_one(conn)
-        .await?
-        .owner_id,
-    ))
-}
-
-pub async fn is_comment_first(
-    conn: &mut sqlx::PgConnection,
-    task: TaskId,
-    event: EventId,
-) -> anyhow::Result<bool> {
-    Ok(sqlx::query!(
-        "SELECT id FROM add_comment_events WHERE task_id = $1 ORDER BY date LIMIT 1",
-        task.0
-    )
-    .fetch_one(conn)
-    .await?
-    .id == event.0)
-}
-
 pub async fn submit_event(
     conn: &mut sqlx::PgConnection,
     e: NewEvent,
 ) -> anyhow::Result<Result<(), PermissionDenied>> {
-    // Check authorization
-    let mut auth = e.is_authorized(
-        &auth_info_for(&mut *conn, e.event.owner, e.task)
-            .await
-            .with_context(|| format!("fetching auth info for {:?} {:?}", e.event.owner, e.task))?,
-    );
-    loop {
-        match auth.clone() {
-            AuthCheck::Done(true) => break,
-            AuthCheck::Done(false) => return Ok(Err(PermissionDenied)),
-            AuthCheck::IfCanTriage(task) => auth.feed_auth_info_for(
-                task,
-                &auth_info_for(&mut *conn, e.event.owner, task)
-                    .await
-                    .with_context(|| {
-                        format!("fetching auth info for {:?} {:?}", e.event.owner, e.task)
-                    })?,
-            ),
-            AuthCheck::IfTagInTagsFor(tag, task) => auth.feed_tag_in_tags_for(
-                tag,
-                task,
-                list_tags_on(&mut *conn, task)
-                    .await
-                    .with_context(|| format!("fetching tags on {:?}", task))?
-                    .contains(&tag),
-            ),
-            AuthCheck::IfIsCommentOwner(comm) => auth.feed_is_comment_owner(
-                comm,
-                get_comment_owner(&mut *conn, comm)
-                    .await
-                    .with_context(|| format!("getting comment owner of {:?}", comm))?
-                    == e.event.owner,
-            ),
-            AuthCheck::IfIsCommentFirstOr(task, comm, _) => auth.feed_is_comment_first(
-                task,
-                comm,
-                is_comment_first(&mut *conn, task, comm)
-                    .await
-                    .with_context(|| {
-                        format!(
-                            "checking if comment {:?} is the first of task {:?}",
-                            comm, task
-                        )
-                    })?,
-            ),
-        }
-    }
+    let event_id = e.id;
 
-    let event_id = e.event.id;
+    // Check authorization
+    let mut db = PostgresDb {
+        conn,
+        user: e.owner,
+    };
+    let auth = e
+        .is_authorized(&mut db)
+        .await
+        .with_context(|| format!("checking if user is authorized to add event {:?}", event_id))?;
+    if !auth {
+        return Ok(Err(PermissionDenied));
+    }
 
     macro_rules! insert_event {
         ($table:expr, $repeat:expr, $( $v:expr ),*) => {{
@@ -487,52 +459,62 @@ pub async fn submit_event(
                     ")",
                 )
             )
-            .bind(e.event.id.0)
-            .bind(e.event.owner.0)
-            .bind(e.event.date)
+            .bind(e.id.0)
+            .bind(e.owner.0)
+            .bind(e.date)
             $(.bind($v))*
-            .execute(&mut *conn)
+            .execute(&mut *db.conn)
             .await
             .with_context(|| format!("inserting {} {:?}", $table, event_id))?
         }}
     }
 
-    let res = match e.event.contents {
-        EventType::SetTitle(t) => insert_event!("set_title_events", "$4, $5", e.task.0, t),
-        EventType::SetDone(d) => insert_event!("set_task_done_events", "$4, $5", e.task.0, d),
-        EventType::SetArchived(a) => {
-            insert_event!("set_task_archived_events", "$4, $5", e.task.0, a)
+    let res = match e.contents {
+        NewEventContents::SetTitle { task, title } => {
+            insert_event!("set_title_events", "$4, $5", task.0, title)
         }
-        EventType::Schedule(d) => insert_event!(
+        NewEventContents::SetDone { task, now_done } => {
+            insert_event!("set_task_done_events", "$4, $5", task.0, now_done)
+        }
+        NewEventContents::SetArchived { task, now_archived } => {
+            insert_event!("set_task_archived_events", "$4, $5", task.0, now_archived)
+        }
+        NewEventContents::Schedule {
+            task,
+            scheduled_date,
+        } => insert_event!(
             "schedule_events",
             "$4, $5",
-            e.task.0,
-            d.map(|d| d.naive_utc())
+            task.0,
+            scheduled_date.map(|d| d.naive_utc())
         ),
-        EventType::AddDepBeforeSelf(o) => {
-            insert_event!("add_dependency_events", "$4, $5", o.0, e.task.0)
+        NewEventContents::AddDep { first, then } => {
+            insert_event!("add_dependency_events", "$4, $5", first.0, then.0)
         }
-        EventType::AddDepAfterSelf(o) => {
-            insert_event!("add_dependency_events", "$4, $5", e.task.0, o.0)
+        NewEventContents::RmDep { first, then } => {
+            insert_event!("remove_dependency_events", "$4, $5", first.0, then.0)
         }
-        EventType::RmDepBeforeSelf(o) => {
-            insert_event!("remove_dependency_events", "$4, $5", o.0, e.task.0)
-        }
-        EventType::RmDepAfterSelf(o) => {
-            insert_event!("remove_dependency_events", "$4, $5", e.task.0, o.0)
-        }
-        EventType::AddTag { tag, prio, backlog } => insert_event!(
+        NewEventContents::AddTag {
+            task,
+            tag,
+            prio,
+            backlog,
+        } => insert_event!(
             "add_tag_events",
             "$4, $5, $6, $7",
-            e.task.0,
+            task.0,
             tag.0,
             prio,
             backlog
         ),
-        EventType::RmTag(tag) => insert_event!("remove_tag_events", "$4, $5", e.task.0, tag.0),
-        EventType::AddComment(txt) => insert_event!("add_comment_events", "$4, $5", e.task.0, txt),
-        EventType::EditComment(comm, txt) => {
-            insert_event!("edit_comment_events", "$4, $5", comm.0, txt)
+        NewEventContents::RmTag { task, tag } => {
+            insert_event!("remove_tag_events", "$4, $5", task.0, tag.0)
+        }
+        NewEventContents::AddComment { task, text } => {
+            insert_event!("add_comment_events", "$4, $5", task.0, text)
+        }
+        NewEventContents::EditComment { comment, text, .. } => {
+            insert_event!("edit_comment_events", "$4, $5", comment.0, text)
         }
     };
 

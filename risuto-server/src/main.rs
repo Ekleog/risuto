@@ -144,7 +144,7 @@ async fn submit_event(
 ) -> Result<Result<(), PermissionDenied>, AnyhowError> {
     match user.0 {
         None => Ok(Err(PermissionDenied)),
-        Some(user) if user.id != e.event.owner => Ok(Err(PermissionDenied)),
+        Some(user) if user.id != e.owner => Ok(Err(PermissionDenied)),
         Some(_) => {
             let mut conn = db.acquire().await.context("acquiring db connection")?;
             // TODO: websocket stuff
