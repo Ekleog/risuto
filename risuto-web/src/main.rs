@@ -6,8 +6,7 @@ use yew::prelude::*;
 
 mod api;
 
-mod login;
-use login::Login;
+mod ui;
 
 fn main() {
     tracing_wasm::set_as_global_default();
@@ -152,7 +151,7 @@ impl Component for App {
         if self.login.is_none() {
             return html! {
                 <div class="container">
-                    <Login
+                    <ui::Login
                         info={self.logout.clone()}
                         on_submit={ctx.link().callback(AppMsg::UserLogin)}
                     />
