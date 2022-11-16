@@ -1382,6 +1382,7 @@ name = "risuto-web"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "futures",
  "getrandom",
  "gloo-storage",
  "reqwest",
@@ -1389,6 +1390,7 @@ dependencies = [
  "serde",
  "tracing",
  "tracing-wasm",
+ "wasm-bindgen-futures",
  "web-sys",
  "yew",
 ]

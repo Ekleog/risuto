@@ -1,5 +1,13 @@
+use std::{collections::VecDeque, future::Future, pin::Pin};
+
+use futures::{
+    channel::mpsc::{self},
+    future::{self},
+    select, FutureExt, StreamExt,
+};
 use gloo_storage::{LocalStorage, Storage};
 use risuto_api::*;
+use wasm_bindgen_futures::spawn_local;
 use yew::prelude::*;
 
 mod login;
@@ -10,8 +18,8 @@ fn main() {
     yew::start_app::<App>();
 }
 
-async fn fetch_db_dump(login: &LoginInfo) -> reqwest::Result<DbDump> {
-    reqwest::Client::new()
+async fn fetch_db_dump(client: &reqwest::Client, login: &LoginInfo) -> reqwest::Result<DbDump> {
+    client
         .get(format!("{}/api/fetch-unarchived", login.host))
         .basic_auth(&login.user, Some(&login.pass))
         .send()
@@ -27,6 +35,12 @@ pub struct LoginInfo {
     pass: String,
 }
 
+#[derive(Clone, Debug)]
+pub struct LoginData {
+    info: LoginInfo,
+    event_submitter: mpsc::UnboundedSender<NewEvent>,
+}
+
 enum AppMsg {
     UserLogin(LoginInfo),
     UserLogout,
@@ -36,7 +50,8 @@ enum AppMsg {
 }
 
 struct App {
-    login: Option<LoginInfo>,
+    client: reqwest::Client,
+    login: Option<LoginData>,
     logout: Option<LoginInfo>, // info saved from login info
     db: DbDump,
     initial_load_completed: bool,
@@ -46,6 +61,7 @@ struct App {
 impl App {
     fn new() -> App {
         App {
+            client: reqwest::Client::new(),
             login: None,
             logout: None,
             db: DbDump::stub(),
@@ -59,9 +75,10 @@ impl App {
             .login
             .clone()
             .expect("called App::fetch_db_dump without a login set");
+        let client = self.client.clone();
         ctx.link().send_future(async move {
             let db: DbDump = loop {
-                match fetch_db_dump(&login).await {
+                match fetch_db_dump(&client, &login.info).await {
                     Ok(db) => break db,
                     Err(e) if e.is_timeout() => continue,
                     // TODO: at least handle unauthorized error
@@ -71,6 +88,20 @@ impl App {
             AppMsg::ReceivedDb(db)
         });
     }
+
+    fn got_login_info(&mut self, ctx: &Context<Self>, info: LoginInfo) {
+        let (event_submitter, event_receiver) = mpsc::unbounded();
+        spawn_local(handle_event_submissions(
+            self.client.clone(),
+            info.clone(),
+            event_receiver,
+        ));
+        self.login = Some(LoginData {
+            info,
+            event_submitter,
+        });
+        self.fetch_db_dump(ctx);
+    }
 }
 
 impl Component for App {
@@ -79,27 +110,27 @@ impl Component for App {
 
     fn create(ctx: &Context<Self>) -> Self {
         let mut this = App::new();
-        this.login = LocalStorage::get("login").ok();
-        if this.login.is_some() {
-            this.fetch_db_dump(ctx);
+        if let Ok(info) = LocalStorage::get("login") {
+            this.got_login_info(ctx, info);
         }
         this
     }
 
     fn update(&mut self, ctx: &Context<Self>, msg: Self::Message) -> bool {
         match msg {
-            AppMsg::UserLogin(login) => {
-                LocalStorage::set("login", &login)
+            AppMsg::UserLogin(info) => {
+                LocalStorage::set("login", &info)
                     .expect("failed saving login info to LocalStorage");
-                self.login = Some(login);
-                self.fetch_db_dump(ctx);
+                self.got_login_info(ctx, info);
             }
             AppMsg::UserLogout => {
                 LocalStorage::delete("login");
+                // TODO: also clear saved outgoing queue, and warn the user upon logout that unsynced changes will be lost
                 let mut this = App::new();
-                this.logout = self.login.take().map(|mut i| {
-                    i.pass = String::new();
-                    i
+                this.logout = self.login.take().map(|i| LoginInfo {
+                    host: i.info.host,
+                    user: i.info.user,
+                    pass: String::new(),
                 }); // info saved from login info
                 *self = this;
             }
@@ -122,7 +153,12 @@ impl Component for App {
                 self.tag = id;
             }
             AppMsg::NewTaskEvent(e) => {
-                // TODO: RPC to set task as done
+                self.login
+                    .as_mut()
+                    .expect("got NewTaskEvent without a login configured")
+                    .event_submitter
+                    .unbounded_send(e.clone())
+                    .expect("failed sending local event to event submitter");
                 match self.db.tasks.get_mut(&e.task) {
                     None => tracing::warn!(evt=?e, "got event for task not in db"),
                     Some(t) => {
@@ -233,6 +269,63 @@ impl Component for App {
                     </main>
                 </div>
             </div>
+        }
+    }
+}
+
+async fn send_event(client: &reqwest::Client, login: &LoginInfo, event: NewEvent) {
+    loop {
+        let res = client
+            .post(format!("{}/api/submit-event", login.host))
+            .basic_auth(&login.user, Some(&login.pass))
+            .json(&event)
+            .send()
+            .await;
+        match res {
+            // TODO: panicking on server message is Bad(tm)
+            Ok(r) if r.status().is_success() => break,
+            Ok(r) => panic!("got non-successful response to event submission: {:?}", r),
+            Err(e) if e.is_timeout() => continue,
+            Err(e) => panic!("got reqwest error {:?}", e),
+        }
+    }
+}
+
+async fn handle_event_submissions(
+    client: reqwest::Client,
+    login: LoginInfo,
+    queue: mpsc::UnboundedReceiver<NewEvent>,
+) {
+    let mut queue = queue.fuse();
+    let mut to_send = LocalStorage::get("queue").ok().unwrap_or(VecDeque::new());
+    // TODO: to_send should be exposed from the UI
+    let mut currently_sending = false;
+    let mut current_send =
+        (Box::pin(future::pending()) as Pin<Box<dyn Future<Output = ()>>>).fuse();
+    loop {
+        select! {
+            e = queue.next() => {
+                match e {
+                    None => break,
+                    Some(e) => {
+                        to_send.push_back(e);
+                        LocalStorage::set("queue", &to_send)
+                            .expect("failed saving queue to local storage");
+                    }
+                }
+            }
+            _ = current_send => {
+                to_send.pop_front();
+                LocalStorage::set("queue", &to_send)
+                    .expect("failed saving queue to local storage");
+                currently_sending = false;
+            }
+        }
+        if !currently_sending && !to_send.is_empty() {
+            current_send = (Box::pin(send_event(&client, &login, to_send[0].clone()))
+                as Pin<Box<dyn Future<Output = ()>>>)
+                .fuse();
+            currently_sending = true;
         }
     }
 }

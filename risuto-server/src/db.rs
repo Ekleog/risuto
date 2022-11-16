@@ -539,6 +539,7 @@ pub async fn submit_event(
         event_id,
         res.rows_affected()
     );
+    // TODO: give a specific error if the event id is already taken
 
     Ok(Ok(()))
 }
