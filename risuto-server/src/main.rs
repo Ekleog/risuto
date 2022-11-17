@@ -1,13 +1,20 @@
 use anyhow::Context;
+use arrayvec::ArrayVec;
 use axum::{
+    extract::{
+        ws::{Message, WebSocket},
+        WebSocketUpgrade,
+    },
     http::{self, Request, StatusCode},
     middleware::Next,
     response::Response,
     routing::{get, post},
     Extension, Json, Router,
 };
+use futures::{stream, StreamExt};
 use risuto_api::{DbDump, UserId};
-use std::net::SocketAddr;
+use std::{collections::HashMap, net::SocketAddr, sync::Arc};
+use tokio::sync::{Mutex, RwLock};
 
 mod db;
 
@@ -79,11 +86,15 @@ async fn main() -> anyhow::Result<()> {
         .await
         .with_context(|| format!("Error opening database {:?}", db_url))?;
 
+    let feeds = UserFeeds(Arc::new(RwLock::new(HashMap::new())));
+
     let app = Router::new()
         .route("/api/fetch-unarchived", get(fetch_unarchived))
+        .route("/api/event-feed", get(event_feed))
         .route("/api/submit-event", post(submit_event))
         .route_layer(axum::middleware::from_fn(auth))
-        .layer(Extension(db));
+        .layer(Extension(db))
+        .layer(Extension(feeds));
 
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
     tracing::info!("listening on {}", addr);
@@ -141,16 +152,116 @@ async fn submit_event(
     Json(e): Json<risuto_api::NewEvent>,
     Extension(user): Extension<Auth>,
     Extension(db): Extension<sqlx::PgPool>,
+    Extension(feeds): Extension<UserFeeds>,
 ) -> Result<Result<(), PermissionDenied>, AnyhowError> {
     match user.0 {
         None => Ok(Err(PermissionDenied)),
         Some(user) if user.id != e.owner => Ok(Err(PermissionDenied)),
-        Some(_) => {
+        Some(user) => {
             let mut conn = db.acquire().await.context("acquiring db connection")?;
-            // TODO: websocket stuff
-            Ok(db::submit_event(&mut conn, e)
+            let res = db::submit_event(&mut conn, e.clone())
                 .await
-                .context("submitting event to db")?)
+                .context("submitting event to db")?;
+            if res.is_err() {
+                return Ok(res);
+            }
+            let db = db::PostgresDb {
+                conn: &mut conn,
+                user: user.id,
+            };
+            feeds.relay_event(db, e).await;
+            Ok(Ok(()))
         }
+    }
+}
+
+async fn event_feed(
+    ws: WebSocketUpgrade,
+    Extension(user): Extension<Auth>,
+    Extension(feeds): Extension<UserFeeds>,
+) -> Result<axum::response::Response, PermissionDenied> {
+    if let Some(user) = user.0 {
+        Ok(ws.on_upgrade(move |sock| feeds.clone().add_for_user(user.id, sock)))
+    } else {
+        Err(PermissionDenied)
+    }
+}
+
+#[derive(Clone, Debug)]
+struct UserFeeds(Arc<RwLock<HashMap<UserId, Vec<Mutex<WebSocket>>>>>);
+
+impl UserFeeds {
+    async fn add_for_user(self, user: UserId, sock: WebSocket) {
+        // TODO: limit to some reasonable number of sockets, to avoid starvations
+        self.0
+            .write()
+            .await
+            .entry(user)
+            .or_insert_with(Vec::new)
+            .push(Mutex::new(sock));
+    }
+
+    async fn relay_event(&self, mut db: db::PostgresDb<'_>, mut e: risuto_api::NewEvent) {
+        if let Err(err) = e.make_untrusted_trusted(&mut db).await {
+            tracing::error!(?err, "failed to make untrusted event {:?} trusted", e);
+            return;
+        }
+
+        let json = match serde_json::to_vec(&e) {
+            Ok(json) => json,
+            Err(err) => {
+                tracing::error!(?err, event=?e, "failed to serialize evetn to json");
+                return;
+            }
+        };
+        let json_ref = &json[..];
+
+        let tasks = e
+            .untrusted_task_event_list()
+            .into_iter()
+            .map(|(t, _)| t.0)
+            .collect::<ArrayVec<_, 2>>();
+
+        // TODO: magic numbers below should be at least explained
+        db::users_interested_by(&mut db.conn, &tasks)
+            .for_each_concurrent(Some(16), |u| async move {
+                match u {
+                    Err(err) => {
+                        tracing::error!(?err, "error occurred while listing interested users");
+                    }
+                    Ok(u) => {
+                        let ids_to_rm = if let Some(socks) = self.0.read().await.get(&u) {
+                            stream::iter(socks.iter().enumerate())
+                                .filter_map(|(i, s)| async move {
+                                    if let Err(_) = s
+                                        .lock()
+                                        .await
+                                        .send(Message::Binary(json_ref.to_vec()))
+                                        .await
+                                    {
+                                        // TODO: check error details, using axum-tungstenite, to confirm we need to remove this socket
+                                        Some(i)
+                                    } else {
+                                        None
+                                    }
+                                })
+                                .collect::<Vec<_>>()
+                                .await
+                        } else {
+                            Vec::new()
+                        };
+                        if !ids_to_rm.is_empty() {
+                            let mut users = self.0.write().await;
+                            let socks = users
+                                .get_mut(&u)
+                                .expect("we should never remove UserId's from UserFeeds");
+                            for i in ids_to_rm {
+                                socks.swap_remove(i);
+                            }
+                        }
+                    }
+                }
+            })
+            .await;
     }
 }

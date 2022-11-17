@@ -1,19 +1,19 @@
 use anyhow::Context;
 use axum::async_trait;
 use chrono::Utc;
-use futures::TryStreamExt;
+use futures::{Stream, StreamExt, TryStreamExt};
 use risuto_api::{
     AuthInfo, DbDump, Event, EventId, EventType, NewEvent, NewEventContents, Tag, TagId, Task,
-    TaskId, User, UserId,
+    TaskId, User, UserId, Uuid,
 };
 use sqlx::Row;
 use std::collections::{BTreeMap, HashMap, HashSet};
 
 use crate::PermissionDenied;
 
-struct PostgresDb<'a> {
-    conn: &'a mut sqlx::PgConnection,
-    user: UserId,
+pub struct PostgresDb<'a> {
+    pub conn: &'a mut sqlx::PgConnection,
+    pub user: UserId,
 }
 
 #[async_trait]
@@ -107,6 +107,23 @@ impl<'a> risuto_api::Db for PostgresDb<'a> {
         .await?
         .id == comment.0)
     }
+}
+
+pub fn users_interested_by<'conn>(
+    conn: &'conn mut sqlx::PgConnection,
+    tasks: &[Uuid], // TODO: when safe-transmute happens we can just take &[TaskId]
+) -> impl 'conn + Stream<Item = anyhow::Result<UserId>> {
+    sqlx::query!(
+        r#"
+            SELECT DISTINCT
+                user_id AS "user_id!"
+            FROM v_tasks_users
+            WHERE task_id = ANY($1)
+        "#,
+        tasks
+    )
+    .fetch(conn)
+    .map(|r| r.map(|u| UserId(u.user_id)).map_err(anyhow::Error::from))
 }
 
 pub async fn fetch_dump_unarchived(

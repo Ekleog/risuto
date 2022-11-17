@@ -7,11 +7,13 @@ edition = "2021"
 risuto-api = { path = "../risuto-api" }
 
 anyhow = "1.0"
-axum = "0.5.16"
+arrayvec = "0.7.2"
+axum = { version = "0.5.16", features = ["ws"] }
 axum-macros = "0.2.3"
 base64 = "0.13.0"
 chrono = "0.4.22"
 futures = "0.3.25"
+serde_json = "1.0"
 sqlx = { version = "0.6.2", features = ["chrono", "postgres", "runtime-tokio-rustls", "uuid"] }
 tokio = { version = "1.21", features = ["full"] }
 tracing = "0.1.36"

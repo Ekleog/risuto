@@ -285,6 +285,27 @@ impl NewEvent {
         }
     }
 
+    pub async fn make_untrusted_trusted<D: Db>(&mut self, db: &mut D) -> anyhow::Result<()> {
+        match self.contents {
+            NewEventContents::EditComment {
+                ref mut untrusted_task,
+                comment,
+                ..
+            } => {
+                let real_task = db
+                    .get_task_for_comment(comment)
+                    .await
+                    .with_context(|| format!("getting task for comment {:?}", comment))?;
+                if *untrusted_task != real_task {
+                    *untrusted_task = real_task;
+                    tracing::warn!(event=?self, ?real_task, "got event that lied on its attached task");
+                }
+            }
+            _ => (),
+        }
+        Ok(())
+    }
+
     pub fn untrusted_task_event_list(&self) -> ArrayVec<(TaskId, Event), 2> {
         let mut res = ArrayVec::new();
         macro_rules! event {
