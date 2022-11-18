@@ -157,10 +157,23 @@ async fn submit_event(
 
 async fn event_feed(
     ws: WebSocketUpgrade,
-    Auth(user): Auth,
+    Extension(db): Extension<sqlx::PgPool>,
     Extension(feeds): Extension<UserFeeds>,
 ) -> Result<axum::response::Response, Error> {
-    Ok(ws.on_upgrade(move |sock| feeds.clone().add_for_user(user, sock)))
+    Ok(ws.on_upgrade(move |mut sock| async move {
+        // TODO: handle errors more gracefully
+        if let Some(Ok(Message::Text(token))) = sock.recv().await {
+            if let Ok(token) = Uuid::try_from(&token as &str) {
+                if let Ok(mut conn) = db.acquire().await {
+                    if let Ok(user) = db::recover_session(&mut conn, token).await {
+                        if let Ok(_) = sock.send(Message::Text(String::from("ok"))).await {
+                            feeds.clone().add_for_user(user, sock).await;
+                        }
+                    }
+                }
+            }
+        }
+    }))
 }
 
 #[derive(Clone, Debug)]
