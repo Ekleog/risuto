@@ -1,4 +1,7 @@
-use futures::{channel::mpsc, FutureExt};
+use futures::{
+    channel::{mpsc, oneshot},
+    FutureExt,
+};
 use gloo_storage::{LocalStorage, Storage};
 use risuto_api::*;
 use wasm_bindgen_futures::spawn_local;
@@ -66,16 +69,30 @@ impl App {
     }
 
     fn got_login_info(&mut self, ctx: &Context<Self>, info: LoginInfo) {
+        // Connect to websocket event feed
+        let (feed_submitter, feed_receiver) = mpsc::unbounded();
+        let (feed_cancel_receiver, feed_canceller) = oneshot::channel();
+        spawn_local(api::start_event_feed(
+            info.clone(),
+            feed_submitter,
+            feed_cancel_receiver,
+        ));
+
+        // Prepare thread handling event submission
         let (event_submitter, event_receiver) = mpsc::unbounded();
         spawn_local(api::handle_event_submissions(
             self.client.clone(),
             info.clone(),
             event_receiver,
         ));
+
+        // Record login info
         self.login = Some(LoginData {
             info,
             event_submitter,
         });
+
+        // Finally, fetch a DB dump from the server
         self.fetch_db_dump(ctx);
     }
 }

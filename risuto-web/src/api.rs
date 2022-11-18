@@ -1,4 +1,10 @@
-use futures::{channel::mpsc, future, select, FutureExt, StreamExt};
+use futures::{
+    channel::{
+        mpsc::{self, UnboundedSender},
+        oneshot,
+    },
+    future, select, FutureExt, StreamExt,
+};
 use gloo_storage::{LocalStorage, Storage};
 use risuto_api::*;
 use std::{collections::VecDeque, future::Future, pin::Pin};
@@ -24,6 +30,25 @@ async fn try_fetch_db_dump(client: &reqwest::Client, login: &LoginInfo) -> reqwe
         .await?
         .json()
         .await
+}
+
+pub async fn start_event_feed(
+    login: LoginInfo,
+    feed: UnboundedSender<NewEvent>,
+    mut cancel: oneshot::Sender<()>,
+) {
+    // TODO: make a custom error type
+    let ws_url = format!(
+        "ws{}/api/ws",
+        login.host.strip_prefix("http").expect("TODO")
+    );
+    let mut cancellation = cancel.cancellation().fuse();
+    loop {
+        select! {
+            _ = cancellation => return,
+            // todo
+        }
+    }
 }
 
 pub async fn handle_event_submissions(

@@ -43,7 +43,7 @@ impl Component for Login {
             LoginMsg::UserChanged(u) => self.user = u,
             LoginMsg::PassChanged(p) => self.pass = p,
             LoginMsg::SubmitClicked => {
-                // TODO: hash password (username + "risuto" + password), validate login
+                // TODO: hash password (username + "risuto" + password)
                 ctx.props().on_submit.emit(LoginInfo {
                     host: self.host.clone(),
                     user: self.user.clone(),
