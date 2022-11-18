@@ -33,7 +33,7 @@ async fn main() -> anyhow::Result<()> {
     let app = Router::new()
         .route("/api/auth", post(auth))
         .route("/api/fetch-unarchived", get(fetch_unarchived))
-        .route("/api/event-feed", get(event_feed))
+        .route("/ws/event-feed", get(event_feed))
         .route("/api/submit-event", post(submit_event))
         .layer(Extension(db))
         .layer(Extension(feeds));
@@ -162,11 +162,14 @@ async fn event_feed(
 ) -> Result<axum::response::Response, Error> {
     Ok(ws.on_upgrade(move |mut sock| async move {
         // TODO: handle errors more gracefully
+        // TODO: also log ip of other websocket end
+        tracing::debug!("event feed websocket connected");
         if let Some(Ok(Message::Text(token))) = sock.recv().await {
             if let Ok(token) = Uuid::try_from(&token as &str) {
                 if let Ok(mut conn) = db.acquire().await {
                     if let Ok(user) = db::recover_session(&mut conn, token).await {
                         if let Ok(_) = sock.send(Message::Text(String::from("ok"))).await {
+                            tracing::debug!(?user, "event feed websocket auth success");
                             feeds.clone().add_for_user(user, sock).await;
                         }
                     }

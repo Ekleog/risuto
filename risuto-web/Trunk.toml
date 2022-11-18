@@ -5,5 +5,9 @@
 watch = [".", "../risuto-api"]
 
 [[proxy]]
+backend = "ws://localhost:3000/ws/event-feed"
+ws = true
+
+[[proxy]]
 backend = "http://localhost:3000/api"
 
