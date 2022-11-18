@@ -3,7 +3,6 @@ DROP TABLE edit_comment_events;
 DROP TABLE add_comment_events;
 DROP TABLE remove_tag_events;
 DROP TABLE add_tag_events;
-DROP TABLE tags;
 DROP TABLE remove_dependency_events;
 DROP TABLE add_dependency_events;
 DROP TABLE schedule_events;
