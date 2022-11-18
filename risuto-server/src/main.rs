@@ -1,79 +1,21 @@
 use anyhow::Context;
 use arrayvec::ArrayVec;
 use axum::{
+    async_trait,
     extract::{
         ws::{Message, WebSocket},
-        WebSocketUpgrade,
+        FromRequest, RequestParts, WebSocketUpgrade,
     },
-    http::{self, Request, StatusCode},
-    middleware::Next,
-    response::Response,
+    http::StatusCode,
     routing::{get, post},
     Extension, Json, Router,
 };
 use futures::{stream, StreamExt};
-use risuto_api::{DbDump, UserId};
+use risuto_api::{AuthToken, DbDump, NewSession, UserId, Uuid};
 use std::{collections::HashMap, net::SocketAddr, sync::Arc};
 use tokio::sync::{Mutex, RwLock};
 
 mod db;
-
-#[derive(Clone, Debug)]
-struct Auth(Option<CurrentUser>);
-
-#[derive(Clone, Debug)]
-struct CurrentUser {
-    id: UserId,
-}
-
-async fn auth<B: std::fmt::Debug>(
-    mut req: Request<B>,
-    next: Next<B>,
-) -> Result<Response, StatusCode> {
-    if let Some(auth) = req.headers().get(http::header::AUTHORIZATION) {
-        let auth = auth.to_str().map_err(|_| StatusCode::UNAUTHORIZED)?;
-
-        let db = req
-            .extensions()
-            .get::<sqlx::PgPool>()
-            .expect("No sqlite pool extension");
-        if let Some(current_user) = authorize_current_user(db, auth).await {
-            req.extensions_mut().insert(Auth(Some(current_user)));
-            Ok(next.run(req).await)
-        } else {
-            Err(StatusCode::UNAUTHORIZED)
-        }
-    } else {
-        req.extensions_mut().insert(Auth(None));
-        Ok(next.run(req).await)
-    }
-}
-
-async fn authorize_current_user(db: &sqlx::PgPool, auth: &str) -> Option<CurrentUser> {
-    let split = auth.split(' ').collect::<Vec<_>>();
-    if split.len() != 2 || split[0] != "Basic" {
-        return None;
-    }
-
-    let userpass = base64::decode(split[1]).ok()?;
-    let userpass = std::str::from_utf8(&userpass).ok()?;
-    let split = userpass.split(':').collect::<Vec<_>>();
-    if split.len() != 2 {
-        return None;
-    }
-
-    let user = sqlx::query!(
-        "SELECT id FROM users WHERE name = $1 AND password = $2",
-        split[0],
-        split[1]
-    )
-    .fetch_one(db)
-    .await
-    .ok()?;
-    Some(CurrentUser {
-        id: UserId(user.id),
-    })
-}
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -89,10 +31,10 @@ async fn main() -> anyhow::Result<()> {
     let feeds = UserFeeds(Arc::new(RwLock::new(HashMap::new())));
 
     let app = Router::new()
+        .route("/api/auth", post(auth))
         .route("/api/fetch-unarchived", get(fetch_unarchived))
         .route("/api/event-feed", get(event_feed))
         .route("/api/submit-event", post(submit_event))
-        .route_layer(axum::middleware::from_fn(auth))
         .layer(Extension(db))
         .layer(Extension(feeds));
 
@@ -104,87 +46,121 @@ async fn main() -> anyhow::Result<()> {
         .context("serving axum webserver")
 }
 
-struct AnyhowError(());
+struct Auth(UserId);
 
-impl From<anyhow::Error> for AnyhowError {
-    fn from(e: anyhow::Error) -> AnyhowError {
-        tracing::error!(err=?e, "got an error");
-        AnyhowError(())
+#[async_trait]
+impl<B: Send + Sync> FromRequest<B> for Auth {
+    type Rejection = Error;
+
+    async fn from_request(req: &mut RequestParts<B>) -> Result<Auth, Error> {
+        match req.headers().get(axum::http::header::AUTHORIZATION) {
+            None => Err(Error::PermissionDenied),
+            Some(auth) => {
+                let auth = auth.to_str().map_err(|_| Error::PermissionDenied)?;
+                let mut auth = auth.split(' ');
+                if !auth
+                    .next()
+                    .ok_or(Error::PermissionDenied)?
+                    .eq_ignore_ascii_case("bearer")
+                {
+                    return Err(Error::PermissionDenied);
+                }
+                let token = auth.next().ok_or(Error::PermissionDenied)?;
+                if !auth.next().is_none() {
+                    return Err(Error::PermissionDenied);
+                }
+                let token = Uuid::try_from(token).map_err(|_| Error::PermissionDenied)?;
+                let db = req
+                    .extract::<Extension<sqlx::PgPool>>()
+                    .await
+                    .context("recovering PgPool extension")?;
+                let mut conn = db
+                    .acquire()
+                    .await
+                    .context("getting connection to database")?;
+                Ok(Auth(db::recover_session(&mut conn, token).await?))
+            }
+        }
     }
 }
 
-impl axum::response::IntoResponse for AnyhowError {
-    fn into_response(self) -> axum::response::Response {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "Internal server error, see logs for details",
-        )
-            .into_response()
+pub enum Error {
+    Anyhow(anyhow::Error),
+    PermissionDenied,
+}
+
+impl From<anyhow::Error> for Error {
+    fn from(e: anyhow::Error) -> Error {
+        Error::Anyhow(e)
     }
 }
 
-pub struct PermissionDenied;
-
-impl axum::response::IntoResponse for PermissionDenied {
+impl axum::response::IntoResponse for Error {
     fn into_response(self) -> axum::response::Response {
-        (StatusCode::FORBIDDEN, "Permission denied").into_response()
+        match self {
+            Error::Anyhow(e) => {
+                tracing::error!(err=?e, "got an error");
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Internal server error, see logs for details",
+                )
+                    .into_response()
+            }
+            Error::PermissionDenied => (StatusCode::FORBIDDEN, "Permission denied").into_response(),
+        }
     }
+}
+
+async fn auth(
+    Extension(db): Extension<sqlx::PgPool>,
+    Json(data): Json<NewSession>,
+) -> Result<Json<AuthToken>, Error> {
+    let mut conn = db.acquire().await.context("acquiring db connection")?;
+    Ok(Json(
+        db::login_user(&mut conn, &data)
+            .await
+            .context("logging user in")?
+            .ok_or(Error::PermissionDenied)?,
+    ))
 }
 
 async fn fetch_unarchived(
-    Extension(user): Extension<Auth>,
+    Auth(user): Auth,
     Extension(db): Extension<sqlx::PgPool>,
-) -> Result<Result<Json<DbDump>, PermissionDenied>, AnyhowError> {
-    match user.0 {
-        None => Ok(Err(PermissionDenied)),
-        Some(user) => {
-            let mut conn = db.acquire().await.context("acquiring db connection")?;
-            Ok(Ok(Json(
-                db::fetch_dump_unarchived(&mut conn, user.id)
-                    .await
-                    .with_context(|| format!("fetching db dump for {:?}", user))?,
-            )))
-        }
-    }
+) -> Result<Json<DbDump>, Error> {
+    let mut conn = db.acquire().await.context("acquiring db connection")?;
+    Ok(Json(
+        db::fetch_dump_unarchived(&mut conn, user)
+            .await
+            .with_context(|| format!("fetching db dump for {:?}", user))?,
+    ))
 }
 
 async fn submit_event(
     Json(e): Json<risuto_api::NewEvent>,
-    Extension(user): Extension<Auth>,
+    Auth(user): Auth,
     Extension(db): Extension<sqlx::PgPool>,
     Extension(feeds): Extension<UserFeeds>,
-) -> Result<Result<(), PermissionDenied>, AnyhowError> {
-    match user.0 {
-        None => Ok(Err(PermissionDenied)),
-        Some(user) if user.id != e.owner => Ok(Err(PermissionDenied)),
-        Some(user) => {
-            let mut conn = db.acquire().await.context("acquiring db connection")?;
-            let res = db::submit_event(&mut conn, e.clone())
-                .await
-                .context("submitting event to db")?;
-            if res.is_err() {
-                return Ok(res);
-            }
-            let db = db::PostgresDb {
-                conn: &mut conn,
-                user: user.id,
-            };
-            feeds.relay_event(db, e).await;
-            Ok(Ok(()))
-        }
+) -> Result<(), Error> {
+    if user != e.owner {
+        return Err(Error::PermissionDenied);
     }
+    let mut conn = db.acquire().await.context("acquiring db connection")?;
+    db::submit_event(&mut conn, e.clone()).await?;
+    let db = db::PostgresDb {
+        conn: &mut conn,
+        user,
+    };
+    feeds.relay_event(db, e).await;
+    Ok(())
 }
 
 async fn event_feed(
     ws: WebSocketUpgrade,
-    Extension(user): Extension<Auth>,
+    Auth(user): Auth,
     Extension(feeds): Extension<UserFeeds>,
-) -> Result<axum::response::Response, PermissionDenied> {
-    if let Some(user) = user.0 {
-        Ok(ws.on_upgrade(move |sock| feeds.clone().add_for_user(user.id, sock)))
-    } else {
-        Err(PermissionDenied)
-    }
+) -> Result<axum::response::Response, Error> {
+    Ok(ws.on_upgrade(move |sock| feeds.clone().add_for_user(user, sock)))
 }
 
 #[derive(Clone, Debug)]

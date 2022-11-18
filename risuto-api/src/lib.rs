@@ -9,18 +9,28 @@ pub type Time = chrono::DateTime<Utc>;
 
 pub const STUB_UUID: Uuid = uuid!("ffffffff-ffff-ffff-ffff-ffffffffffff");
 
+#[derive(serde::Deserialize, serde::Serialize)]
+pub struct NewSession {
+    pub user: String,
+    pub password: String,
+    pub device: String,
+}
+
+#[derive(Clone, Copy, Debug, serde::Deserialize, serde::Serialize)]
+pub struct AuthToken(pub Uuid);
+
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct UserId(pub Uuid);
-
-#[derive(Debug, serde::Deserialize, serde::Serialize)]
-pub struct User {
-    pub name: String,
-}
 
 impl UserId {
     pub fn stub() -> UserId {
         UserId(STUB_UUID)
     }
+}
+
+#[derive(Debug, serde::Deserialize, serde::Serialize)]
+pub struct User {
+    pub name: String,
 }
 
 #[derive(

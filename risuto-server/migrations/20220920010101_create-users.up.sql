@@ -10,7 +10,7 @@ CREATE TABLE sessions (
     id UUID PRIMARY KEY NOT NULL,
     user_id UUID NOT NULL,
     name VARCHAR NOT NULL,
-    login TIMESTAMP NOT NULL,
+    login_time TIMESTAMP NOT NULL,
     last_active TIMESTAMP NOT NULL,
 
     FOREIGN KEY (user_id) REFERENCES users (id)

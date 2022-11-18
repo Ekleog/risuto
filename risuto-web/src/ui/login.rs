@@ -43,7 +43,7 @@ impl Component for Login {
             LoginMsg::UserChanged(u) => self.user = u,
             LoginMsg::PassChanged(p) => self.pass = p,
             LoginMsg::SubmitClicked => {
-                // TODO: hash password (username + "risuto" + password)
+                // TODO: this should auth the user, get a token, and not save the password
                 ctx.props().on_submit.emit(LoginInfo {
                     host: self.host.clone(),
                     user: self.user.clone(),

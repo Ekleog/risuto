@@ -1,15 +1,15 @@
-use anyhow::Context;
+use anyhow::{anyhow, Context};
 use axum::async_trait;
 use chrono::Utc;
 use futures::{Stream, StreamExt, TryStreamExt};
 use risuto_api::{
-    AuthInfo, DbDump, Event, EventId, EventType, NewEvent, NewEventContents, Tag, TagId, Task,
-    TaskId, User, UserId, Uuid,
+    AuthInfo, AuthToken, DbDump, Event, EventId, EventType, NewEvent, NewEventContents, NewSession,
+    Tag, TagId, Task, TaskId, User, UserId, Uuid,
 };
 use sqlx::Row;
 use std::collections::{BTreeMap, HashMap, HashSet};
 
-use crate::PermissionDenied;
+use crate::Error;
 
 pub struct PostgresDb<'a> {
     pub conn: &'a mut sqlx::PgConnection,
@@ -106,6 +106,62 @@ impl<'a> risuto_api::Db for PostgresDb<'a> {
         .fetch_one(&mut *self.conn)
         .await?
         .id == comment.0)
+    }
+}
+
+pub async fn login_user(
+    db: &mut sqlx::PgConnection,
+    s: &NewSession,
+) -> anyhow::Result<Option<AuthToken>> {
+    let session_id = Uuid::new_v4();
+    let now = Utc::now();
+    let rows_inserted = sqlx::query!(
+        "
+            INSERT INTO sessions
+            SELECT $1, id, $2, $3, $3
+            FROM users
+            WHERE name = $4 AND password = $5
+        ",
+        session_id,
+        s.device,
+        now.naive_utc(),
+        s.user,
+        s.password, // TODO: password should be salted (eg. user + "risuto" + password)
+    )
+    .execute(db)
+    .await
+    .with_context(|| format!("authenticating user {:?}", s.user))?
+    .rows_affected();
+    assert!(
+        rows_inserted <= 1,
+        "inserted more than 1 row: {}",
+        rows_inserted
+    );
+    Ok((rows_inserted == 1).then(|| AuthToken(session_id)))
+}
+
+pub async fn recover_session(db: &mut sqlx::PgConnection, token: Uuid) -> Result<UserId, Error> {
+    let res = sqlx::query!(
+        "
+            UPDATE sessions
+            SET last_active = $1
+            WHERE id=$2
+            RETURNING user_id
+        ",
+        Utc::now().naive_utc(),
+        token,
+    )
+    .fetch_all(db)
+    .await
+    .with_context(|| format!("getting user id for session {}", token))?;
+    assert!(
+        res.len() <= 1,
+        "got multiple results for primary key request"
+    );
+    if res.is_empty() {
+        Err(Error::PermissionDenied)
+    } else {
+        Ok(UserId(res[0].user_id))
     }
 }
 
@@ -446,10 +502,7 @@ async fn fetch_tasks_from_tmp_tasks_table(
     Ok(tasks)
 }
 
-pub async fn submit_event(
-    conn: &mut sqlx::PgConnection,
-    e: NewEvent,
-) -> anyhow::Result<Result<(), PermissionDenied>> {
+pub async fn submit_event(conn: &mut sqlx::PgConnection, e: NewEvent) -> Result<(), Error> {
     let event_id = e.id;
 
     // Check authorization
@@ -462,7 +515,7 @@ pub async fn submit_event(
         .await
         .with_context(|| format!("checking if user is authorized to add event {:?}", event_id))?;
     if !auth {
-        return Ok(Err(PermissionDenied));
+        return Err(Error::PermissionDenied);
     }
 
     macro_rules! insert_event {
@@ -535,13 +588,14 @@ pub async fn submit_event(
         }
     };
 
-    anyhow::ensure!(
-        res.rows_affected() == 1,
-        "insertion of event {:?} affected {} rows",
-        event_id,
-        res.rows_affected()
-    );
+    if res.rows_affected() != 1 {
+        Err(anyhow!(
+            "insertion of event {:?} affected {} rows",
+            event_id,
+            res.rows_affected(),
+        ))?;
+    }
     // TODO: give a specific error if the event id is already taken
 
-    Ok(Ok(()))
+    Ok(())
 }
