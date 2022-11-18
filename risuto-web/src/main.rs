@@ -20,7 +20,7 @@ fn main() {
 pub struct LoginInfo {
     host: String,
     user: String,
-    pass: String,
+    token: AuthToken,
 }
 
 #[derive(Clone, Debug)]
@@ -124,7 +124,7 @@ impl Component for App {
                 this.logout = self.login.take().map(|i| LoginInfo {
                     host: i.info.host,
                     user: i.info.user,
-                    pass: String::new(),
+                    token: AuthToken::stub(),
                 }); // info saved from login info
                 *self = this;
             }
@@ -175,7 +175,7 @@ impl Component for App {
                 <div class="container">
                     <ui::Login
                         info={self.logout.clone()}
-                        on_submit={ctx.link().callback(AppMsg::UserLogin)}
+                        on_authed={ctx.link().callback(AppMsg::UserLogin)}
                     />
                 </div>
             };

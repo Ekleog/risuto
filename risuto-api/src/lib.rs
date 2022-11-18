@@ -16,8 +16,14 @@ pub struct NewSession {
     pub device: String,
 }
 
-#[derive(Clone, Copy, Debug, serde::Deserialize, serde::Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct AuthToken(pub Uuid);
+
+impl AuthToken {
+    pub fn stub() -> AuthToken {
+        AuthToken(STUB_UUID)
+    }
+}
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct UserId(pub Uuid);

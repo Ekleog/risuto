@@ -1,11 +1,13 @@
+use futures::FutureExt;
+use risuto_api::{AuthToken, NewSession};
 use yew::prelude::*;
 
-use crate::LoginInfo;
+use crate::{api, LoginInfo};
 
 #[derive(Clone, PartialEq, Properties)]
 pub struct LoginProps {
     pub info: Option<LoginInfo>,
-    pub on_submit: Callback<LoginInfo>,
+    pub on_authed: Callback<LoginInfo>,
 }
 
 pub struct Login {
@@ -19,6 +21,11 @@ pub enum LoginMsg {
     UserChanged(String),
     PassChanged(String),
     SubmitClicked,
+    Authed(String, String, anyhow::Result<AuthToken>),
+}
+
+fn get_device() -> anyhow::Result<String> {
+    Ok("Unknown Device".into()) // TODO: see https://stackoverflow.com/questions/11219582/how-to-detect-my-browser-version-and-operating-system-using-javascript
 }
 
 impl Component for Login {
@@ -43,12 +50,29 @@ impl Component for Login {
             LoginMsg::UserChanged(u) => self.user = u,
             LoginMsg::PassChanged(p) => self.pass = p,
             LoginMsg::SubmitClicked => {
-                // TODO: this should auth the user, get a token, and not save the password
-                ctx.props().on_submit.emit(LoginInfo {
-                    host: self.host.clone(),
+                let device = get_device().unwrap_or_else(|_| String::from("Unknown device"));
+                let session = NewSession {
                     user: self.user.clone(),
-                    pass: self.pass.clone(),
-                });
+                    password: self.pass.clone(),
+                    device,
+                };
+                let host = self.host.clone();
+                let user = self.user.clone();
+                ctx.link().send_future(
+                    api::auth(reqwest::Client::new(), self.host.clone(), session)
+                        .map(move |token| LoginMsg::Authed(host, user, token)),
+                );
+                // TODO: show some kind of indicator that auth is in progress?
+                // making host/user disabled would also avoid the need of passing them through Authed
+                // TODO: reuse the Client built in App
+                return false;
+            }
+            LoginMsg::Authed(host, user, Ok(token)) => {
+                ctx.props().on_authed.emit(LoginInfo { host, user, token });
+                return false;
+            }
+            LoginMsg::Authed(_, _, Err(_)) => {
+                // TODO: at least PermissionDenied must be handled separately
                 return false;
             }
         }

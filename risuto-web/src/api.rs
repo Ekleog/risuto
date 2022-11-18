@@ -11,6 +11,20 @@ use std::{collections::VecDeque, future::Future, pin::Pin};
 
 use crate::LoginInfo;
 
+pub async fn auth(
+    client: reqwest::Client,
+    host: String,
+    session: NewSession,
+) -> anyhow::Result<AuthToken> {
+    Ok(client
+        .post(format!("{}/api/auth", host))
+        .json(&session)
+        .send()
+        .await?
+        .json()
+        .await?)
+}
+
 pub async fn fetch_db_dump(client: reqwest::Client, login: LoginInfo) -> DbDump {
     loop {
         match try_fetch_db_dump(&client, &login).await {
@@ -25,7 +39,7 @@ pub async fn fetch_db_dump(client: reqwest::Client, login: LoginInfo) -> DbDump 
 async fn try_fetch_db_dump(client: &reqwest::Client, login: &LoginInfo) -> reqwest::Result<DbDump> {
     client
         .get(format!("{}/api/fetch-unarchived", login.host))
-        .basic_auth(&login.user, Some(&login.pass))
+        .bearer_auth(login.token.0)
         .send()
         .await?
         .json()
@@ -96,7 +110,7 @@ async fn send_event(client: &reqwest::Client, login: &LoginInfo, event: NewEvent
     loop {
         let res = client
             .post(format!("{}/api/submit-event", login.host))
-            .basic_auth(&login.user, Some(&login.pass))
+            .bearer_auth(login.token.0)
             .json(&event)
             .send()
             .await;
