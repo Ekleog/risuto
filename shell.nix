@@ -1,4 +1,4 @@
-with import ./common.nix;
+with import ./nix/pkgs.nix;
 
 let
   androidBuildToolsVersion = "30.0.3";
@@ -21,6 +21,7 @@ pkgs.stdenv.mkDerivation {
       gradle
       jdk8_headless
       mdbook
+      niv
       nodePackages.cordova
       nodePackages.npm
       nodePackages.sass
