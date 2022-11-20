@@ -22,5 +22,17 @@
         "type": "tarball",
         "url": "https://github.com/NixOS/nixpkgs/archive/cd00072eeb6ca71e6f30831385ce9d613508ad1d.tar.gz",
         "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
+    },
+    "npmlock2nix": {
+        "branch": "master",
+        "description": "nixify npm based packages [maintainer=@andir] ",
+        "homepage": "",
+        "owner": "nix-community",
+        "repo": "npmlock2nix",
+        "rev": "eeed152290ec2425f96c5e74e469c40b621e1468",
+        "sha256": "00p9m7hldpm1qbv00bhswg0nda0rhcsh9zniaqa2rg5cgjp3mh8w",
+        "type": "tarball",
+        "url": "https://github.com/nix-community/npmlock2nix/archive/eeed152290ec2425f96c5e74e469c40b621e1468.tar.gz",
+        "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
     }
 }

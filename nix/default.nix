@@ -18,6 +18,9 @@ rec {
     };
     overlays = [
       fenixOverlay
+      (self: super: {
+        npmlock2nix = self.callPackage sources.npmlock2nix {};
+      })
     ];
   };
 }

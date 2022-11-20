@@ -1,4 +1,4 @@
-with import ./nix/pkgs.nix;
+with import ./nix;
 
 let
   androidBuildToolsVersion = "30.0.3";
