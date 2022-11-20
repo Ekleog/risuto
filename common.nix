@@ -1,8 +1,9 @@
 rec {
   pkgsSrc = builtins.fetchTarball {
     # The following is for nixos-unstable on 2022-11-13
-    url = "https://github.com/NixOS/nixpkgs/archive/cd00072eeb6ca71e6f30831385ce9d613508ad1d.tar.gz";
-    sha256 = "1hmwmp73hba7kd89wfv3nir3xv760w31z4m31vs1mjinwmb6955v";
+    # Note: this has a patch fixing android emulator, see https://github.com/NixOS/nixpkgs/pull/202088
+    url = "https://github.com/Ekleog/nixpkgs/archive/d0e691c9fee72b55fa4ecfe88e72cdd696e08100.tar.gz";
+    sha256 = "1q5cs9r82j0i8v2swryzad9nlvxv3k6bw2d6p6dblbqgikcp07if";
   };
   fenixOverlaySrc = builtins.fetchTarball {
     # The following is the latest version as of 2022-11-15
@@ -11,6 +12,10 @@ rec {
   };
   fenixOverlay = import (fenixOverlaySrc + "/overlay.nix");
   pkgs = import pkgsSrc {
+    config = {
+      allowUnfreePredicate = pkg: pkg.name == "androidsdk";
+      android_sdk.accept_license = true;
+    };
     overlays = [
       fenixOverlay
     ];
