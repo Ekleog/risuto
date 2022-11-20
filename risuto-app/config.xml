@@ -19,12 +19,12 @@
 -->
 <widget xmlns="http://www.w3.org/ns/widgets"
     xmlns:cdv="http://cordova.apache.org/ns/1.0"
-    id="io.cordova.hellocordova"
+    id="org.ekleog.risuto"
     version="1.0.0">
-    <name>HelloCordova</name>
-    <description>Sample Apache Cordova App</description>
-    <author email="dev@cordova.apache.org" href="https://cordova.apache.org">
-        Apache Cordova Team
+    <name>Risuto</name>
+    <description>TODO</description>
+    <author email="risuto@ekleog.org" href="https://github.com/Ekleog/risuto">
+        Léo Gaspard
     </author>
 
     <!-- https://s.apache.org/cdv-content-config -->
