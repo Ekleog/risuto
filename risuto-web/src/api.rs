@@ -3,11 +3,12 @@ use futures::{
         mpsc::{self, UnboundedSender},
         oneshot,
     },
-    future, select, FutureExt, StreamExt,
+    future, select, FutureExt, SinkExt, StreamExt,
 };
 use gloo_storage::{LocalStorage, Storage};
 use risuto_api::*;
 use std::{collections::VecDeque, future::Future, pin::Pin};
+use ws_stream_wasm::{WsMessage, WsMeta};
 
 use crate::LoginInfo;
 
@@ -51,11 +52,25 @@ pub async fn start_event_feed(
     feed: UnboundedSender<NewEvent>,
     mut cancel: oneshot::Sender<()>,
 ) {
-    // TODO: make a custom error type
+    // Connect to websocket
+    // TODO: split connect & auth into another function that returns an error on perm-denied
     let ws_url = format!(
-        "ws{}/api/ws",
+        "ws{}/ws/event-feed",
         login.host.strip_prefix("http").expect("TODO")
     );
+    let (_, mut sock) = WsMeta::connect(ws_url, None).await.expect("TODO");
+
+    // Authentify
+    let mut buf = Uuid::encode_buffer();
+    sock.send(WsMessage::Text(
+        login.token.0.as_hyphenated().encode_lower(&mut buf).into(),
+    ))
+    .await
+    .expect("TODO");
+    let res = sock.next().await.expect("TODO");
+    assert_eq!(res, WsMessage::Text("ok".into()));
+
+    // Finally, run the event feed
     let mut cancellation = cancel.cancellation().fuse();
     loop {
         select! {
