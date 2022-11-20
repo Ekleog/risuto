@@ -1,6 +1,5 @@
-with import ./nix;
-
 let
+  pkgs = import ./nix;
   androidBuildToolsVersion = "30.0.3";
   androidPkgs = pkgs.androidenv.composeAndroidPackages {
     buildToolsVersions = [ androidBuildToolsVersion ];
