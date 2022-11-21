@@ -11,11 +11,13 @@
   "author": "Léo Gaspard",
   "license": "Apache-2.0",
   "devDependencies": {
-    "cordova-android": "^10.1.2"
+    "cordova-android": "^10.1.2",
+    "cordova-electron": "^3.1.0"
   },
   "cordova": {
     "platforms": [
-      "android"
+      "android",
+      "electron"
     ]
   }
 }
