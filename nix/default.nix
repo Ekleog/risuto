@@ -11,8 +11,6 @@ let
 in
 import pkgsSrc {
   config = {
-    permittedInsecurePackages = [ "electron-14.2.9" ];
-
     allowUnfreePredicate = pkg: pkg.name == "androidsdk";
     android_sdk.accept_license = true;
   };

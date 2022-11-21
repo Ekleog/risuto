@@ -24,7 +24,6 @@ pkgs.stdenv.mkDerivation {
     (with pkgs; [
       androidPkgs.androidsdk
       cacert
-      electron_14
       gradle
       jdk8_headless
       mdbook
