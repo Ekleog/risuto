@@ -126,13 +126,12 @@ impl Component for Login {
                         onchange={callback_for!(PassChanged)}
                     />
                 </div>
-                <button
-                    type="submit"
+                <input
+                    type="button"
                     class="btn btn-primary"
                     onclick={ctx.link().callback(|_| LoginMsg::SubmitClicked)}
-                >
-                    { "Connect" }
-                </button>
+                    value="Connect"
+                />
             </form>
         </>}
     }
