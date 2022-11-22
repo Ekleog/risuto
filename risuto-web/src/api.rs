@@ -1,8 +1,5 @@
 use futures::{
-    channel::{
-        mpsc::{self, UnboundedSender},
-        oneshot,
-    },
+    channel::{mpsc, oneshot},
     future, select, FutureExt, SinkExt, StreamExt,
 };
 use gloo_storage::{LocalStorage, Storage};
@@ -49,7 +46,7 @@ async fn try_fetch_db_dump(client: &reqwest::Client, login: &LoginInfo) -> reqwe
 
 pub async fn start_event_feed(
     login: LoginInfo,
-    feed: UnboundedSender<NewEvent>,
+    feed_sender: yew::html::Scope<crate::App>,
     mut cancel: oneshot::Sender<()>,
 ) {
     // Connect to websocket
@@ -86,7 +83,7 @@ pub async fn start_event_feed(
                     Some(WsMessage::Text(t)) => serde_json::from_str(&t),
                     Some(WsMessage::Binary(b)) => serde_json::from_slice(&b),
                 }.expect("TODO");
-                feed.unbounded_send(msg).expect("TODO");
+                feed_sender.send_message(crate::AppMsg::NewNetworkEvent(msg));
             }
         }
     }

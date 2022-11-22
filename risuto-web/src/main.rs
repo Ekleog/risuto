@@ -30,15 +30,16 @@ pub struct LoginData {
     feed_canceller: Rc<RefCell<oneshot::Receiver<()>>>,
 }
 
-enum AppMsg {
+pub enum AppMsg {
     UserLogin(LoginInfo),
     UserLogout,
     ReceivedDb(DbDump),
     SetTag(Option<TagId>),
-    NewTaskEvent(NewEvent),
+    NewUserEvent(NewEvent),
+    NewNetworkEvent(NewEvent),
 }
 
-struct App {
+pub struct App {
     client: reqwest::Client,
     login: Option<LoginData>,
     logout: Option<LoginInfo>, // info saved from login info
@@ -71,11 +72,11 @@ impl App {
 
     fn got_login_info(&mut self, ctx: &Context<Self>, info: LoginInfo) {
         // Connect to websocket event feed
-        let (feed_submitter, feed_receiver) = mpsc::unbounded();
+        let feed_sender = ctx.link().clone();
         let (feed_cancel_receiver, feed_canceller) = oneshot::channel();
         spawn_local(api::start_event_feed(
             info.clone(),
-            feed_submitter,
+            feed_sender,
             feed_cancel_receiver,
         ));
 
@@ -96,6 +97,18 @@ impl App {
 
         // Finally, fetch a DB dump from the server
         self.fetch_db_dump(ctx);
+    }
+
+    fn handle_new_event(&mut self, e: NewEvent) {
+        for (t, e) in e.untrusted_task_event_list().into_iter() {
+            match self.db.tasks.get_mut(&t) {
+                None => tracing::warn!(evt=?e, "got event for task not in db"),
+                Some(t) => {
+                    t.add_event(e);
+                    t.refresh_metadata();
+                }
+            }
+        }
     }
 }
 
@@ -151,7 +164,7 @@ impl Component for App {
             AppMsg::SetTag(id) => {
                 self.tag = id;
             }
-            AppMsg::NewTaskEvent(e) => {
+            AppMsg::NewUserEvent(e) => {
                 // TODO: validate user is allowed to send this event
                 // (at least a panic is better than a localstorage queue being borken due to 403 failures)
                 self.login
@@ -160,16 +173,9 @@ impl Component for App {
                     .event_submitter
                     .unbounded_send(e.clone())
                     .expect("failed sending local event to event submitter");
-                for (t, e) in e.untrusted_task_event_list().into_iter() {
-                    match self.db.tasks.get_mut(&t) {
-                        None => tracing::warn!(evt=?e, "got event for task not in db"),
-                        Some(t) => {
-                            t.add_event(e);
-                            t.refresh_metadata();
-                        }
-                    }
-                }
+                self.handle_new_event(e);
             }
+            AppMsg::NewNetworkEvent(e) => self.handle_new_event(e),
         }
         true
     }
@@ -190,7 +196,7 @@ impl Component for App {
         let on_done_change = {
             let owner = self.db.owner.clone();
             ctx.link().callback(move |(task, now_done)| {
-                AppMsg::NewTaskEvent(NewEvent::now(
+                AppMsg::NewUserEvent(NewEvent::now(
                     owner,
                     NewEventContents::SetDone { task, now_done },
                 ))
