@@ -4,11 +4,11 @@ use futures::{
 };
 use gloo_storage::{LocalStorage, Storage};
 use risuto_api::*;
+use std::{cell::RefCell, rc::Rc};
 use wasm_bindgen_futures::spawn_local;
 use yew::prelude::*;
 
 mod api;
-
 mod ui;
 
 fn main() {
@@ -27,6 +27,7 @@ pub struct LoginInfo {
 pub struct LoginData {
     info: LoginInfo,
     event_submitter: mpsc::UnboundedSender<NewEvent>,
+    feed_canceller: Rc<RefCell<oneshot::Receiver<()>>>,
 }
 
 enum AppMsg {
@@ -90,6 +91,7 @@ impl App {
         self.login = Some(LoginData {
             info,
             event_submitter,
+            feed_canceller: Rc::new(RefCell::new(feed_canceller)),
         });
 
         // Finally, fetch a DB dump from the server
@@ -121,10 +123,13 @@ impl Component for App {
                 LocalStorage::delete("queue");
                 // TODO: warn the user upon logout that unsynced changes will be lost
                 let mut this = App::new();
-                this.logout = self.login.take().map(|i| LoginInfo {
-                    host: i.info.host,
-                    user: i.info.user,
-                    token: AuthToken::stub(),
+                this.logout = self.login.take().map(|i| {
+                    i.feed_canceller.borrow_mut().close(); // This should be unneeded as it closes on drop, but better safe than sorry
+                    LoginInfo {
+                        host: i.info.host,
+                        user: i.info.user,
+                        token: AuthToken::stub(),
+                    }
                 }); // info saved from login info
                 *self = this;
             }

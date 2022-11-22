@@ -1424,6 +1424,7 @@ dependencies = [
  "reqwest",
  "risuto-api",
  "serde",
+ "serde_json",
  "tracing",
  "tracing-wasm",
  "wasm-bindgen-futures",

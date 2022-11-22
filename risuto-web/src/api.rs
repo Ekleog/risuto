@@ -71,11 +71,23 @@ pub async fn start_event_feed(
     assert_eq!(res, WsMessage::Text("ok".into()));
 
     // Finally, run the event feed
+    let mut sock = sock.fuse();
     let mut cancellation = cancel.cancellation().fuse();
     loop {
         select! {
-            _ = cancellation => return,
-            // todo
+            _ = cancellation => {
+                sock.into_inner().close().await.expect("TODO");
+                tracing::info!("disconnected from event feed");
+                return;
+            }
+            msg = sock.next() => {
+                let msg = match msg {
+                    None => panic!("TODO"),
+                    Some(WsMessage::Text(t)) => serde_json::from_str(&t),
+                    Some(WsMessage::Binary(b)) => serde_json::from_slice(&b),
+                }.expect("TODO");
+                feed.unbounded_send(msg).expect("TODO");
+            }
         }
     }
 }
