@@ -37,7 +37,6 @@ pub enum AppMsg {
     SetTag(Option<TagId>),
     NewUserEvent(NewEvent),
     NewNetworkEvent(NewEvent),
-    SetTaskBacklog(TaskId, TagId, bool),
 }
 
 pub struct App {
@@ -215,29 +214,6 @@ impl Component for App {
                 self.handle_new_event(e);
             }
             AppMsg::NewNetworkEvent(e) => self.handle_new_event(e),
-            AppMsg::SetTaskBacklog(task, tag, now_backlog) => {
-                let prio = self
-                    .db
-                    .tasks
-                    .get(&task)
-                    .expect("setting task backlog for task not in db")
-                    .current_tags
-                    .get(&tag)
-                    .expect("setting task backlog for a tag it does not have")
-                    .priority;
-                return self.update(
-                    ctx,
-                    AppMsg::NewUserEvent(NewEvent::now(
-                        self.db.owner,
-                        NewEventContents::AddTag {
-                            task,
-                            tag,
-                            prio,
-                            backlog: now_backlog,
-                        },
-                    )),
-                );
-            }
         }
         true
     }
@@ -267,13 +243,33 @@ impl Component for App {
             })
         };
         let on_backlog_change = {
+            let owner = self.db.owner.clone();
             let tag = self.tag.clone();
+            let tasks_normal = tasks_normal.clone();
+            let tasks_backlog = tasks_backlog.clone();
             ctx.link().callback(move |(task, now_backlog)| {
-                AppMsg::SetTaskBacklog(
-                    task,
-                    tag.expect("called on_backlog_change in untagged list"),
-                    now_backlog,
-                )
+                let tag = tag
+                    .as_ref()
+                    .expect("called on_backlog_change on untagged task list");
+                let prio = tasks_normal
+                    .iter()
+                    .chain(tasks_backlog.iter())
+                    .find(|(id, _)| *id == task)
+                    .expect("setting task backlog for task not in list")
+                    .1
+                    .current_tags
+                    .get(tag)
+                    .expect("setting task backlog for a tag it does not have")
+                    .priority;
+                AppMsg::NewUserEvent(NewEvent::now(
+                    owner,
+                    NewEventContents::AddTag {
+                        task,
+                        tag: tag.clone(),
+                        prio,
+                        backlog: now_backlog,
+                    },
+                ))
             })
         };
         let on_order_change = {
