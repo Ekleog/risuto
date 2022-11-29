@@ -99,6 +99,27 @@ impl App {
         self.fetch_db_dump(ctx);
     }
 
+    fn logout(&mut self) {
+        // TODO: warn the user upon logout that unsynced changes will be lost
+        if let Some(ref l) = self.login {
+            spawn_local(api::unauth(
+                self.client.clone(),
+                l.info.host.clone(),
+                l.info.token,
+            ));
+        }
+        let mut this = App::new();
+        this.logout = self.login.take().map(|i| {
+            i.feed_canceller.borrow_mut().close(); // This should be unneeded as it closes on drop, but better safe than sorry
+            LoginInfo {
+                host: i.info.host,
+                user: i.info.user,
+                token: AuthToken::stub(),
+            }
+        }); // info saved from login info
+        *self = this;
+    }
+
     fn handle_new_event(&mut self, e: NewEvent) {
         for (t, e) in e.untrusted_task_event_list().into_iter() {
             match self.db.tasks.get_mut(&t) {
@@ -132,19 +153,9 @@ impl Component for App {
                 self.got_login_info(ctx, info);
             }
             AppMsg::UserLogout => {
+                self.logout();
                 LocalStorage::delete("login");
                 LocalStorage::delete("queue");
-                // TODO: warn the user upon logout that unsynced changes will be lost
-                let mut this = App::new();
-                this.logout = self.login.take().map(|i| {
-                    i.feed_canceller.borrow_mut().close(); // This should be unneeded as it closes on drop, but better safe than sorry
-                    LoginInfo {
-                        host: i.info.host,
-                        user: i.info.user,
-                        token: AuthToken::stub(),
-                    }
-                }); // info saved from login info
-                *self = this;
             }
             AppMsg::ReceivedDb(db) => {
                 self.db = db;

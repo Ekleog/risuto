@@ -23,6 +23,21 @@ pub async fn auth(
         .await?)
 }
 
+pub async fn unauth(client: reqwest::Client, host: String, token: AuthToken) {
+    let resp = client
+        .post(format!("{}/api/unauth", host))
+        .bearer_auth(token.0)
+        .send()
+        .await;
+    match resp {
+        Err(e) => tracing::error!("failed to unauth: {:?}", e),
+        Ok(resp) if !resp.status().is_success() => {
+            tracing::error!("failed to unauth: response is not success {:?}", resp)
+        }
+        Ok(_) => (),
+    }
+}
+
 pub async fn fetch_db_dump(client: reqwest::Client, login: LoginInfo) -> DbDump {
     loop {
         match try_fetch_db_dump(&client, &login).await {

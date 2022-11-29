@@ -140,7 +140,31 @@ pub async fn login_user(
     Ok((rows_inserted == 1).then(|| AuthToken(session_id)))
 }
 
-pub async fn recover_session(db: &mut sqlx::PgConnection, token: Uuid) -> Result<UserId, Error> {
+/// Returns true iff a user was actually logged out
+pub async fn logout_user(
+    db: &mut sqlx::PgConnection,
+    user: &AuthToken,
+) -> anyhow::Result<bool> {
+    let rows_deleted = sqlx::query!(
+        "
+            DELETE FROM sessions
+            WHERE id = $1
+        ",
+        user.0,
+    )
+    .execute(db)
+    .await
+    .with_context(|| format!("deauthenticating session with token {:?}", user))?
+    .rows_affected();
+    assert!(
+        rows_deleted <= 1,
+        "deleted more than 1 row: {}",
+        rows_deleted
+    );
+    Ok(rows_deleted == 1)
+}
+
+pub async fn recover_session(db: &mut sqlx::PgConnection, token: AuthToken) -> Result<UserId, Error> {
     let res = sqlx::query!(
         "
             UPDATE sessions
@@ -149,11 +173,11 @@ pub async fn recover_session(db: &mut sqlx::PgConnection, token: Uuid) -> Result
             RETURNING user_id
         ",
         Utc::now().naive_utc(),
-        token,
+        token.0,
     )
     .fetch_all(db)
     .await
-    .with_context(|| format!("getting user id for session {}", token))?;
+    .with_context(|| format!("getting user id for session {:?}", token))?;
     assert!(
         res.len() <= 1,
         "got multiple results for primary key request"

@@ -32,6 +32,7 @@ async fn main() -> anyhow::Result<()> {
 
     let app = Router::new()
         .route("/api/auth", post(auth))
+        .route("/api/unauth", post(unauth))
         .route("/api/fetch-unarchived", get(fetch_unarchived))
         .route("/ws/event-feed", get(event_feed))
         .route("/api/submit-event", post(submit_event))
@@ -46,13 +47,13 @@ async fn main() -> anyhow::Result<()> {
         .context("serving axum webserver")
 }
 
-struct Auth(UserId);
+struct PreAuth(AuthToken);
 
 #[async_trait]
-impl<B: Send + Sync> FromRequest<B> for Auth {
+impl<B: Send + Sync> FromRequest<B> for PreAuth {
     type Rejection = Error;
 
-    async fn from_request(req: &mut RequestParts<B>) -> Result<Auth, Error> {
+    async fn from_request(req: &mut RequestParts<B>) -> Result<PreAuth, Error> {
         match req.headers().get(axum::http::header::AUTHORIZATION) {
             None => Err(Error::PermissionDenied),
             Some(auth) => {
@@ -70,17 +71,29 @@ impl<B: Send + Sync> FromRequest<B> for Auth {
                     return Err(Error::PermissionDenied);
                 }
                 let token = Uuid::try_from(token).map_err(|_| Error::PermissionDenied)?;
-                let db = req
-                    .extract::<Extension<sqlx::PgPool>>()
-                    .await
-                    .context("recovering PgPool extension")?;
-                let mut conn = db
-                    .acquire()
-                    .await
-                    .context("getting connection to database")?;
-                Ok(Auth(db::recover_session(&mut conn, token).await?))
+                Ok(PreAuth(AuthToken(token)))
             }
         }
+    }
+}
+
+struct Auth(UserId);
+
+#[async_trait]
+impl<B: Send + Sync> FromRequest<B> for Auth {
+    type Rejection = Error;
+
+    async fn from_request(req: &mut RequestParts<B>) -> Result<Auth, Error> {
+        let token = req.extract::<PreAuth>().await?.0;
+        let db = req
+            .extract::<Extension<sqlx::PgPool>>()
+            .await
+            .context("recovering PgPool extension")?;
+        let mut conn = db
+            .acquire()
+            .await
+            .context("getting connection to database")?;
+        Ok(Auth(db::recover_session(&mut conn, token).await?))
     }
 }
 
@@ -122,6 +135,15 @@ async fn auth(
             .context("logging user in")?
             .ok_or(Error::PermissionDenied)?,
     ))
+}
+
+async fn unauth(user: PreAuth, Extension(db): Extension<sqlx::PgPool>) -> Result<(), Error> {
+    let mut conn = db.acquire().await.context("acquiring db connection")?;
+    match db::logout_user(&mut conn, &user.0).await {
+        Ok(true) => Ok(()),
+        Ok(false) => Err(Error::PermissionDenied),
+        Err(e) => Err(Error::Anyhow(e)),
+    }
 }
 
 async fn fetch_unarchived(
@@ -167,7 +189,7 @@ async fn event_feed(
         if let Some(Ok(Message::Text(token))) = sock.recv().await {
             if let Ok(token) = Uuid::try_from(&token as &str) {
                 if let Ok(mut conn) = db.acquire().await {
-                    if let Ok(user) = db::recover_session(&mut conn, token).await {
+                    if let Ok(user) = db::recover_session(&mut conn, AuthToken(token)).await {
                         if let Ok(_) = sock.send(Message::Text(String::from("ok"))).await {
                             tracing::debug!(?user, "event feed websocket auth success");
                             feeds.clone().add_for_user(user, sock).await;
