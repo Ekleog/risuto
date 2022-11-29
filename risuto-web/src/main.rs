@@ -5,6 +5,7 @@ use futures::{
 use gloo_storage::{LocalStorage, Storage};
 use risuto_api::*;
 use std::{cell::RefCell, rc::Rc};
+use ui::TaskOrderChangeEvent;
 use wasm_bindgen_futures::spawn_local;
 use yew::prelude::*;
 
@@ -134,7 +135,7 @@ impl App {
 
     fn current_task_list(&self) -> (Rc<Vec<(TaskId, Task)>>, Rc<Vec<(TaskId, Task)>>) {
         let tasks = self.db.tasks.iter();
-        let (normal, backlog) = if let Some(tag) = self.tag {
+        let (backlog, normal) = if let Some(tag) = self.tag {
             let mut tasks = tasks
                 .filter_map(|(id, task)| {
                     task.current_tags
@@ -156,7 +157,7 @@ impl App {
                     .collect(),
             )
         };
-        (Rc::new(backlog), Rc::new(normal))
+        (Rc::new(normal), Rc::new(backlog))
     }
 }
 
@@ -277,10 +278,26 @@ impl Component for App {
             let tag = self.tag.clone();
             let tasks_normal = tasks_normal.clone();
             let tasks_backlog = tasks_backlog.clone();
-            ctx.link().batch_callback(move |e| {
-                // TODO (this will also change with backlog tasks showing)
-                tracing::warn!("got on_order_change event: {:?}", e);
-                Vec::new()
+            ctx.link().batch_callback(move |e: TaskOrderChangeEvent| {
+                let task_id = match e.before.in_backlog {
+                    true => tasks_backlog[e.before.index].0,
+                    false => tasks_normal[e.before.index].0,
+                };
+                let mut insert_into = match e.after.in_backlog {
+                    true => (*tasks_backlog).clone(),
+                    false => (*tasks_normal).clone(),
+                };
+                if e.before.in_backlog == e.after.in_backlog {
+                    insert_into.remove(e.before.index);
+                }
+                compute_reordering_events(
+                    owner,
+                    tag.expect("attempted to reorder in untagged list"),
+                    task_id,
+                    e.after.index,
+                    e.after.in_backlog,
+                    insert_into,
+                )
             })
         };
         html! {
@@ -313,4 +330,90 @@ impl Component for App {
             </div>
         }
     }
+}
+
+fn compute_reordering_events(
+    owner: UserId,
+    tag: TagId,
+    task: TaskId,
+    index: usize,
+    into_backlog: bool,
+    into: Vec<(TaskId, Task)>,
+) -> Vec<AppMsg> {
+    macro_rules! evt {
+        ( $task:expr, $prio:expr ) => {
+            AppMsg::NewUserEvent(NewEvent::now(
+                owner,
+                NewEventContents::AddTag {
+                    task: $task,
+                    tag,
+                    prio: $prio,
+                    backlog: into_backlog,
+                },
+            ))
+        };
+    }
+    macro_rules! prio {
+        ($task:expr) => {
+            $task
+                .1
+                .prio(&tag)
+                .expect("computing events reordering with task not in tag")
+        };
+    }
+    // this value was taken after intense finger-based wind-speed-taking
+    // basically we can add 2^(64-40) items at the beginning or end this way, and intersperse 40 items in-between other items, all without a redistribution
+    const SPACING: i64 = 1 << 40;
+
+    if into.len() == 0 {
+        // Easy case: inserting into an empty list
+        return vec![evt!(task, 0)];
+    }
+
+    if index == 0 {
+        // Inserting in the first position
+        let first_prio = prio!(into[0]);
+        let subtract = match first_prio > i64::MIN + SPACING {
+            true => SPACING,
+            false => (first_prio - i64::MIN) / 2,
+        };
+        if subtract > 0 {
+            return vec![evt!(task, first_prio - subtract)];
+        }
+    } else if index == into.len() {
+        // Inserting in the last position
+        let last_prio = prio!(into[index - 1]);
+        let add = match last_prio < i64::MAX - SPACING {
+            true => SPACING,
+            false => (i64::MAX - last_prio) / 2,
+        };
+        if add > 0 {
+            return vec![evt!(task, last_prio + add)];
+        }
+    } else {
+        // Inserting in-between two elements
+        let prio_before = prio!(into[index - 1]);
+        let prio_after = prio!(into[index]);
+        let add = (prio_after - prio_before) / 2;
+        if add > 0 {
+            return vec![evt!(task, prio_before + add)];
+        }
+    }
+
+    // Do a full redistribute
+    // TODO: maybe we could only partially redistribute? not sure whether that'd actually be better...
+    into[..index]
+        .iter()
+        .enumerate()
+        .map(|(i, (t, _))| evt!(*t, (i as i64).checked_mul(SPACING).unwrap()))
+        .chain(std::iter::once(evt!(
+            task,
+            (index as i64).checked_mul(SPACING).unwrap()
+        )))
+        .chain(
+            into[index..].iter().enumerate().map(|(i, (t, _))| {
+                evt!(*t, (index as i64 + 1 + i as i64).checked_mul(SPACING).unwrap())
+            }),
+        )
+        .collect()
 }

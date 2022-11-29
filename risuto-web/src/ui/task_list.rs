@@ -105,9 +105,8 @@ pub fn task_list(p: &TaskListProps) -> Html {
     // Then, make list sortable
     let normal_list_ref = use_node_ref();
     let backlog_list_ref = use_node_ref();
-    let on_order_change = p.on_order_change.clone();
     use_effect_with_deps(
-        move |(normal_list_ref, backlog_list_ref)| {
+        |(normal_list_ref, backlog_list_ref, on_order_change)| {
             let normal_list = normal_list_ref
                 .cast::<web_sys::Element>()
                 .expect("list_ref is not attached to an element");
@@ -122,6 +121,7 @@ pub fn task_list(p: &TaskListProps) -> Html {
             {
                 let normal_list = normal_list.clone();
                 let backlog_list = backlog_list.clone();
+                let on_order_change = on_order_change.clone();
                 options.on_end(move |e| {
                     let before = TaskPosition {
                         index: e.old_index.expect("got update event without old index"),
@@ -149,7 +149,7 @@ pub fn task_list(p: &TaskListProps) -> Html {
                 std::mem::drop(keepalive);
             }
         },
-        (normal_list_ref.clone(), backlog_list_ref.clone()),
+        (normal_list_ref.clone(), backlog_list_ref.clone(), p.on_order_change.clone()),
     );
 
     // Finally, put everything together

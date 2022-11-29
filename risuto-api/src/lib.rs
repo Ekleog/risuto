@@ -94,6 +94,12 @@ pub struct Task {
 }
 
 impl Task {
+    pub fn prio(&self, tag: &TagId) -> Option<i64> {
+        self.current_tags
+            .get(tag)
+            .map(|t| t.priority)
+    }
+
     pub fn add_event(&mut self, e: Event) {
         self.events.entry(e.date).or_insert(Vec::new()).push(e);
     }
