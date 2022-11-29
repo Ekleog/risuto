@@ -204,15 +204,6 @@ impl Component for App {
         }
         let loading_banner =
             (!self.initial_load_completed).then(|| html! { <h1>{ "Loading..." }</h1> });
-        let on_done_change = {
-            let owner = self.db.owner.clone();
-            ctx.link().callback(move |(task, now_done)| {
-                AppMsg::NewUserEvent(NewEvent::now(
-                    owner,
-                    NewEventContents::SetDone { task, now_done },
-                ))
-            })
-        };
         let current_tag = self.tag.as_ref().and_then(|t| self.db.tags.get(t)).cloned();
         let tasks = self.db.tasks.iter();
         let tasks: Vec<_> = if let Some(tag) = self.tag {
@@ -234,6 +225,24 @@ impl Component for App {
                 .map(|(id, task)| (*id, task.clone()))
                 .collect()
         };
+        let tasks = Rc::new(tasks);
+        let on_done_change = {
+            let owner = self.db.owner.clone();
+            ctx.link().callback(move |(task, now_done)| {
+                AppMsg::NewUserEvent(NewEvent::now(
+                    owner,
+                    NewEventContents::SetDone { task, now_done },
+                ))
+            })
+        };
+        let on_order_change = {
+            let owner = self.db.owner.clone();
+            let tasks = tasks.clone();
+            ctx.link().batch_callback(move |(old, new)| {
+                // TODO (this will also change with backlog tasks showing)
+                Vec::new()
+            })
+        };
         html! {
             <div class="container-fluid">
                 { for loading_banner }
@@ -252,7 +261,7 @@ impl Component for App {
                         <button onclick={ctx.link().callback(|_| AppMsg::UserLogout)}>
                             { "Logout" }
                         </button>
-                        <ui::TaskList tasks={tasks} {on_done_change} />
+                        <ui::TaskList tasks={tasks} {on_done_change} {on_order_change} />
                     </main>
                 </div>
             </div>
