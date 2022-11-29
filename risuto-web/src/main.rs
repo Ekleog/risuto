@@ -274,10 +274,12 @@ impl Component for App {
         };
         let on_order_change = {
             let owner = self.db.owner.clone();
+            let tag = self.tag.clone();
             let tasks_normal = tasks_normal.clone();
             let tasks_backlog = tasks_backlog.clone();
-            ctx.link().batch_callback(move |(old, new)| {
+            ctx.link().batch_callback(move |e| {
                 // TODO (this will also change with backlog tasks showing)
+                tracing::warn!("got on_order_change event: {:?}", e);
                 Vec::new()
             })
         };

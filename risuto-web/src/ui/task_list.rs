@@ -2,16 +2,32 @@ use risuto_api::{Task, TaskId};
 use std::rc::Rc;
 use yew::prelude::*;
 
+#[derive(Debug, Eq, PartialEq)]
+pub struct TaskPosition {
+    pub index: usize,
+    pub in_backlog: bool,
+}
+
+#[derive(Debug)]
+pub struct TaskOrderChangeEvent {
+    pub before: TaskPosition,
+    pub after: TaskPosition,
+}
+
 #[derive(Clone, PartialEq, Properties)]
 pub struct TaskListProps {
     pub tasks_normal: Rc<Vec<(TaskId, Task)>>,
     pub tasks_backlog: Rc<Vec<(TaskId, Task)>>,
     pub on_done_change: Callback<(TaskId, bool)>,
     pub on_backlog_change: Callback<(TaskId, bool)>,
-    pub on_order_change: Callback<(usize, usize)>,
+    pub on_order_change: Callback<TaskOrderChangeEvent>,
 }
 
-fn task_list_for<'a>(p: &'a TaskListProps, tasks: &'a Vec<(TaskId, Task)>, is_backlog: bool) -> impl 'a + Iterator<Item = Html> {
+fn task_list_for<'a>(
+    p: &'a TaskListProps,
+    tasks: &'a Vec<(TaskId, Task)>,
+    is_backlog: bool,
+) -> impl 'a + Iterator<Item = Html> {
     tasks.iter().map(move |(id, t)| {
         // (Un)backlog button
         // TODO: make disappear on untagged list
@@ -99,12 +115,35 @@ pub fn task_list(p: &TaskListProps) -> Html {
                 .cast::<web_sys::Element>()
                 .expect("list_ref is not attached to an element");
             let mut options = sortable_js::Options::new();
-            options.animation_ms(150.)
-                .on_update(move |e| {
-                    let old = e.old_index.expect("got update event without old index");
-                    let new = e.new_index.expect("got update event without old index");
-                    on_order_change.emit((old, new));
+            options
+                .animation_ms(150.)
+                .group("task-lists")
+                .revert_on_spill(true);
+            {
+                let normal_list = normal_list.clone();
+                let backlog_list = backlog_list.clone();
+                options.on_end(move |e| {
+                    let before = TaskPosition {
+                        index: e.old_index.expect("got update event without old index"),
+                        in_backlog: *e.from == backlog_list,
+                    };
+                    let after = TaskPosition {
+                        index: e.new_index.expect("got update event without old index"),
+                        in_backlog: *e.to == backlog_list,
+                    };
+                    assert!(
+                        before.in_backlog || *e.from == normal_list,
+                        "got event that is from neither normal nor backlog list"
+                    );
+                    assert!(
+                        after.in_backlog || *e.to == normal_list,
+                        "got event that is to neither normal nor backlog list"
+                    );
+                    if before != after {
+                        on_order_change.emit(TaskOrderChangeEvent { before, after });
+                    }
                 });
+            }
             let keepalive = (options.apply(&normal_list), options.apply(&backlog_list));
             move || {
                 std::mem::drop(keepalive);
@@ -115,14 +154,18 @@ pub fn task_list(p: &TaskListProps) -> Html {
 
     // Finally, put everything together
     html! {
-        <>
-            <ul ref={normal_list_ref} class="task-list list-group">
-                { for normal_list_items }
-            </ul>
-            <h2>{ "Backlog" }</h2>
-            <ul ref={backlog_list_ref} class="task-list list-group">
-                { for backlog_list_items }
-            </ul>
-        </>
+        <div style="height: 100%">
+            <div style="height: 50%">
+                <ul ref={normal_list_ref} class="task-list list-group">
+                    { for normal_list_items }
+                </ul>
+            </div>
+            <div style="height: 50%">
+                <h2>{ "Backlog" }</h2>
+                <ul ref={backlog_list_ref} class="task-list list-group">
+                    { for backlog_list_items }
+                </ul>
+            </div>
+        </div>
     }
 }
