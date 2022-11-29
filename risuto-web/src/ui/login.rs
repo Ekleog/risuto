@@ -25,7 +25,8 @@ pub enum LoginMsg {
 }
 
 fn get_device() -> anyhow::Result<String> {
-    Ok("Unknown Device".into()) // TODO: see https://stackoverflow.com/questions/11219582/how-to-detect-my-browser-version-and-operating-system-using-javascript
+    Ok(format!("{}", whoami::platform()))
+    // TODO: add more details, see https://github.com/ardaku/whoami/issues/52
 }
 
 impl Component for Login {

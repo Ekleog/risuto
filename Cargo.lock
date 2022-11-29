@@ -1429,6 +1429,7 @@ dependencies = [
  "tracing-wasm",
  "wasm-bindgen-futures",
  "web-sys",
+ "whoami",
  "ws_stream_wasm",
  "yew",
 ]
