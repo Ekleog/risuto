@@ -269,7 +269,8 @@ impl UserFeeds {
                             let socks = users
                                 .get_mut(&u)
                                 .expect("we should never remove UserId's from UserFeeds");
-                            for i in ids_to_rm {
+                            for i in ids_to_rm.into_iter().rev() {
+                                // iterate from last to remove to first, as we can swap with the last item
                                 socks.swap_remove(i);
                             }
                         }
