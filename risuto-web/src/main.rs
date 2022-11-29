@@ -37,6 +37,7 @@ pub enum AppMsg {
     SetTag(Option<TagId>),
     NewUserEvent(NewEvent),
     NewNetworkEvent(NewEvent),
+    SetTaskBacklog(TaskId, TagId, bool),
 }
 
 pub struct App {
@@ -131,6 +132,33 @@ impl App {
             }
         }
     }
+
+    fn current_task_list(&self) -> (Rc<Vec<(TaskId, Task)>>, Rc<Vec<(TaskId, Task)>>) {
+        let tasks = self.db.tasks.iter();
+        let (normal, backlog) = if let Some(tag) = self.tag {
+            let mut tasks = tasks
+                .filter_map(|(id, task)| {
+                    task.current_tags
+                        .get(&tag)
+                        .map(|prio| (prio, *id, task.clone()))
+                })
+                .collect::<Vec<_>>();
+            tasks.sort_unstable_by_key(|(meta, id, _)| (meta.priority, *id));
+            tasks
+                .into_iter()
+                .map(|(_prio, id, task)| (id, task))
+                .partition(|(_, t)| t.current_tags.get(&tag).unwrap().backlog)
+        } else {
+            (
+                Vec::new(),
+                tasks
+                    .filter(|(_, task)| task.current_tags.len() == 0)
+                    .map(|(id, task)| (*id, task.clone()))
+                    .collect(),
+            )
+        };
+        (Rc::new(backlog), Rc::new(normal))
+    }
 }
 
 impl Component for App {
@@ -187,6 +215,29 @@ impl Component for App {
                 self.handle_new_event(e);
             }
             AppMsg::NewNetworkEvent(e) => self.handle_new_event(e),
+            AppMsg::SetTaskBacklog(task, tag, now_backlog) => {
+                let prio = self
+                    .db
+                    .tasks
+                    .get(&task)
+                    .expect("setting task backlog for task not in db")
+                    .current_tags
+                    .get(&tag)
+                    .expect("setting task backlog for a tag it does not have")
+                    .priority;
+                return self.update(
+                    ctx,
+                    AppMsg::NewUserEvent(NewEvent::now(
+                        self.db.owner,
+                        NewEventContents::AddTag {
+                            task,
+                            tag,
+                            prio,
+                            backlog: now_backlog,
+                        },
+                    )),
+                );
+            }
         }
         true
     }
@@ -205,27 +256,7 @@ impl Component for App {
         let loading_banner =
             (!self.initial_load_completed).then(|| html! { <h1>{ "Loading..." }</h1> });
         let current_tag = self.tag.as_ref().and_then(|t| self.db.tags.get(t)).cloned();
-        let tasks = self.db.tasks.iter();
-        let tasks: Vec<_> = if let Some(tag) = self.tag {
-            let mut tasks = tasks
-                .filter_map(|(id, task)| {
-                    task.current_tags
-                        .get(&tag)
-                        .map(|prio| (prio, *id, task.clone()))
-                })
-                .collect::<Vec<_>>();
-            tasks.sort_unstable_by_key(|(meta, id, _)| (meta.priority, *id));
-            tasks
-                .into_iter()
-                .map(|(_prio, id, task)| (id, task))
-                .collect()
-        } else {
-            tasks
-                .filter(|(_, task)| task.current_tags.len() == 0)
-                .map(|(id, task)| (*id, task.clone()))
-                .collect()
-        };
-        let tasks = Rc::new(tasks);
+        let (tasks_normal, tasks_backlog) = self.current_task_list();
         let on_done_change = {
             let owner = self.db.owner.clone();
             ctx.link().callback(move |(task, now_done)| {
@@ -235,9 +266,20 @@ impl Component for App {
                 ))
             })
         };
+        let on_backlog_change = {
+            let tag = self.tag.clone();
+            ctx.link().callback(move |(task, now_backlog)| {
+                AppMsg::SetTaskBacklog(
+                    task,
+                    tag.expect("called on_backlog_change in untagged list"),
+                    now_backlog,
+                )
+            })
+        };
         let on_order_change = {
             let owner = self.db.owner.clone();
-            let tasks = tasks.clone();
+            let tasks_normal = tasks_normal.clone();
+            let tasks_backlog = tasks_backlog.clone();
             ctx.link().batch_callback(move |(old, new)| {
                 // TODO (this will also change with backlog tasks showing)
                 Vec::new()
@@ -261,7 +303,13 @@ impl Component for App {
                         <button onclick={ctx.link().callback(|_| AppMsg::UserLogout)}>
                             { "Logout" }
                         </button>
-                        <ui::TaskList tasks={tasks} {on_done_change} {on_order_change} />
+                        <ui::TaskList
+                            {tasks_normal}
+                            {tasks_backlog}
+                            {on_done_change}
+                            {on_backlog_change}
+                            {on_order_change}
+                            />
                     </main>
                 </div>
             </div>
