@@ -1,0 +1,9 @@
+[package]
+name = "tests"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+mockd = { version = "0.4.0", features = ["all"] }
+simplerand = "1.3"
