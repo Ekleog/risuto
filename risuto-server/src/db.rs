@@ -41,7 +41,7 @@ impl<'a> risuto_api::Db for PostgresDb<'a> {
                 self.user, task
             )
         })?;
-        match &auth[..] {
+        let auth = match &auth[..] {
             [] => Ok(AuthInfo {
                 can_read: false,
                 can_edit: false,
@@ -61,7 +61,9 @@ impl<'a> risuto_api::Db for PostgresDb<'a> {
                 task,
                 self.user
             )),
-        }
+        }?;
+        tracing::trace!(?auth, ?task, "retrieved auth info");
+        Ok(auth)
     }
 
     async fn list_tags_for(&mut self, task: TaskId) -> anyhow::Result<Vec<TagId>> {
@@ -539,6 +541,7 @@ pub async fn submit_event(conn: &mut sqlx::PgConnection, e: NewEvent) -> Result<
         .await
         .with_context(|| format!("checking if user is authorized to add event {:?}", event_id))?;
     if !auth {
+        tracing::info!("rejected permission for event {:?}", e);
         return Err(Error::PermissionDenied);
     }
 

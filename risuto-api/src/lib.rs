@@ -225,6 +225,7 @@ impl DbDump {
     }
 }
 
+#[derive(Debug)]
 pub struct AuthInfo {
     pub can_read: bool,
     pub can_edit: bool,
