@@ -130,13 +130,13 @@ pub fn task_list(p: &TaskListProps) -> Html {
 
     // Finally, put everything together
     html! {
-        <div style="height: 100%">
-            <div style="height: 50%">
+        <div class="h-100">
+            <div class="h-50 overflow-auto">
                 <ul ref={normal_list_ref} class="task-list list-group">
                     { for normal_list_items }
                 </ul>
             </div>
-            <div style="height: 50%">
+            <div class="h-50 overflow-auto">
                 <h2>{ "Backlog" }</h2>
                 <ul ref={backlog_list_ref} class="task-list list-group">
                     { for backlog_list_items }
