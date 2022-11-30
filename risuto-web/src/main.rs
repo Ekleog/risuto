@@ -278,18 +278,18 @@ impl Component for App {
             })
         };
         html! {
-            <div class="container-fluid">
+            <div class="container-fluid vh-100 d-flex flex-column">
                 { for loading_banner }
-                <div class="row">
-                    <nav class="navbar navbar-expand-sm">
-                        <div class="container-fluid">
-                            <h1>{ "Tasks for tag " }{ current_tag.map(|t| t.0.name).unwrap_or_else(|| String::from(":untagged")) }</h1>
-                            <button onclick={ctx.link().callback(|_| AppMsg::UserLogout)}>
-                                { "Logout" }
-                            </button>
-                        </div>
-                    </nav>
-                    <nav class="col-md-2 sidebar overflow-scroll">
+                <nav class="navbar navbar-expand-sm">
+                    <div class="container-fluid">
+                        <h1>{ "Tasks for tag " }{ current_tag.map(|t| t.0.name).unwrap_or_else(|| String::from(":untagged")) }</h1>
+                        <button onclick={ctx.link().callback(|_| AppMsg::UserLogout)}>
+                            { "Logout" }
+                        </button>
+                    </div>
+                </nav>
+                <div class="row flex-fill">
+                    <nav class="col-md-2 sidebar overflow-auto">
                         <ui::TagList
                             tags={self.db.tags.clone()}
                             current_user={self.db.owner}
@@ -297,13 +297,13 @@ impl Component for App {
                             on_select_tag={ctx.link().callback(|id| AppMsg::SetTag(id))}
                         />
                     </nav>
-                    <main class="col-md-9 m-5">
+                    <main class="col-md-9">
                         <ui::TaskList
                             {tasks_normal}
                             {tasks_backlog}
                             {on_done_change}
                             {on_order_change}
-                            />
+                        />
                     </main>
                 </div>
             </div>
