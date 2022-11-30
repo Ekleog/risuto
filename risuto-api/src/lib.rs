@@ -395,7 +395,6 @@ impl NewEvent {
     }
 
     /// Takes AuthInfo as the authorization status for the user for self.task
-    // TODO: refactor as an async fn that takes in 4 async callbacks
     pub async fn is_authorized<D: Db>(&self, db: &mut D) -> anyhow::Result<bool> {
         macro_rules! auth {
             ($t:expr) => {{
