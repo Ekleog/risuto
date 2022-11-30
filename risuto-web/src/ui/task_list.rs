@@ -58,6 +58,7 @@ fn task_list_for<'a>(
         // Put everything together
         html! {
             <li class="list-group-item d-flex align-items-center">
+                <span class="drag-handle bi-btn bi-grip-vertical pe-3"></span>
                 <span class="flex-grow-1">{ &t.current_title }</span>
                 { done_change_button }
             </li>
@@ -86,6 +87,7 @@ pub fn task_list(p: &TaskListProps) -> Html {
             options
                 .animation_ms(150.)
                 .group("task-lists")
+                .handle(".drag-handle")
                 .revert_on_spill(true)
                 .revert_dom(true);
             {
