@@ -20,6 +20,23 @@ $primary: $red;
     height: 100vh;
 }
 
+::-webkit-scrollbar {
+    height: 5px;
+    width: 5px;
+}
+
+::-webkit-scrollbar-track {
+    background: $gray-800;
+}
+
+::-webkit-scrollbar-thumb {
+    background: $gray-600;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: $gray-500;
+}
+
 .sidebar a {
     color: $body-color;
 }
