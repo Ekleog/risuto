@@ -285,7 +285,7 @@ async fn fetch_tags_for_user(
             INNER JOIN v_tags_users vtu
                 ON vtu.tag_id = t.id
             INNER JOIN users u
-                ON u.id = vtu.user_id
+                ON u.id = t.owner_id
             WHERE vtu.user_id = $1
         "#,
         user.0
