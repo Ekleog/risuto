@@ -210,7 +210,7 @@ pub enum EventType {
 pub struct DbDump {
     pub owner: UserId,
     pub users: HashMap<UserId, User>,
-    pub tags: HashMap<TagId, Tag>,
+    pub tags: HashMap<TagId, (Tag, AuthInfo)>,
     pub tasks: HashMap<TaskId, Task>,
 }
 
@@ -225,7 +225,7 @@ impl DbDump {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct AuthInfo {
     pub can_read: bool,
     pub can_edit: bool,

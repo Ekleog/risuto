@@ -143,10 +143,7 @@ pub async fn login_user(
 }
 
 /// Returns true iff a user was actually logged out
-pub async fn logout_user(
-    db: &mut sqlx::PgConnection,
-    user: &AuthToken,
-) -> anyhow::Result<bool> {
+pub async fn logout_user(db: &mut sqlx::PgConnection, user: &AuthToken) -> anyhow::Result<bool> {
     let rows_deleted = sqlx::query!(
         "
             DELETE FROM sessions
@@ -166,7 +163,10 @@ pub async fn logout_user(
     Ok(rows_deleted == 1)
 }
 
-pub async fn recover_session(db: &mut sqlx::PgConnection, token: AuthToken) -> Result<UserId, Error> {
+pub async fn recover_session(
+    db: &mut sqlx::PgConnection,
+    token: AuthToken,
+) -> Result<UserId, Error> {
     let res = sqlx::query!(
         "
             UPDATE sessions
@@ -268,42 +268,53 @@ async fn fetch_users(conn: &mut sqlx::PgConnection) -> anyhow::Result<HashMap<Us
 async fn fetch_tags_for_user(
     conn: &mut sqlx::PgConnection,
     user: UserId,
-) -> anyhow::Result<HashMap<TagId, Tag>> {
-    // TODO: also report which permissions are available to the user
+) -> anyhow::Result<HashMap<TagId, (Tag, AuthInfo)>> {
     Ok(sqlx::query!(
-        "
+        r#"
             SELECT
-                tags.id,
-                tags.owner_id,
-                tags.name,
-                tags.archived,
-                users.name AS owner_name
-            FROM tags
-            INNER JOIN users
-                ON users.id = tags.owner_id
-            LEFT JOIN perms
-                ON perms.tag_id = tags.id
-            WHERE perms.user_id = $1
-                OR tags.owner_id = $1
-        ",
+                t.id,
+                t.owner_id,
+                t.name,
+                t.archived,
+                u.name AS owner_name,
+                vtu.can_edit AS "can_edit!",
+                vtu.can_triage AS "can_triage!",
+                vtu.can_relabel_to_any AS "can_relabel_to_any!",
+                vtu.can_comment AS "can_comment!"
+            FROM tags t
+            INNER JOIN v_tags_users vtu
+                ON vtu.tag_id = t.id
+            INNER JOIN users u
+                ON u.id = vtu.user_id
+            WHERE vtu.user_id = $1
+        "#,
         user.0
     )
     .fetch(conn)
     .map_ok(|t| {
         (
             TagId(t.id),
-            Tag {
-                owner: UserId(t.owner_id),
-                name: if t.owner_id == user.0 {
-                    t.name
-                } else {
-                    format!("{}:{}", t.owner_name, t.name)
+            (
+                Tag {
+                    owner: UserId(t.owner_id),
+                    name: if t.owner_id == user.0 {
+                        t.name
+                    } else {
+                        format!("{}:{}", t.owner_name, t.name)
+                    },
+                    archived: t.archived,
                 },
-                archived: t.archived,
-            },
+                AuthInfo {
+                    can_read: true,
+                    can_edit: t.can_edit,
+                    can_triage: t.can_triage,
+                    can_relabel_to_any: t.can_relabel_to_any,
+                    can_comment: t.can_comment,
+                },
+            ),
         )
     })
-    .try_collect::<HashMap<TagId, Tag>>()
+    .try_collect::<HashMap<TagId, (Tag, AuthInfo)>>()
     .await
     .context("querying tags table")?)
 }

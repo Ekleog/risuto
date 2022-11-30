@@ -193,7 +193,7 @@ impl Component for App {
                         self.db
                             .tags
                             .iter()
-                            .find(|(_, t)| t.name == "today")
+                            .find(|(_, t)| t.0.name == "today")
                             .expect("found no tag named 'today'")
                             .0
                             .clone(),
@@ -284,7 +284,7 @@ impl Component for App {
                         />
                     </nav>
                     <main class="col-md-9 m-5">
-                        <h1>{ "Tasks for tag " }{ current_tag.map(|t| t.name).unwrap_or_else(|| String::from(":untagged")) }</h1>
+                        <h1>{ "Tasks for tag " }{ current_tag.map(|t| t.0.name).unwrap_or_else(|| String::from(":untagged")) }</h1>
                         <button onclick={ctx.link().callback(|_| AppMsg::UserLogout)}>
                             { "Logout" }
                         </button>
