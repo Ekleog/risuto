@@ -289,7 +289,7 @@ impl Component for App {
                             </button>
                         </div>
                     </nav>
-                    <nav class="col-md-2 sidebar">
+                    <nav class="col-md-2 sidebar overflow-scroll">
                         <ui::TagList
                             tags={self.db.tags.clone()}
                             current_user={self.db.owner}
