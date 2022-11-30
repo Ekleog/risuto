@@ -121,7 +121,11 @@ pub fn task_list(p: &TaskListProps) -> Html {
                 std::mem::drop(keepalive);
             }
         },
-        (normal_list_ref.clone(), backlog_list_ref.clone(), p.on_order_change.clone()),
+        (
+            normal_list_ref.clone(),
+            backlog_list_ref.clone(),
+            p.on_order_change.clone(),
+        ),
     );
 
     // Finally, put everything together

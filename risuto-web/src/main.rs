@@ -1,5 +1,6 @@
 use futures::{
     channel::{mpsc, oneshot},
+    executor::block_on,
     FutureExt,
 };
 use gloo_storage::{LocalStorage, Storage};
@@ -204,8 +205,14 @@ impl Component for App {
                 self.tag = id;
             }
             AppMsg::NewUserEvent(e) => {
-                // TODO: validate user is allowed to send this event
-                // (at least a panic is better than a localstorage queue being borken due to 403 failures)
+                // Sanity-check that we're allowed to submit the event before adding it to the queue
+                assert!(
+                    block_on(e.is_authorized(&mut self.db)).expect("checking is_authorized on local db dump"),
+                    "Submitted userevent that is not authorized. The button should have been disabled! {:?}",
+                    e,
+                );
+
+                // Submit the event to the upload queue and update our state
                 self.login
                     .as_mut()
                     .expect("got NewTaskEvent without a login configured")
@@ -379,10 +386,11 @@ fn compute_reordering_events(
             task,
             (index as i64).checked_mul(SPACING).unwrap()
         )))
-        .chain(
-            into[index..].iter().enumerate().map(|(i, (t, _))| {
-                evt!(*t, (index as i64 + 1 + i as i64).checked_mul(SPACING).unwrap())
-            }),
-        )
+        .chain(into[index..].iter().enumerate().map(|(i, (t, _))| {
+            evt!(
+                *t,
+                (index as i64 + 1 + i as i64).checked_mul(SPACING).unwrap()
+            )
+        }))
         .collect()
 }

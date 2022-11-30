@@ -1,8 +1,11 @@
-use anyhow::Context;
+use anyhow::{anyhow, Context};
 use arrayvec::ArrayVec;
 use async_trait::async_trait;
 use chrono::Utc;
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::{
+    collections::{BTreeMap, HashMap, HashSet},
+    ops::BitOr,
+};
 
 pub use uuid::{uuid, Uuid};
 pub type Time = chrono::DateTime<Utc>;
@@ -95,9 +98,7 @@ pub struct Task {
 
 impl Task {
     pub fn prio(&self, tag: &TagId) -> Option<i64> {
-        self.current_tags
-            .get(tag)
-            .map(|t| t.priority)
+        self.current_tags.get(tag).map(|t| t.priority)
     }
 
     pub fn add_event(&mut self, e: Event) {
@@ -225,13 +226,137 @@ impl DbDump {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
+#[async_trait]
+impl Db for DbDump {
+    async fn auth_info_for(&mut self, t: TaskId) -> anyhow::Result<AuthInfo> {
+        let t = match self.tasks.get(&t) {
+            None => {
+                return Err(anyhow!(
+                    "requested auth info for task {:?} that is not in db",
+                    t
+                ))
+            }
+            Some(t) => t,
+        };
+        let for_task = AuthInfo::all_or_nothing(t.owner == self.owner);
+        let mut for_tags = AuthInfo::none();
+        for tag in t.current_tags.keys() {
+            if let Some((_, auth)) = self.tags.get(&tag) {
+                for_tags = for_tags | *auth;
+            }
+        }
+        Ok(for_task | for_tags)
+    }
+
+    async fn list_tags_for(&mut self, t: TaskId) -> anyhow::Result<Vec<TagId>> {
+        Ok(self
+            .tasks
+            .get(&t)
+            .ok_or_else(|| anyhow!("requested tag listing for task {:?} that is not in db", t))?
+            .current_tags
+            .keys()
+            .copied()
+            .collect())
+    }
+
+    async fn get_task_for_comment(&mut self, comment: EventId) -> anyhow::Result<TaskId> {
+        for (task, t) in self.tasks.iter() {
+            for evts in t.events.values() {
+                for e in evts.iter() {
+                    if e.id == comment {
+                        return Ok(*task);
+                    }
+                }
+            }
+        }
+        Err(anyhow!(
+            "requested task for comment {:?} that is not in db",
+            comment
+        ))
+    }
+
+    async fn get_comment_owner(&mut self, e: EventId) -> anyhow::Result<UserId> {
+        let t = self.get_task_for_comment(e).await?;
+        Ok(self
+            .tasks
+            .get(&t)
+            .ok_or_else(|| {
+                anyhow!(
+                    "requested comment owner for event {:?} for which task {:?} is not in db",
+                    e,
+                    t
+                )
+            })?
+            .owner)
+    }
+
+    async fn is_first_comment(&mut self, task: TaskId, comment: EventId) -> anyhow::Result<bool> {
+        Ok(comment
+            == self
+                .tasks
+                .get(&task)
+                .ok_or_else(|| {
+                    anyhow!(
+                        "requested is_first_comment for task {:?} that is not in db",
+                        task
+                    )
+                })?
+                .events
+                .iter()
+                .flat_map(|(_, evts)| evts.iter())
+                .find(|e| matches!(e.contents, EventType::AddComment(_)))
+                .ok_or_else(|| {
+                    anyhow!(
+                        "requested is_first_comment for task {:?} that has no comment",
+                        task
+                    )
+                })?
+                .id)
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct AuthInfo {
     pub can_read: bool,
     pub can_edit: bool,
     pub can_triage: bool,
-    pub can_relabel_to_any: bool,
+    pub can_relabel_to_any: bool, // TODO: rename into can_admin?
     pub can_comment: bool,
+}
+
+impl AuthInfo {
+    pub fn owner() -> AuthInfo {
+        Self::all_or_nothing(true)
+    }
+
+    pub fn none() -> AuthInfo {
+        Self::all_or_nothing(false)
+    }
+
+    pub fn all_or_nothing(all: bool) -> AuthInfo {
+        AuthInfo {
+            can_read: all,
+            can_edit: all,
+            can_triage: all,
+            can_relabel_to_any: all,
+            can_comment: all,
+        }
+    }
+}
+
+impl BitOr for AuthInfo {
+    type Output = Self;
+
+    fn bitor(self, rhs: AuthInfo) -> AuthInfo {
+        // TODO: use some bitset crate?
+        AuthInfo {
+            can_read: self.can_read || rhs.can_read,
+            can_edit: self.can_edit || rhs.can_edit,
+            can_triage: self.can_triage || rhs.can_triage,
+            can_relabel_to_any: self.can_relabel_to_any || rhs.can_relabel_to_any,
+            can_comment: self.can_comment || rhs.can_comment,
+        }
+    }
 }
 
 #[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
