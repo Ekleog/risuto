@@ -281,8 +281,15 @@ impl Component for App {
             <div class="container-fluid">
                 { for loading_banner }
                 <div class="row">
+                    <nav class="navbar navbar-expand-sm">
+                        <div class="container-fluid">
+                            <h1>{ "Tasks for tag " }{ current_tag.map(|t| t.0.name).unwrap_or_else(|| String::from(":untagged")) }</h1>
+                            <button onclick={ctx.link().callback(|_| AppMsg::UserLogout)}>
+                                { "Logout" }
+                            </button>
+                        </div>
+                    </nav>
                     <nav class="col-md-2 sidebar">
-                        <h1>{ "Tags" }</h1>
                         <ui::TagList
                             tags={self.db.tags.clone()}
                             current_user={self.db.owner}
@@ -291,10 +298,6 @@ impl Component for App {
                         />
                     </nav>
                     <main class="col-md-9 m-5">
-                        <h1>{ "Tasks for tag " }{ current_tag.map(|t| t.0.name).unwrap_or_else(|| String::from(":untagged")) }</h1>
-                        <button onclick={ctx.link().callback(|_| AppMsg::UserLogout)}>
-                            { "Logout" }
-                        </button>
                         <ui::TaskList
                             {tasks_normal}
                             {tasks_backlog}
