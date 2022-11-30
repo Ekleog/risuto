@@ -1665,9 +1665,9 @@ dependencies = [
 
 [[package]]
 name = "sortable-js"
-version = "0.1.2+js.1.15.0"
+version = "0.1.4+js.1.15.0.patched.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "df3d3dda6605f58428517ef6faa2fcb4c1840150e35f7c215cdcd8bbadeebc80"
+checksum = "df60efe9bfdd4b6643715a59e4cbb189e8252c2c8941abaf22b096bc4899a9fd"
 dependencies = [
  "js-sys",
  "wasm-bindgen",

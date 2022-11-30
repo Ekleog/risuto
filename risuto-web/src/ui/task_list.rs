@@ -117,7 +117,8 @@ pub fn task_list(p: &TaskListProps) -> Html {
             options
                 .animation_ms(150.)
                 .group("task-lists")
-                .revert_on_spill(true);
+                .revert_on_spill(true)
+                .revert_dom(true);
             {
                 let normal_list = normal_list.clone();
                 let backlog_list = backlog_list.clone();
