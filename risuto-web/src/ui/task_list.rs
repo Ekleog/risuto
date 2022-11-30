@@ -89,6 +89,8 @@ pub fn task_list(p: &TaskListProps) -> Html {
                 .group("task-lists")
                 .handle(".drag-handle")
                 .revert_on_spill(true)
+                .scroll(true)
+                .bubble_scroll(true)
                 .revert_dom(true);
             {
                 let normal_list = normal_list.clone();
