@@ -1,8 +1,11 @@
 mod login;
 pub use login::Login;
 
+mod main_view;
+pub use main_view::{MainView, TaskOrderChangeEvent, TaskPosition};
+
 mod tag_list;
 pub use tag_list::TagList;
 
-mod main_view;
-pub use main_view::{MainView, TaskOrderChangeEvent, TaskPosition};
+mod task_list;
+pub use task_list::TaskList;

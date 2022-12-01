@@ -131,12 +131,7 @@ fn main() {
         gen_task(),
         gen_task_title(),
     );
-    evt_gen!(
-        "set_task_done_events",
-        "'{}', {}",
-        gen_task(),
-        gen_bool(),
-    );
+    evt_gen!("set_task_done_events", "'{}', {}", gen_task(), gen_bool(),);
     evt_gen!(
         "set_task_archived_events",
         "'{}', {}",

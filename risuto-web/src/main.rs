@@ -239,7 +239,7 @@ impl Component for App {
         }
         let loading_banner =
             (!self.initial_load_completed).then(|| html! { <h1>{ "Loading..." }</h1> });
-        let (tasks_normal, tasks_backlog) = self.current_task_list();
+        let (tasks_open, tasks_backlog) = self.current_task_list();
         let on_done_change = {
             let owner = self.db.owner.clone();
             ctx.link().callback(move |(task, now_done)| {
@@ -252,16 +252,16 @@ impl Component for App {
         let on_order_change = {
             let owner = self.db.owner.clone();
             let tag = self.tag.clone();
-            let tasks_normal = tasks_normal.clone();
+            let tasks_open = tasks_open.clone();
             let tasks_backlog = tasks_backlog.clone();
             ctx.link().batch_callback(move |e: TaskOrderChangeEvent| {
                 let task_id = match e.before.in_backlog {
                     true => tasks_backlog[e.before.index].0,
-                    false => tasks_normal[e.before.index].0,
+                    false => tasks_open[e.before.index].0,
                 };
                 let mut insert_into = match e.after.in_backlog {
                     true => (*tasks_backlog).clone(),
-                    false => (*tasks_normal).clone(),
+                    false => (*tasks_open).clone(),
                 };
                 if e.before.in_backlog == e.after.in_backlog {
                     insert_into.remove(e.before.index);
@@ -289,7 +289,7 @@ impl Component for App {
                     </nav>
                     <main class="col-md-10 h-100">
                         <ui::MainView
-                            {tasks_normal}
+                            {tasks_open}
                             {tasks_backlog}
                             on_logout={ctx.link().callback(|_| AppMsg::UserLogout)}
                             {on_done_change}
