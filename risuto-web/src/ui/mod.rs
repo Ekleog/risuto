@@ -9,3 +9,6 @@ pub use tag_list::TagList;
 
 mod task_list;
 pub use task_list::TaskList;
+
+mod task_list_item;
+pub use task_list_item::TaskListItem;
