@@ -18,6 +18,7 @@ pub struct TaskOrderChangeEvent {
 pub struct TaskListProps {
     pub tasks_normal: Rc<Vec<(TaskId, Task)>>,
     pub tasks_backlog: Rc<Vec<(TaskId, Task)>>,
+    pub on_logout: Callback<()>,
     pub on_done_change: Callback<(TaskId, bool)>,
     pub on_order_change: Callback<TaskOrderChangeEvent>,
 }
@@ -133,12 +134,18 @@ pub fn task_list(p: &TaskListProps) -> Html {
     // Finally, put everything together
     html! {
         <div class="h-100">
-            <div class="h-50 overflow-auto">
+            <button
+                class="position-absolute top-0 end-0 float-above"
+                onclick={p.on_logout.reform(|_| ())}
+            >
+                { "Logout" }
+            </button>
+            <div class="h-50 overflow-auto p-lg-5">
                 <ul ref={normal_list_ref} class="task-list list-group">
                     { for normal_list_items }
                 </ul>
             </div>
-            <div class="h-50 overflow-auto">
+            <div class="h-50 overflow-auto p-lg-5">
                 <h2>{ "Backlog" }</h2>
                 <ul ref={backlog_list_ref} class="task-list list-group">
                     { for backlog_list_items }

@@ -239,7 +239,6 @@ impl Component for App {
         }
         let loading_banner =
             (!self.initial_load_completed).then(|| html! { <h1>{ "Loading..." }</h1> });
-        let current_tag = self.tag.as_ref().and_then(|t| self.db.tags.get(t)).cloned();
         let (tasks_normal, tasks_backlog) = self.current_task_list();
         let on_done_change = {
             let owner = self.db.owner.clone();
@@ -278,17 +277,8 @@ impl Component for App {
             })
         };
         html! {
-            <div class="container-fluid vh-100 d-flex flex-column">
-                { for loading_banner }
-                <nav class="navbar navbar-expand-sm">
-                    <div class="container-fluid">
-                        <h1>{ "Tasks for tag " }{ current_tag.map(|t| t.0.name).unwrap_or_else(|| String::from(":untagged")) }</h1>
-                        <button onclick={ctx.link().callback(|_| AppMsg::UserLogout)}>
-                            { "Logout" }
-                        </button>
-                    </div>
-                </nav>
-                <div class="row flex-fill">
+            <div class="container-fluid vh-100">
+                <div class="row h-100">
                     <nav class="col-md-2 sidebar overflow-auto">
                         <ui::TagList
                             tags={self.db.tags.clone()}
@@ -297,10 +287,11 @@ impl Component for App {
                             on_select_tag={ctx.link().callback(|id| AppMsg::SetTag(id))}
                         />
                     </nav>
-                    <main class="col-md-9">
+                    <main class="col-md-10 h-100">
                         <ui::TaskList
                             {tasks_normal}
                             {tasks_backlog}
+                            on_logout={ctx.link().callback(|_| AppMsg::UserLogout)}
                             {on_done_change}
                             {on_order_change}
                         />
