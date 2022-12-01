@@ -15,7 +15,7 @@ pub struct TaskOrderChangeEvent {
 }
 
 #[derive(Clone, PartialEq, Properties)]
-pub struct TaskListProps {
+pub struct MainViewProps {
     pub tasks_normal: Rc<Vec<(TaskId, Task)>>,
     pub tasks_backlog: Rc<Vec<(TaskId, Task)>>,
     pub on_logout: Callback<()>,
@@ -24,7 +24,7 @@ pub struct TaskListProps {
 }
 
 fn task_list_for<'a>(
-    p: &'a TaskListProps,
+    p: &'a MainViewProps,
     tasks: &'a Vec<(TaskId, Task)>,
 ) -> impl 'a + Iterator<Item = Html> {
     tasks.iter().map(move |(id, t)| {
@@ -67,8 +67,8 @@ fn task_list_for<'a>(
     })
 }
 
-#[function_component(TaskList)]
-pub fn task_list(p: &TaskListProps) -> Html {
+#[function_component(MainView)]
+pub fn main_view(p: &MainViewProps) -> Html {
     // First, build the list items
     let normal_list_items = task_list_for(&p, &p.tasks_normal);
     let backlog_list_items = task_list_for(&p, &p.tasks_backlog);

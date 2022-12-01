@@ -288,7 +288,7 @@ impl Component for App {
                         />
                     </nav>
                     <main class="col-md-10 h-100">
-                        <ui::TaskList
+                        <ui::MainView
                             {tasks_normal}
                             {tasks_backlog}
                             on_logout={ctx.link().callback(|_| AppMsg::UserLogout)}
