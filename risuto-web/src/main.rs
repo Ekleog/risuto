@@ -219,12 +219,14 @@ impl Component for App {
                 self.tag = id;
             }
             AppMsg::NewUserEvent(e) => {
+                tracing::debug!("got new user event {:?}", e);
                 // Sanity-check that we're allowed to submit the event before adding it to the queue
                 assert!(
                     block_on(e.is_authorized(&mut self.db)).expect("checking is_authorized on local db dump"),
                     "Submitted userevent that is not authorized. The button should have been disabled! {:?}",
                     e,
                 );
+                tracing::trace!("user event authorized {:?}", e);
 
                 // Submit the event to the upload queue and update our state
                 let login = self
@@ -234,6 +236,7 @@ impl Component for App {
                 login.events_pending_submission.push_back(e.clone());
                 LocalStorage::set("queue", &login.events_pending_submission)
                     .expect("failed saving queue to local storage");
+                tracing::trace!("events pending submission queue saved");
                 if !login.event_being_submitted {
                     assert_eq!(
                         login.events_pending_submission.len(),
@@ -242,8 +245,10 @@ impl Component for App {
                     );
                     login.event_being_submitted = true;
                     send_event(&self.client, ctx, login, e.clone());
+                    tracing::debug!("started event submission with event {:?}", e);
                 }
-                self.handle_new_event(e);
+                self.handle_new_event(e.clone());
+                tracing::debug!("handled new user event {:?}", e);
             }
             AppMsg::NewNetworkEvent(e) => self.handle_new_event(e),
             AppMsg::EventSubmissionComplete(id) => {
