@@ -12,7 +12,7 @@ pub fn task_list(p: &TaskListItemProps) -> Html {
     html! {
         <li class="list-group-item d-flex align-items-center">
             <span class="drag-handle bi-btn bi-grip-vertical pe-3"></span>
-            <span class="flex-grow-1">{ &p.task.current_title }</span>
+            <span class="flex-fill">{ &p.task.current_title }</span>
             { button_done_change(&p.task, &p.on_done_change) }
         </li>
     }
@@ -30,9 +30,9 @@ fn button_done_change(t: &Task, on_done_change: &Callback<()>) -> Html {
     html! {
         <button
             type="button"
-            class={classes!("btn", "bi-btn", icon_class)}
-            aria-label={aria_label}
-            onclick={on_done_change.reform(|_| ())}
+            class={ classes!("btn", "bi-btn", icon_class) }
+            aria-label={ aria_label }
+            onclick={ on_done_change.reform(|_| ()) }
         >
         </button>
     }

@@ -86,21 +86,21 @@ pub fn main_view(p: &MainViewProps) -> Html {
 
     // Finally, put everything together
     html! {
-        <div class="h-100">
+        <div class="h-100 d-flex flex-column">
             <button
                 class="position-absolute top-0 end-0 float-above"
                 onclick={p.on_logout.reform(|_| ())}
             >
                 { "Logout" }
             </button>
-            <div class="h-50 overflow-auto p-lg-5">
+            <div class="flex-fill overflow-auto p-lg-5">
                 <ui::TaskList
                     ref_this={ref_open}
                     tasks={p.tasks_open.clone()}
                     on_done_change={p.on_done_change.clone()}
                 />
             </div>
-            <div class="h-50 overflow-auto p-lg-5">
+            <div class="overflow-auto p-lg-5" style="min-height: 50%; max-height: 50%;">
                 <h2>{ "Backlog" }</h2>
                 <ui::TaskList
                     ref_this={ref_backlog}
