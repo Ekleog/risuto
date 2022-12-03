@@ -94,10 +94,21 @@ impl App {
         self.login = Some(LoginData {
             id: LoginId(Uuid::new_v4()),
             info,
+            event_being_submitted: !events_pending_submission.is_empty(),
             events_pending_submission,
-            event_being_submitted: false,
             feed_canceller: Rc::new(RefCell::new(feed_canceller)),
         });
+
+        // Start event submission if need be
+        let login = self.login.as_mut().unwrap();
+        if !login.events_pending_submission.is_empty() {
+            send_event(
+                &self.client,
+                ctx,
+                login,
+                login.events_pending_submission[0].clone(),
+            );
+        }
 
         // Finally, fetch a DB dump from the server
         self.fetch_db_dump(ctx);
