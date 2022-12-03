@@ -1,6 +1,6 @@
 use crate::ui;
-use risuto_api::{Task, TaskId};
-use std::rc::Rc;
+use risuto_api::{Task, TaskId, NewEvent};
+use std::{rc::Rc, collections::VecDeque};
 use yew::prelude::*;
 
 #[derive(Debug, Eq, PartialEq)]
@@ -18,6 +18,7 @@ pub struct TaskOrderChangeEvent {
 #[derive(Clone, PartialEq, Properties)]
 pub struct MainViewProps {
     pub offline: bool,
+    pub events_pending_submission: VecDeque<NewEvent>,
     pub tasks_open: Rc<Vec<(TaskId, Task)>>,
     pub tasks_backlog: Rc<Vec<(TaskId, Task)>>,
     pub on_logout: Callback<()>,
@@ -101,14 +102,33 @@ pub fn main_view(p: &MainViewProps) -> Html {
             </div>
 
             // Top-right corner
-            <div class="position-absolute top-0 end-0 float-above">
-                <button class="btn btn-secondary btn-circle m-3" type="button">
-                    <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
-                    <span class="visually-hidden">{ "Submitting events..." }</span>
-                </button>
-                <button onclick={p.on_logout.reform(|_| ())}>
-                    { "Logout" }
-                </button>
+            <div class="position-absolute top-0 end-0 float-above d-flex">
+                <div class={ classes!(
+                    "events-pending", p.events_pending_submission.is_empty().then(|| "events-pending-none"),
+                    "dropdown",
+                ) }>
+                    <button
+                        class={ classes!(
+
+                            "btn", "btn-secondary", "btn-circle", "m-3"
+                        ) }
+                        type="button"
+                        data-bs-toggle="dropdown"
+                    >
+                        <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                        <span class="visually-hidden">{ "Submitting events..." }</span>
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-dark">
+                        { for p.events_pending_submission.iter().map(|e| html! {
+                            <li>{ format!("{:?}", e) }</li> // TODO: make events prettier
+                        }) }
+                    </ul>
+                </div>
+                <div>
+                    <button onclick={p.on_logout.reform(|_| ())}>
+                        { "Logout" }
+                    </button>
+                </div>
             </div>
 
             // Main task list

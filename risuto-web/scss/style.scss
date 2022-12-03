@@ -25,6 +25,25 @@ $primary: $red;
     background-color: $gray-900;
 }
 
+.sidebar a {
+    color: $body-color;
+}
+
+.sidebar .nav-item .active {
+    background-color: $primary;
+}
+
+.events-pending.events-pending-none {
+    width: 0;
+    height: 0;
+    overflow: hidden;
+}
+
+.task-list li {
+    background-color: $gray-900;
+    color: $body-color;
+}
+
 ::-webkit-scrollbar {
     height: 5px;
     width: 5px;
@@ -40,19 +59,6 @@ $primary: $red;
 
 ::-webkit-scrollbar-thumb:hover {
     background: $gray-500;
-}
-
-.sidebar a {
-    color: $body-color;
-}
-
-.sidebar .nav-item .active {
-    background-color: $primary;
-}
-
-.task-list li {
-    background-color: $gray-900;
-    color: $body-color;
 }
 
 .bi-btn {

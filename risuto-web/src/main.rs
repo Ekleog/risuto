@@ -283,6 +283,12 @@ impl Component for App {
                 </div>
             };
         }
+        let events_pending_submission = self
+            .login
+            .as_ref()
+            .unwrap()
+            .events_pending_submission
+            .clone();
         let (tasks_open, tasks_backlog) = self.current_task_list();
         let on_done_change = {
             let owner = self.db.owner.clone();
@@ -334,6 +340,7 @@ impl Component for App {
                     <main class="col-md-10 h-100">
                         <ui::MainView
                             offline={self.offline}
+                            {events_pending_submission}
                             {tasks_open}
                             {tasks_backlog}
                             on_logout={ctx.link().callback(|_| AppMsg::UserLogout)}
