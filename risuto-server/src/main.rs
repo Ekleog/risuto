@@ -111,15 +111,18 @@ impl From<anyhow::Error> for Error {
 impl axum::response::IntoResponse for Error {
     fn into_response(self) -> axum::response::Response {
         match self {
-            Error::Anyhow(e) => {
-                tracing::error!(err=?e, "got an error");
+            Error::Anyhow(err) => {
+                tracing::error!(?err, "got an error");
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     "Internal server error, see logs for details",
                 )
                     .into_response()
             }
-            Error::PermissionDenied => (StatusCode::FORBIDDEN, "Permission denied").into_response(),
+            Error::PermissionDenied => {
+                tracing::info!("returning permission denied to client");
+                (StatusCode::FORBIDDEN, "Permission denied").into_response()
+            }
         }
     }
 }
