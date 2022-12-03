@@ -12,6 +12,7 @@ use axum::{
 };
 use futures::{stream, StreamExt};
 use risuto_api::{AuthToken, DbDump, NewSession, UserId, Uuid};
+use tower_http::trace::TraceLayer;
 use std::{collections::HashMap, net::SocketAddr, sync::Arc};
 use tokio::sync::{Mutex, RwLock};
 
@@ -37,7 +38,8 @@ async fn main() -> anyhow::Result<()> {
         .route("/ws/event-feed", get(event_feed))
         .route("/api/submit-event", post(submit_event))
         .layer(Extension(db))
-        .layer(Extension(feeds));
+        .layer(Extension(feeds))
+        .layer(TraceLayer::new_for_http());
 
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
     tracing::info!("listening on {}", addr);
