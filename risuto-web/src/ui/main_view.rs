@@ -85,24 +85,25 @@ pub fn main_view(p: &MainViewProps) -> Html {
         ),
     );
 
-    // Prepare the offline banner
-    let offline_banner = p.offline.then(|| html! {
-        <div class="offline-banner d-flex align-items-center">
-            <div class="spinner-border m-4" role="status"></div>
-            <div class="fs-5">{ "Currently offline, trying to reconnect..." }</div>
-        </div>
-    });
-
     // Put everything together
     html! {
         <div class="h-100 d-flex flex-column">
+            <div
+                class={ classes!(
+                    "offline-banner", (!p.offline).then(|| "is-online"),
+                    "d-flex", "align-items-center"
+                ) }
+                aria-hidden={ if p.offline { "false" } else { "true" } }
+            >
+                <div class="spinner-border m-4" role="status"></div>
+                <div class="fs-5">{ "Currently offline, trying to reconnect..." }</div>
+            </div>
             <button
                 class="position-absolute top-0 end-0 float-above"
                 onclick={p.on_logout.reform(|_| ())}
             >
                 { "Logout" }
             </button>
-            { for offline_banner }
             <div class="flex-fill overflow-auto p-lg-5">
                 <ui::TaskList
                     ref_this={ref_open}

@@ -15,6 +15,12 @@ $primary: $red;
     background-color: $gray-900;
 }
 
+.offline-banner.is-online {
+    position: absolute;
+    transform: translateY(-100%);
+    transition: .3s ease-in-out;
+}
+
 .sidebar {
     background-color: $gray-900;
 }
