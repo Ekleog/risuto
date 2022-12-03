@@ -46,7 +46,7 @@ pub struct App {
     login: Option<LoginData>,
     logout: Option<LoginInfo>, // info saved from login info
     db: DbDump,
-    initial_load_completed: bool,
+    offline: bool,
     tag: Option<TagId>,
 }
 
@@ -57,7 +57,7 @@ impl App {
             login: None,
             logout: None,
             db: DbDump::stub(),
-            initial_load_completed: false,
+            offline: true,
             tag: Some(TagId::stub()),
         }
     }
@@ -188,7 +188,7 @@ impl Component for App {
             }
             AppMsg::ReceivedDb(db) => {
                 self.db = db;
-                self.initial_load_completed = true;
+                self.offline = false;
                 if self.tag == Some(TagId::stub()) {
                     self.tag = Some(
                         self.db
@@ -237,8 +237,6 @@ impl Component for App {
                 </div>
             };
         }
-        let loading_banner =
-            (!self.initial_load_completed).then(|| html! { <h1>{ "Loading..." }</h1> });
         let (tasks_open, tasks_backlog) = self.current_task_list();
         let on_done_change = {
             let owner = self.db.owner.clone();
@@ -289,6 +287,7 @@ impl Component for App {
                     </nav>
                     <main class="col-md-10 h-100">
                         <ui::MainView
+                            offline={self.offline}
                             {tasks_open}
                             {tasks_backlog}
                             on_logout={ctx.link().callback(|_| AppMsg::UserLogout)}

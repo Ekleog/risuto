@@ -17,6 +17,7 @@ pub struct TaskOrderChangeEvent {
 
 #[derive(Clone, PartialEq, Properties)]
 pub struct MainViewProps {
+    pub offline: bool,
     pub tasks_open: Rc<Vec<(TaskId, Task)>>,
     pub tasks_backlog: Rc<Vec<(TaskId, Task)>>,
     pub on_logout: Callback<()>,
@@ -26,7 +27,7 @@ pub struct MainViewProps {
 
 #[function_component(MainView)]
 pub fn main_view(p: &MainViewProps) -> Html {
-    // The list must be sortable
+    // The lists must be sortable
     let ref_open = use_node_ref();
     let ref_backlog = use_node_ref();
     use_effect_with_deps(
@@ -84,7 +85,15 @@ pub fn main_view(p: &MainViewProps) -> Html {
         ),
     );
 
-    // Finally, put everything together
+    // Prepare the offline banner
+    let offline_banner = p.offline.then(|| html! {
+        <div class="offline-banner d-flex align-items-center">
+            <div class="spinner-border m-4" role="status"></div>
+            <div class="fs-5">{ "Currently offline, trying to reconnect..." }</div>
+        </div>
+    });
+
+    // Put everything together
     html! {
         <div class="h-100 d-flex flex-column">
             <button
@@ -93,6 +102,7 @@ pub fn main_view(p: &MainViewProps) -> Html {
             >
                 { "Logout" }
             </button>
+            { for offline_banner }
             <div class="flex-fill overflow-auto p-lg-5">
                 <ui::TaskList
                     ref_this={ref_open}
