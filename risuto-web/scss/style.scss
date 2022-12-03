@@ -33,10 +33,12 @@ $primary: $red;
     background-color: $primary;
 }
 
-.events-pending.events-pending-none {
-    width: 0;
-    height: 0;
-    overflow: hidden;
+.events-pending-spinner {
+    transition: .1s ease-in-out;
+}
+
+.events-pending-spinner.no-events {
+    transform: scale(0);
 }
 
 .task-list li {

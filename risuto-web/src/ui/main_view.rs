@@ -103,13 +103,11 @@ pub fn main_view(p: &MainViewProps) -> Html {
 
             // Top-right corner
             <div class="position-absolute top-0 end-0 float-above d-flex">
-                <div class={ classes!(
-                    "events-pending", p.events_pending_submission.is_empty().then(|| "events-pending-none"),
-                    "dropdown",
-                ) }>
+                <div class="dropdown">
                     <button
                         class={ classes!(
-
+                            "events-pending-spinner",
+                            p.events_pending_submission.is_empty().then(|| "no-events"),
                             "btn", "btn-secondary", "btn-circle", "m-3"
                         ) }
                         type="button"
