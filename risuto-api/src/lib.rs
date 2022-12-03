@@ -359,7 +359,7 @@ impl BitOr for AuthInfo {
     }
 }
 
-#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
+#[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 pub enum NewEventContents {
     SetTitle {
         task: TaskId,
@@ -415,7 +415,7 @@ pub trait Db {
     async fn is_first_comment(&mut self, task: TaskId, comment: EventId) -> anyhow::Result<bool>;
 }
 
-#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
+#[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct NewEvent {
     pub id: EventId,
     pub owner: UserId,
