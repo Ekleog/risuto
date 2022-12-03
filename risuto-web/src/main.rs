@@ -1,11 +1,7 @@
-use futures::{
-    channel::{mpsc, oneshot},
-    executor::block_on,
-    FutureExt,
-};
+use futures::{channel::oneshot, executor::block_on, FutureExt};
 use gloo_storage::{LocalStorage, Storage};
 use risuto_api::*;
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::RefCell, collections::VecDeque, rc::Rc};
 use ui::TaskOrderChangeEvent;
 use wasm_bindgen_futures::spawn_local;
 use yew::prelude::*;
@@ -25,10 +21,16 @@ pub struct LoginInfo {
     token: AuthToken,
 }
 
+/// just some random id that changes on each login
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct LoginId(Uuid);
+
 #[derive(Clone, Debug)]
 pub struct LoginData {
+    id: LoginId,
     info: LoginInfo,
-    event_submitter: mpsc::UnboundedSender<NewEvent>,
+    events_pending_submission: VecDeque<NewEvent>, // push_back, pop_front
+    event_being_submitted: bool,
     feed_canceller: Rc<RefCell<oneshot::Receiver<()>>>,
 }
 
@@ -39,6 +41,7 @@ pub enum AppMsg {
     SetTag(Option<TagId>),
     NewUserEvent(NewEvent),
     NewNetworkEvent(NewEvent),
+    EventSubmissionComplete(LoginId),
 }
 
 pub struct App {
@@ -72,7 +75,12 @@ impl App {
             .send_future(api::fetch_db_dump(self.client.clone(), login).map(AppMsg::ReceivedDb));
     }
 
-    fn got_login_info(&mut self, ctx: &Context<Self>, info: LoginInfo) {
+    fn got_login_info(
+        &mut self,
+        ctx: &Context<Self>,
+        info: LoginInfo,
+        events_pending_submission: VecDeque<NewEvent>,
+    ) {
         // Connect to websocket event feed
         let feed_sender = ctx.link().clone();
         let (feed_cancel_receiver, feed_canceller) = oneshot::channel();
@@ -82,18 +90,12 @@ impl App {
             feed_cancel_receiver,
         ));
 
-        // Prepare thread handling event submission
-        let (event_submitter, event_receiver) = mpsc::unbounded();
-        spawn_local(api::handle_event_submissions(
-            self.client.clone(),
-            info.clone(),
-            event_receiver,
-        ));
-
         // Record login info
         self.login = Some(LoginData {
+            id: LoginId(Uuid::new_v4()),
             info,
-            event_submitter,
+            events_pending_submission,
+            event_being_submitted: false,
             feed_canceller: Rc::new(RefCell::new(feed_canceller)),
         });
 
@@ -169,7 +171,8 @@ impl Component for App {
     fn create(ctx: &Context<Self>) -> Self {
         let mut this = App::new();
         if let Ok(info) = LocalStorage::get("login") {
-            this.got_login_info(ctx, info);
+            let queue = LocalStorage::get("queue").ok().unwrap_or(VecDeque::new());
+            this.got_login_info(ctx, info, queue);
         }
         this
     }
@@ -179,7 +182,7 @@ impl Component for App {
             AppMsg::UserLogin(info) => {
                 LocalStorage::set("login", &info)
                     .expect("failed saving login info to LocalStorage");
-                self.got_login_info(ctx, info);
+                self.got_login_info(ctx, info, VecDeque::new());
             }
             AppMsg::UserLogout => {
                 self.logout();
@@ -213,15 +216,42 @@ impl Component for App {
                 );
 
                 // Submit the event to the upload queue and update our state
-                self.login
+                let login = self
+                    .login
                     .as_mut()
-                    .expect("got NewTaskEvent without a login configured")
-                    .event_submitter
-                    .unbounded_send(e.clone())
-                    .expect("failed sending local event to event submitter");
+                    .expect("got NewTaskEvent without a login configured");
+                login.events_pending_submission.push_back(e.clone());
+                LocalStorage::set("queue", &login.events_pending_submission)
+                    .expect("failed saving queue to local storage");
+                if !login.event_being_submitted {
+                    assert_eq!(
+                        login.events_pending_submission.len(),
+                        1,
+                        "already had events pending submission but no event was being submitted"
+                    );
+                    login.event_being_submitted = true;
+                    send_event(&self.client, ctx, login, e.clone());
+                }
                 self.handle_new_event(e);
             }
             AppMsg::NewNetworkEvent(e) => self.handle_new_event(e),
+            AppMsg::EventSubmissionComplete(id) => {
+                if let Some(login) = self.login.as_mut() {
+                    if login.id != id {
+                        // if login is not Some or the id changed, we disconnected since the event was submitted
+                        return false;
+                    }
+                    login.events_pending_submission.pop_front();
+                    LocalStorage::set("queue", &login.events_pending_submission)
+                        .expect("failed saving queue to local storage");
+                    if login.events_pending_submission.is_empty() {
+                        login.event_being_submitted = false;
+                    } else {
+                        let e = login.events_pending_submission[0].clone();
+                        send_event(&self.client, ctx, login, e);
+                    }
+                }
+            }
         }
         true
     }
@@ -386,4 +416,14 @@ fn compute_reordering_events(
             )
         }))
         .collect()
+}
+
+fn send_event(client: &reqwest::Client, ctx: &Context<App>, login: &mut LoginData, e: NewEvent) {
+    let client = client.clone();
+    let info = login.info.clone();
+    let id = login.id.clone();
+    ctx.link().send_future(async move {
+        api::send_event(&client, &info, e).await;
+        AppMsg::EventSubmissionComplete(id)
+    });
 }
