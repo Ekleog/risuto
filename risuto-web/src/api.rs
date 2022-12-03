@@ -19,6 +19,7 @@ pub async fn auth(
 }
 
 pub async fn unauth(client: reqwest::Client, host: String, token: AuthToken) {
+    // TODO: make this a loop in case of network issues?
     let resp = client
         .post(format!("{}/api/unauth", host))
         .bearer_auth(token.0)
@@ -81,6 +82,7 @@ pub async fn start_event_feed(
     let mut sock = sock.fuse();
     let mut cancellation = cancel.cancellation().fuse();
     loop {
+        // TODO: ping-pong to detect disconnection
         select! {
             _ = cancellation => {
                 sock.into_inner().close().await.expect("TODO");

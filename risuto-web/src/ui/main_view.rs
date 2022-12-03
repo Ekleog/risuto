@@ -88,6 +88,7 @@ pub fn main_view(p: &MainViewProps) -> Html {
     // Put everything together
     html! {
         <div class="h-100 d-flex flex-column">
+            // Offline banner
             <div
                 class={ classes!(
                     "offline-banner", (!p.offline).then(|| "is-online"),
@@ -98,12 +99,19 @@ pub fn main_view(p: &MainViewProps) -> Html {
                 <div class="spinner-border m-4" role="status"></div>
                 <div class="fs-5">{ "Currently offline, trying to reconnect..." }</div>
             </div>
-            <button
-                class="position-absolute top-0 end-0 float-above"
-                onclick={p.on_logout.reform(|_| ())}
-            >
-                { "Logout" }
-            </button>
+
+            // Top-right corner
+            <div class="position-absolute top-0 end-0 float-above">
+                <button class="btn btn-secondary btn-circle m-3" type="button">
+                    <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                    <span class="visually-hidden">{ "Submitting events..." }</span>
+                </button>
+                <button onclick={p.on_logout.reform(|_| ())}>
+                    { "Logout" }
+                </button>
+            </div>
+
+            // Main task list
             <div class="flex-fill overflow-auto p-lg-5">
                 <ui::TaskList
                     ref_this={ref_open}
@@ -111,6 +119,8 @@ pub fn main_view(p: &MainViewProps) -> Html {
                     on_done_change={p.on_done_change.clone()}
                 />
             </div>
+
+            // Backlog task list
             <div class="overflow-auto p-lg-5" style="min-height: 50%; max-height: 50%;">
                 <h2>{ "Backlog" }</h2>
                 <ui::TaskList
