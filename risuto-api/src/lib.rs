@@ -177,9 +177,14 @@ impl Task {
                     }
                     EventType::EditComment(comment, txt) => {
                         if let Some((id, comment)) = self.find_event(comment) {
-                            let comment_date = comment.date;
-                            let comment =
-                                &mut self.current_comments.get_mut(&comment_date).unwrap()[id];
+                            let comment = comment.clone();
+                            let comment = match self.current_comments.get_mut(&comment.date) {
+                                None => {
+                                    tracing::error!(?comment, edit=?e, "ill-formed task: comment edition comes before comment creation!");
+                                    continue;
+                                }
+                                Some(c) => &mut c[id],
+                            };
                             comment
                                 .edits
                                 .entry(e.date)
@@ -191,9 +196,14 @@ impl Task {
                     }
                     EventType::SetCommentRead(comment, now_read) => {
                         if let Some((id, comment)) = self.find_event(comment) {
-                            let comment_date = comment.date;
-                            let read_set =
-                                &mut self.current_comments.get_mut(&comment_date).unwrap()[id].read;
+                            let comment = comment.clone();
+                            let read_set = match self.current_comments.get_mut(&comment.date) {
+                                None => {
+                                    tracing::error!(?comment, set_read=?e, "ill-formed task: setting comment read comes before comment creation!");
+                                    continue;
+                                }
+                                Some(c) => &mut c[id].read,
+                            };
                             if *now_read {
                                 read_set.insert(e.owner);
                             } else {
