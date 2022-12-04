@@ -116,7 +116,11 @@ pub fn main_view(p: &MainViewProps) -> Html {
                         <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
                         <span class="visually-hidden">{ "Submitting events..." }</span>
                     </button>
-                    <ul class="dropdown-menu dropdown-menu-dark">
+                    <ul class={ classes!(
+                        "events-pending-list",
+                        p.events_pending_submission.is_empty().then(|| "no-events"),
+                        "dropdown-menu", "dropdown-menu-dark"
+                    ) }>
                         { for p.events_pending_submission.iter().map(|e| html! {
                             <li>{ format!("{:?}", e) }</li> // TODO: make events prettier
                         }) }

@@ -41,6 +41,10 @@ $primary: $red;
     transform: scale(0);
 }
 
+.events-pending-list.no-events {
+    display: none;
+}
+
 .task-list li {
     background-color: $gray-900;
     color: $body-color;
