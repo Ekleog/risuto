@@ -1,4 +1,4 @@
-use futures::{channel::oneshot, executor::block_on, FutureExt};
+use futures::{channel::oneshot, executor::block_on};
 use gloo_storage::{LocalStorage, Storage};
 use risuto_api::*;
 use std::{collections::VecDeque, rc::Rc};
@@ -17,17 +17,28 @@ pub struct AppProps {
 
 pub enum AppMsg {
     Logout,
+
+    WebsocketConnected,
     ReceivedDb(DbDump),
+    WebsocketDisconnected,
+
     SetTag(Option<TagId>),
     NewUserEvent(NewEvent),
     NewNetworkEvent(NewEvent),
     EventSubmissionComplete,
 }
 
+#[derive(Clone, PartialEq)]
+pub enum ConnState {
+    Disconnected,
+    WebsocketConnected(VecDeque<NewEvent>),
+    Connected,
+}
+
 pub struct App {
     client: reqwest::Client,
     db: DbDump,
-    offline: bool,
+    connection_state: ConnState,
     tag: Option<TagId>,
     events_pending_submission: VecDeque<NewEvent>, // push_back, pop_front
     feed_canceller: oneshot::Receiver<()>,
@@ -95,6 +106,7 @@ impl Component for App {
         let feed_sender = ctx.link().clone();
         let (feed_cancel_receiver, feed_canceller) = oneshot::channel();
         spawn_local(api::start_event_feed(
+            client.clone(),
             ctx.props().login.clone(),
             feed_sender,
             feed_cancel_receiver,
@@ -109,15 +121,10 @@ impl Component for App {
             send_event(&client, ctx, events_pending_submission[0].clone());
         }
 
-        // Finally, fetch a DB dump from the server
-        ctx.link().send_future(
-            api::fetch_db_dump(client.clone(), ctx.props().login.clone()).map(AppMsg::ReceivedDb),
-        );
-
         App {
             client,
             db: DbDump::stub(),
-            offline: true,
+            connection_state: ConnState::Disconnected,
             tag: Some(TagId::stub()), // A value that cannot happen when choosing an actual tag
             events_pending_submission,
             feed_canceller,
@@ -131,9 +138,24 @@ impl Component for App {
                 LocalStorage::delete(KEY_EVTS_PENDING_SUBMISSION);
                 ctx.props().on_logout.emit(());
             }
+            AppMsg::WebsocketConnected => {
+                self.connection_state = ConnState::WebsocketConnected(VecDeque::new());
+            }
+            AppMsg::WebsocketDisconnected => {
+                self.connection_state = ConnState::Disconnected;
+            }
             AppMsg::ReceivedDb(db) => {
                 self.db = db;
-                self.offline = false;
+                for e in self.events_pending_submission.clone() {
+                    self.locally_insert_new_event(e.clone());
+                }
+                let events_already_received = match &self.connection_state {
+                    ConnState::WebsocketConnected(e) => e.clone(),
+                    _ => panic!("received database while websocket is not connected"),
+                };
+                for e in events_already_received {
+                    self.locally_insert_new_event(e);
+                }
                 if self.tag == Some(TagId::stub()) {
                     self.tag = Some(
                         self.db
@@ -145,6 +167,7 @@ impl Component for App {
                             .clone(),
                     );
                 }
+                self.connection_state = ConnState::Connected;
             }
             AppMsg::SetTag(id) => {
                 self.tag = id;
@@ -238,7 +261,7 @@ impl Component for App {
                     </nav>
                     <main class="col-md-10 h-100">
                         <ui::MainView
-                            offline={self.offline}
+                            connection_state={self.connection_state.clone()}
                             events_pending_submission={self.events_pending_submission.clone()}
                             tasks_open={tasks.open}
                             tasks_backlog={tasks.backlog}

@@ -34,7 +34,7 @@ pub async fn unauth(client: reqwest::Client, host: String, token: AuthToken) {
     }
 }
 
-pub async fn fetch_db_dump(client: reqwest::Client, login: LoginInfo) -> DbDump {
+pub async fn fetch_db_dump(client: &reqwest::Client, login: &LoginInfo) -> DbDump {
     loop {
         match try_fetch_db_dump(&client, &login).await {
             Ok(db) => return db,
@@ -56,6 +56,7 @@ async fn try_fetch_db_dump(client: &reqwest::Client, login: &LoginInfo) -> reqwe
 }
 
 pub async fn start_event_feed(
+    client: reqwest::Client,
     login: LoginInfo,
     feed_sender: yew::html::Scope<ui::App>,
     mut cancel: oneshot::Sender<()>,
@@ -77,6 +78,13 @@ pub async fn start_event_feed(
     .expect("TODO");
     let res = sock.next().await.expect("TODO");
     assert_eq!(res, WsMessage::Text("ok".into()));
+    feed_sender.send_message(ui::AppMsg::WebsocketConnected);
+
+    // Fetch the database
+    // TODO: this should happen async from the websocket handling to not risk stalling the connection.
+    // ui::App should already be ready to handle it thanks to its connection_state member
+    let db = fetch_db_dump(&client, &login).await;
+    feed_sender.send_message(ui::AppMsg::ReceivedDb(db));
 
     // Finally, run the event feed
     let mut sock = sock.fuse();

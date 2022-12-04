@@ -1,5 +1,5 @@
 mod app;
-pub use app::{App, AppMsg};
+pub use app::{App, AppMsg, ConnState};
 
 mod login;
 pub use login::Login;

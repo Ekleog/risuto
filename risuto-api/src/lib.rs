@@ -111,7 +111,10 @@ impl Task {
     }
 
     pub fn add_event(&mut self, e: Event) {
-        self.events.entry(e.date).or_insert(Vec::new()).push(e);
+        let insert_into = self.events.entry(e.date).or_insert(Vec::new());
+        if insert_into.iter().find(|evt| **evt == e).is_none() {
+            insert_into.push(e);
+        }
     }
 
     /// Returns (index within same-date events, event)

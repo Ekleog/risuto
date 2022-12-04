@@ -83,7 +83,10 @@ impl<'a> risuto_api::Db for PostgresDb<'a> {
         )
         .fetch_one(&mut *self.conn)
         .await?;
-        Ok((UserId(res.owner_id), res.date.and_local_timezone(Utc).unwrap()))
+        Ok((
+            UserId(res.owner_id),
+            res.date.and_local_timezone(Utc).unwrap(),
+        ))
     }
 
     async fn get_task_for_comment(&mut self, comment: EventId) -> anyhow::Result<TaskId> {

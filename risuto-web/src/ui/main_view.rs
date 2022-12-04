@@ -17,7 +17,7 @@ pub struct TaskOrderChangeEvent {
 
 #[derive(Clone, PartialEq, Properties)]
 pub struct MainViewProps {
-    pub offline: bool,
+    pub connection_state: ui::ConnState,
     pub events_pending_submission: VecDeque<NewEvent>,
     pub tasks_open: Rc<Vec<(TaskId, Task)>>,
     pub tasks_backlog: Rc<Vec<(TaskId, Task)>>,
@@ -86,16 +86,19 @@ pub fn main_view(p: &MainViewProps) -> Html {
         ),
     );
 
+    // TODO: display different messages between Disconnected and WebsocketConnected
+    let offline = !matches!(p.connection_state, ui::ConnState::Connected);
+
     // Put everything together
     html! {
         <div class="h-100 d-flex flex-column">
             // Offline banner
             <div
                 class={ classes!(
-                    "offline-banner", (!p.offline).then(|| "is-online"),
+                    "offline-banner", (!offline).then(|| "is-online"),
                     "d-flex", "align-items-center"
                 ) }
-                aria-hidden={ if p.offline { "false" } else { "true" } }
+                aria-hidden={ if offline { "false" } else { "true" } }
             >
                 <div class="spinner-border m-4" role="status"></div>
                 <div class="fs-5">{ "Currently offline, trying to reconnect..." }</div>
