@@ -12,9 +12,9 @@ use axum::{
 };
 use futures::{stream, StreamExt};
 use risuto_api::{AuthToken, DbDump, NewSession, UserId, Uuid};
-use tower_http::trace::TraceLayer;
 use std::{collections::HashMap, net::SocketAddr, sync::Arc};
 use tokio::sync::{Mutex, RwLock};
+use tower_http::trace::TraceLayer;
 
 mod db;
 

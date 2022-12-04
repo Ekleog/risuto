@@ -1,6 +1,6 @@
 use crate::ui;
-use risuto_api::{Task, TaskId, NewEvent};
-use std::{rc::Rc, collections::VecDeque};
+use risuto_api::{NewEvent, Task, TaskId};
+use std::{collections::VecDeque, rc::Rc};
 use yew::prelude::*;
 
 #[derive(Debug, Eq, PartialEq)]
