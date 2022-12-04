@@ -318,19 +318,12 @@ impl Db for DbDump {
         ))
     }
 
-    async fn get_comment_owner(&mut self, e: EventId) -> anyhow::Result<UserId> {
+    async fn get_comment_info(&mut self, e: EventId) -> anyhow::Result<(UserId, Time)> {
         let t = self.get_task_for_comment(e).await?;
-        Ok(self
-            .tasks
-            .get(&t)
-            .ok_or_else(|| {
-                anyhow!(
-                    "requested comment owner for event {:?} for which task {:?} is not in db",
-                    e,
-                    t
-                )
-            })?
-            .owner)
+        let t = self.tasks.get(&t).ok_or_else(|| {
+            anyhow!("requested comment owner for event {e:?} for which task {t:?} is not in db",)
+        })?;
+        Ok((t.owner, t.date))
     }
 
     async fn is_first_comment(&mut self, task: TaskId, comment: EventId) -> anyhow::Result<bool> {
@@ -458,7 +451,7 @@ pub enum NewEventContents {
 pub trait Db {
     async fn auth_info_for(&mut self, t: TaskId) -> anyhow::Result<AuthInfo>;
     async fn list_tags_for(&mut self, t: TaskId) -> anyhow::Result<Vec<TagId>>;
-    async fn get_comment_owner(&mut self, e: EventId) -> anyhow::Result<UserId>;
+    async fn get_comment_info(&mut self, e: EventId) -> anyhow::Result<(UserId, Time)>;
     async fn get_task_for_comment(&mut self, comment: EventId) -> anyhow::Result<TaskId>;
     async fn is_first_comment(&mut self, task: TaskId, comment: EventId) -> anyhow::Result<bool>;
 }
@@ -586,6 +579,18 @@ impl NewEvent {
                     .with_context(|| format!("fetching auth info for task {:?}", t))?
             }};
         }
+        macro_rules! check_comment_event {
+            ($c:expr) => {{
+                let (comm_owner, comm_date) = db
+                    .get_comment_info($c)
+                    .await
+                    .with_context(|| format!("getting info of comment {:?}", $c))?;
+                if comm_date >= self.date {
+                    return Ok(false);
+                }
+                (comm_owner, comm_date)
+            }};
+        }
         Ok(match self.contents {
             NewEventContents::SetTitle { task, .. } => auth!(task).can_edit,
             NewEventContents::SetDone { task, .. }
@@ -607,11 +612,8 @@ impl NewEvent {
             NewEventContents::RmTag { task, .. } => auth!(task).can_relabel_to_any,
             NewEventContents::AddComment { task, .. } => auth!(task).can_comment,
             NewEventContents::EditComment { comment, .. } => {
-                let is_comment_owner = self.owner
-                    == db
-                        .get_comment_owner(comment)
-                        .await
-                        .with_context(|| format!("getting owner of comment {:?}", comment))?;
+                let (comm_owner, _) = check_comment_event!(comment);
+                let is_comment_owner = self.owner == comm_owner;
                 let task = db
                     .get_task_for_comment(comment)
                     .await
@@ -623,6 +625,7 @@ impl NewEvent {
                 is_comment_owner || (auth!(task).can_edit && is_first_comment)
             }
             NewEventContents::SetCommentRead { comment, .. } => {
+                check_comment_event!(comment);
                 let task = db
                     .get_task_for_comment(comment)
                     .await

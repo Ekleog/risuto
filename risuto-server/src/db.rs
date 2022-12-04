@@ -4,7 +4,7 @@ use chrono::Utc;
 use futures::{Stream, StreamExt, TryStreamExt};
 use risuto_api::{
     AuthInfo, AuthToken, DbDump, Event, EventId, EventType, NewEvent, NewEventContents, NewSession,
-    Tag, TagId, Task, TaskId, User, UserId, Uuid,
+    Tag, TagId, Task, TaskId, Time, User, UserId, Uuid,
 };
 use sqlx::Row;
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -76,16 +76,14 @@ impl<'a> risuto_api::Db for PostgresDb<'a> {
         .await?)
     }
 
-    async fn get_comment_owner(&mut self, event: EventId) -> anyhow::Result<UserId> {
-        Ok(UserId(
-            sqlx::query!(
-                "SELECT owner_id FROM add_comment_events WHERE id = $1",
-                event.0
-            )
-            .fetch_one(&mut *self.conn)
-            .await?
-            .owner_id,
-        ))
+    async fn get_comment_info(&mut self, event: EventId) -> anyhow::Result<(UserId, Time)> {
+        let res = sqlx::query!(
+            "SELECT owner_id, date FROM add_comment_events WHERE id = $1",
+            event.0
+        )
+        .fetch_one(&mut *self.conn)
+        .await?;
+        Ok((UserId(res.owner_id), res.date.and_local_timezone(Utc).unwrap()))
     }
 
     async fn get_task_for_comment(&mut self, comment: EventId) -> anyhow::Result<TaskId> {
