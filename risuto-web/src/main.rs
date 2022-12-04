@@ -60,7 +60,6 @@ pub struct LoginData {
     id: LoginId,
     info: LoginInfo,
     events_pending_submission: VecDeque<NewEvent>, // push_back, pop_front
-    event_being_submitted: bool,
     feed_canceller: Rc<RefCell<oneshot::Receiver<()>>>,
 }
 
@@ -124,7 +123,6 @@ impl App {
         self.login = Some(LoginData {
             id: LoginId(Uuid::new_v4()),
             info,
-            event_being_submitted: !events_pending_submission.is_empty(),
             events_pending_submission,
             feed_canceller: Rc::new(RefCell::new(feed_canceller)),
         });
@@ -267,13 +265,7 @@ impl Component for App {
                 LocalStorage::set("queue", &login.events_pending_submission)
                     .expect("failed saving queue to local storage");
                 tracing::trace!("events pending submission queue saved");
-                if !login.event_being_submitted {
-                    assert_eq!(
-                        login.events_pending_submission.len(),
-                        1,
-                        "already had events pending submission but no event was being submitted"
-                    );
-                    login.event_being_submitted = true;
+                if login.events_pending_submission.len() == 1 { // this is the first event from the queue
                     send_event(&self.client, ctx, login, e.clone());
                     tracing::debug!("started event submission with event {:?}", e);
                 }
@@ -290,9 +282,7 @@ impl Component for App {
                     login.events_pending_submission.pop_front();
                     LocalStorage::set("queue", &login.events_pending_submission)
                         .expect("failed saving queue to local storage");
-                    if login.events_pending_submission.is_empty() {
-                        login.event_being_submitted = false;
-                    } else {
+                    if !login.events_pending_submission.is_empty() {
                         let e = login.events_pending_submission[0].clone();
                         send_event(&self.client, ctx, login, e);
                     }
