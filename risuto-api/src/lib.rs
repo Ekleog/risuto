@@ -178,7 +178,8 @@ impl Task {
                     EventType::EditComment(comment, txt) => {
                         if let Some((id, comment)) = self.find_event(comment) {
                             let comment_date = comment.date;
-                            let comment = &mut self.current_comments.get_mut(&comment_date).unwrap()[id];
+                            let comment =
+                                &mut self.current_comments.get_mut(&comment_date).unwrap()[id];
                             comment
                                 .edits
                                 .entry(e.date)
@@ -191,8 +192,8 @@ impl Task {
                     EventType::SetCommentRead(comment, now_read) => {
                         if let Some((id, comment)) = self.find_event(comment) {
                             let comment_date = comment.date;
-                            let read_set = &mut self.current_comments.get_mut(&comment_date).unwrap()[id]
-                                .read;
+                            let read_set =
+                                &mut self.current_comments.get_mut(&comment_date).unwrap()[id].read;
                             if *now_read {
                                 read_set.insert(e.owner);
                             } else {

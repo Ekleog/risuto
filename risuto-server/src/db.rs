@@ -644,7 +644,9 @@ pub async fn submit_event(conn: &mut sqlx::PgConnection, e: NewEvent) -> Result<
         NewEventContents::EditComment { comment, text, .. } => {
             insert_event!("edit_comment_events", "$4, $5", comment.0, text)
         }
-        NewEventContents::SetCommentRead { comment, now_read, .. } => {
+        NewEventContents::SetCommentRead {
+            comment, now_read, ..
+        } => {
             insert_event!("set_comment_read_events", "$4, $5", comment.0, now_read)
         }
     };

@@ -173,6 +173,16 @@ fn main() {
         gen_bool(),
     );
     evt_gen!("remove_tag_events", "'{}', '{}'", gen_task(), gen_tag());
-    evt_gen!("edit_comment_events", "'{}', '{}'", gen_comment(), gen_comment_text());
-    evt_gen!("set_comment_read_events", "'{}', '{}'", gen_comment(), gen_bool());
+    evt_gen!(
+        "edit_comment_events",
+        "'{}', '{}'",
+        gen_comment(),
+        gen_comment_text()
+    );
+    evt_gen!(
+        "set_comment_read_events",
+        "'{}', '{}'",
+        gen_comment(),
+        gen_bool()
+    );
 }

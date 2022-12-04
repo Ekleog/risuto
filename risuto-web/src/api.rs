@@ -2,7 +2,7 @@ use futures::{channel::oneshot, select, FutureExt, SinkExt, StreamExt};
 use risuto_api::*;
 use ws_stream_wasm::{WsMessage, WsMeta};
 
-use crate::LoginInfo;
+use crate::{ui, LoginInfo};
 
 pub async fn auth(
     client: reqwest::Client,
@@ -57,7 +57,7 @@ async fn try_fetch_db_dump(client: &reqwest::Client, login: &LoginInfo) -> reqwe
 
 pub async fn start_event_feed(
     login: LoginInfo,
-    feed_sender: yew::html::Scope<crate::App>,
+    feed_sender: yew::html::Scope<ui::App>,
     mut cancel: oneshot::Sender<()>,
 ) {
     // Connect to websocket
@@ -95,7 +95,7 @@ pub async fn start_event_feed(
                     Some(WsMessage::Text(t)) => serde_json::from_str(&t),
                     Some(WsMessage::Binary(b)) => serde_json::from_slice(&b),
                 }.expect("TODO");
-                feed_sender.send_message(crate::AppMsg::NewNetworkEvent(msg));
+                feed_sender.send_message(ui::AppMsg::NewNetworkEvent(msg));
             }
         }
     }

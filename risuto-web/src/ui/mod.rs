@@ -1,3 +1,6 @@
+mod app;
+pub use app::{App, AppMsg};
+
 mod login;
 pub use login::Login;
 
