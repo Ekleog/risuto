@@ -75,6 +75,15 @@ pub struct TaskInTag {
 pub struct TaskId(pub Uuid);
 
 #[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
+pub struct Comment {
+    /// List of edits in chronological order
+    edits: BTreeMap<Time, Vec<String>>,
+
+    /// Set of users who already read this comment
+    read: HashSet<UserId>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct Task {
     pub owner: UserId,
     pub date: Time,
@@ -90,8 +99,8 @@ pub struct Task {
     pub deps_before_self: HashSet<TaskId>,
     pub deps_after_self: HashSet<TaskId>,
 
-    /// List of comments in chronological order, with for each comment each edit in chronological order
-    pub current_comments: BTreeMap<Time, Vec<BTreeMap<Time, Vec<String>>>>,
+    /// List of comments in chronological order
+    pub current_comments: BTreeMap<Time, Vec<Comment>>,
 
     pub events: BTreeMap<Time, Vec<Event>>,
 }
@@ -103,6 +112,18 @@ impl Task {
 
     pub fn add_event(&mut self, e: Event) {
         self.events.entry(e.date).or_insert(Vec::new()).push(e);
+    }
+
+    /// Returns (index within same-date events, event)
+    fn find_event(&self, evt: &EventId) -> Option<(usize, &Event)> {
+        self.events
+            .values()
+            .flat_map(|v| {
+                v.iter()
+                    .filter(|e| matches!(e.contents, EventType::AddComment(_)))
+                    .enumerate()
+            })
+            .find(|(_, e)| &e.id == evt)
     }
 
     pub fn refresh_metadata(&mut self) {
@@ -147,26 +168,36 @@ impl Task {
                     EventType::AddComment(txt) => {
                         let mut edits = BTreeMap::new();
                         edits.insert(e.date, vec![txt.clone()]);
+                        let mut read = HashSet::new();
+                        read.insert(e.owner);
                         self.current_comments
                             .entry(e.date)
                             .or_insert(Vec::new())
-                            .push(edits);
+                            .push(Comment { edits, read });
                     }
-                    EventType::EditComment(evt, txt) => {
-                        if let Some((id, evt)) = self
-                            .events
-                            .values()
-                            .flat_map(|v| {
-                                v.iter()
-                                    .filter(|e| matches!(e.contents, EventType::AddComment(_)))
-                                    .enumerate()
-                            })
-                            .find(|(_, e)| &e.id == evt)
-                        {
-                            self.current_comments.get_mut(&evt.date).unwrap()[id]
+                    EventType::EditComment(comment, txt) => {
+                        if let Some((id, comment)) = self.find_event(comment) {
+                            let comment_date = comment.date;
+                            let comment = &mut self.current_comments.get_mut(&comment_date).unwrap()[id];
+                            comment
+                                .edits
                                 .entry(e.date)
                                 .or_insert(Vec::new())
                                 .push(txt.clone());
+                            comment.read = HashSet::new();
+                            comment.read.insert(e.owner);
+                        }
+                    }
+                    EventType::SetCommentRead(comment, now_read) => {
+                        if let Some((id, comment)) = self.find_event(comment) {
+                            let comment_date = comment.date;
+                            let read_set = &mut self.current_comments.get_mut(&comment_date).unwrap()[id]
+                                .read;
+                            if *now_read {
+                                read_set.insert(e.owner);
+                            } else {
+                                read_set.remove(&e.owner);
+                            }
                         }
                     }
                 }
@@ -205,6 +236,7 @@ pub enum EventType {
     RmTag(TagId),
     AddComment(String),
     EditComment(EventId, String),
+    SetCommentRead(EventId, bool),
 }
 
 #[derive(Debug, serde::Deserialize, serde::Serialize)]
@@ -404,6 +436,11 @@ pub enum NewEventContents {
         comment: EventId,
         text: String,
     },
+    SetCommentRead {
+        untrusted_task: TaskId,
+        comment: EventId,
+        now_read: bool,
+    },
 }
 
 #[async_trait]
@@ -516,6 +553,14 @@ impl NewEvent {
                 *untrusted_task,
                 EventType::EditComment(*comment, text.clone())
             ),
+            NewEventContents::SetCommentRead {
+                untrusted_task,
+                comment,
+                now_read,
+            } => event!(
+                *untrusted_task,
+                EventType::SetCommentRead(*comment, *now_read)
+            ),
         }
         res
     }
@@ -565,6 +610,13 @@ impl NewEvent {
                         format!("checking if comment {:?} is first comment", comment)
                     })?;
                 is_comment_owner || (auth!(task).can_edit && is_first_comment)
+            }
+            NewEventContents::SetCommentRead { comment, .. } => {
+                let task = db
+                    .get_task_for_comment(comment)
+                    .await
+                    .with_context(|| format!("getting task for comment {:?}", comment))?;
+                auth!(task).can_read
             }
         })
     }

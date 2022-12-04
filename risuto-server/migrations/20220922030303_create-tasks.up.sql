@@ -158,3 +158,17 @@ CREATE TABLE edit_comment_events (
     FOREIGN KEY (comment_id) REFERENCES add_comment_events (id)
         ON DELETE CASCADE
 );
+
+CREATE TABLE set_comment_read_events (
+    id UUID PRIMARY KEY NOT NULL,
+    owner_id UUID NOT NULL,
+    date TIMESTAMP NOT NULL,
+
+    comment_id UUID NOT NULL,
+    read BOOLEAN NOT NULL,
+
+    FOREIGN KEY (owner_id) REFERENCES users (id)
+        ON DELETE CASCADE,
+    FOREIGN KEY (comment_id) REFERENCES add_comment_events (id)
+        ON DELETE CASCADE
+);

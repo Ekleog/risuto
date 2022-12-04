@@ -27,6 +27,15 @@ fn gen_task_title() -> String {
     mockd::words::sentence(TASK_TITLE_LEN)
 }
 
+fn gen_comment_text() -> String {
+    mockd::words::paragraph(
+        COMMENT_PARAGRAPH_COUNT,
+        COMMENT_SENTENCE_COUNT,
+        COMMENT_WORD_COUNT,
+        String::from("\n"),
+    )
+}
+
 fn gen_bool() -> bool {
     // mockd's bool generation is borken https://github.com/jerusdp/mockd/pull/178
     simplerand::randn(2) == 0
@@ -100,14 +109,10 @@ fn main() {
             gen_user(),
             mockd::datetime::date(),
             gen_task(),
-            mockd::words::paragraph(
-                COMMENT_PARAGRAPH_COUNT,
-                COMMENT_SENTENCE_COUNT,
-                COMMENT_WORD_COUNT,
-                String::from("\n"),
-            ),
+            gen_comment_text(),
         )
     });
+    let gen_comment = || -> String { comments[simplerand::randn(comments.len())].clone() };
 
     // Helper macro
     macro_rules! evt_gen {
@@ -168,4 +173,6 @@ fn main() {
         gen_bool(),
     );
     evt_gen!("remove_tag_events", "'{}', '{}'", gen_task(), gen_tag());
+    evt_gen!("edit_comment_events", "'{}', '{}'", gen_comment(), gen_comment_text());
+    evt_gen!("set_comment_read_events", "'{}', '{}'", gen_comment(), gen_bool());
 }

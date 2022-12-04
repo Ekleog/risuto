@@ -1,4 +1,5 @@
 
+DROP TABLE set_comment_read_events;
 DROP TABLE edit_comment_events;
 DROP TABLE add_comment_events;
 DROP TABLE remove_tag_events;

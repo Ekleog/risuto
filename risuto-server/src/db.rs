@@ -532,6 +532,26 @@ async fn fetch_tasks_from_tmp_tasks_table(
         ),
     );
 
+    query_events!(
+        full: "
+            SELECT e.id, e.owner_id, e.date, e.comment_id, e.read, ace.task_id
+                FROM tmp_tasks t
+            INNER JOIN add_comment_events ace
+                ON t.id = ace.task_id
+            INNER JOIN set_comment_read_events e
+                ON ace.id = e.comment_id
+        ",
+        "set_comment_read_events",
+        "task_id",
+        |e| EventType::SetCommentRead(
+            EventId(
+                e.try_get("comment_id")
+                    .context("retrieving comment_id field")?
+            ),
+            e.try_get("read").context("retrieving read field")?
+        ),
+    );
+
     for t in tasks.values_mut() {
         t.refresh_metadata();
     }
@@ -623,6 +643,9 @@ pub async fn submit_event(conn: &mut sqlx::PgConnection, e: NewEvent) -> Result<
         }
         NewEventContents::EditComment { comment, text, .. } => {
             insert_event!("edit_comment_events", "$4, $5", comment.0, text)
+        }
+        NewEventContents::SetCommentRead { comment, now_read, .. } => {
+            insert_event!("set_comment_read_events", "$4, $5", comment.0, now_read)
         }
     };
 
