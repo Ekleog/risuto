@@ -1,3 +1,7 @@
+use std::collections::HashMap;
+
+use chrono::Duration;
+
 const NUM_USERS: usize = 3;
 
 const NUM_TAGS: usize = 15;
@@ -99,22 +103,30 @@ fn main() {
     let gen_task = || -> String { tasks[simplerand::randn(tasks.len())].clone() };
 
     // First generate add_comment_events, as they need special handling
-    let mut comments = Vec::new();
+    let mut comments = HashMap::new();
     gen_n_items("add_comment_events", NUM_EVENTS_PER_TYPE, |_| {
         let uuid = mockd::unique::uuid_v4();
-        comments.push(uuid.clone());
+        let date = mockd::datetime::date();
+        comments.insert(uuid.clone(), date.clone());
         format!(
             "('{}', '{}', '{}', '{}', '{}')",
             uuid,
             gen_user(),
-            mockd::datetime::date(),
+            date,
             gen_task(),
             gen_comment_text(),
         )
     });
-    let gen_comment = || -> String { comments[simplerand::randn(comments.len())].clone() };
+    let gen_comment = || -> String {
+        comments
+            .keys()
+            .skip(simplerand::randn(comments.len()))
+            .next()
+            .unwrap()
+            .clone()
+    };
 
-    // Helper macro
+    // Helper macros
     macro_rules! evt_gen {
         ( $table:expr, $($t:tt)* ) => {
             gen_n_items($table, NUM_EVENTS_PER_TYPE, |_| {
@@ -123,6 +135,25 @@ fn main() {
                     mockd::unique::uuid_v4(),
                     gen_user(),
                     mockd::datetime::date(),
+                    format!($($t)*),
+                )
+            })
+        }
+    }
+    macro_rules! comm_evt_gen {
+        ( $table:expr, $($t:tt)* ) => {
+            gen_n_items($table, NUM_EVENTS_PER_TYPE, |_| {
+                let comm = gen_comment();
+                let date = comments.get(&comm).unwrap();
+                let offset = Duration::milliseconds(simplerand::randn(i64::MAX));
+                let second = Duration::milliseconds(1);
+                let date = date.checked_add_signed(offset).unwrap_or(date.checked_add_signed(second).unwrap());
+                format!(
+                    "('{}', '{}', '{}', '{}', {})",
+                    mockd::unique::uuid_v4(),
+                    gen_user(),
+                    date,
+                    comm,
                     format!($($t)*),
                 )
             })
@@ -173,16 +204,6 @@ fn main() {
         gen_bool(),
     );
     evt_gen!("remove_tag_events", "'{}', '{}'", gen_task(), gen_tag());
-    evt_gen!(
-        "edit_comment_events",
-        "'{}', '{}'",
-        gen_comment(),
-        gen_comment_text()
-    );
-    evt_gen!(
-        "set_comment_read_events",
-        "'{}', '{}'",
-        gen_comment(),
-        gen_bool()
-    );
+    comm_evt_gen!("edit_comment_events", "'{}'", gen_comment_text(),);
+    comm_evt_gen!("set_comment_read_events", "'{}'", gen_bool(),);
 }
