@@ -10,10 +10,10 @@ use axum::{
     routing::{get, post},
     Extension, Json, Router,
 };
-use futures::{stream, StreamExt};
-use risuto_api::{AuthToken, DbDump, NewSession, UserId, Uuid};
+use futures::{channel::mpsc, select, SinkExt, StreamExt};
+use risuto_api::{AuthToken, DbDump, FeedMessage, NewSession, UserId, Uuid};
 use std::{collections::HashMap, net::SocketAddr, sync::Arc};
-use tokio::sync::{Mutex, RwLock};
+use tokio::sync::RwLock;
 use tower_http::trace::TraceLayer;
 
 mod db;
@@ -197,30 +197,94 @@ async fn event_feed(
                     if let Ok(user) = db::recover_session(&mut conn, AuthToken(token)).await {
                         if let Ok(_) = sock.send(Message::Text(String::from("ok"))).await {
                             tracing::debug!(?user, "event feed websocket auth success");
-                            feeds.clone().add_for_user(user, sock).await;
+                            feeds.add_for_user(user, sock).await;
                             return;
                         }
                     }
                 }
             }
             tracing::debug!(?token, "event feed websocket auth failure");
-            let _ = sock.send(Message::Text(String::from("permission denied"))).await;
+            let _ = sock
+                .send(Message::Text(String::from("permission denied")))
+                .await;
         }
     }))
 }
 
 #[derive(Clone, Debug)]
-struct UserFeeds(Arc<RwLock<HashMap<UserId, Vec<Mutex<WebSocket>>>>>);
+struct UserFeeds(Arc<RwLock<HashMap<UserId, HashMap<Uuid, mpsc::UnboundedSender<FeedMessage>>>>>);
 
 impl UserFeeds {
     async fn add_for_user(self, user: UserId, sock: WebSocket) {
+        // Create relayer channel
+        // Note: if this were bounded, there would be a deadlock between the write-lock to remove a channel and the read-lock to send an event to all interested sockets
+        let (sender, mut receiver) = mpsc::unbounded();
+        let sender_id = Uuid::new_v4();
+
+        // Add relayer endpoint to hashmap
         // TODO: limit to some reasonable number of sockets, to avoid starvations
         self.0
             .write()
             .await
             .entry(user)
-            .or_insert_with(Vec::new)
-            .push(Mutex::new(sock));
+            .or_insert_with(HashMap::new)
+            .insert(sender_id, sender);
+
+        // Start relayer queue
+        let this = self.clone();
+        let user = user.clone();
+        let mut sock = sock.fuse();
+        tokio::spawn(async move {
+            macro_rules! remove_self {
+                () => {{
+                    this.0
+                        .write()
+                        .await
+                        .get_mut(&user)
+                        .expect("user {user:?} disappeared")
+                        .remove(&sender_id);
+                    return;
+                }};
+            }
+            macro_rules! send_message {
+                ( $msg:expr ) => {{
+                    let msg: FeedMessage = $msg;
+                    let json = match serde_json::to_vec(&msg) {
+                        Ok(json) => json,
+                        Err(err) => {
+                            tracing::error!(?err, ?msg, "failed serializing message to json");
+                            continue;
+                        }
+                    };
+                    if let Err(_) = sock.send(Message::Binary(json)).await {
+                        // TODO: check error details, using axum-tungstenite, to confirm we need to remove this socket
+                        remove_self!();
+                    }
+                }};
+            }
+            loop {
+                select! {
+                    msg = receiver.next() => match msg {
+                        None => remove_self!(),
+                        Some(msg) => send_message!(msg),
+                    },
+                    msg = sock.next() => match msg {
+                        None => remove_self!(),
+                        Some(Ok(Message::Text(msg))) => {
+                            if msg != "ping" {
+                                tracing::warn!("received unexpected message from client: {msg:?}");
+                                remove_self!();
+                            }
+                            send_message!(FeedMessage::Pong);
+                        }
+                        Some(msg) => {
+                            tracing::warn!("received unexpected message from client: {msg:?}");
+                            remove_self!();
+                        }
+                    },
+                }
+            }
+        });
     }
 
     async fn relay_event(&self, mut db: db::PostgresDb<'_>, mut e: risuto_api::NewEvent) {
@@ -228,15 +292,6 @@ impl UserFeeds {
             tracing::error!(?err, "failed to make untrusted event {:?} trusted", e);
             return;
         }
-
-        let json = match serde_json::to_vec(&e) {
-            Ok(json) => json,
-            Err(err) => {
-                tracing::error!(?err, event=?e, "failed to serialize evetn to json");
-                return;
-            }
-        };
-        let json_ref = &json[..];
 
         let tasks = e
             .untrusted_task_event_list()
@@ -246,40 +301,18 @@ impl UserFeeds {
 
         // TODO: magic numbers below should be at least explained
         db::users_interested_by(&mut db.conn, &tasks)
-            .for_each_concurrent(Some(16), |u| async move {
-                match u {
-                    Err(err) => {
-                        tracing::error!(?err, "error occurred while listing interested users");
-                    }
-                    Ok(u) => {
-                        let ids_to_rm = if let Some(socks) = self.0.read().await.get(&u) {
-                            stream::iter(socks.iter().enumerate())
-                                .filter_map(|(i, s)| async move {
-                                    if let Err(_) = s
-                                        .lock()
-                                        .await
-                                        .send(Message::Binary(json_ref.to_vec()))
-                                        .await
-                                    {
-                                        // TODO: check error details, using axum-tungstenite, to confirm we need to remove this socket
-                                        Some(i)
-                                    } else {
-                                        None
-                                    }
-                                })
-                                .collect::<Vec<_>>()
-                                .await
-                        } else {
-                            Vec::new()
-                        };
-                        if !ids_to_rm.is_empty() {
-                            let mut users = self.0.write().await;
-                            let socks = users
-                                .get_mut(&u)
-                                .expect("we should never remove UserId's from UserFeeds");
-                            for i in ids_to_rm.into_iter().rev() {
-                                // iterate from last to remove to first, as we can swap with the last item
-                                socks.swap_remove(i);
+            .for_each_concurrent(Some(16), |u| {
+                let e = e.clone();
+                async move {
+                    match u {
+                        Err(err) => {
+                            tracing::error!(?err, "error occurred while listing interested users");
+                        }
+                        Ok(u) => {
+                            if let Some(socks) = self.0.read().await.get(&u) {
+                                for s in socks.values() {
+                                    let _ = s.unbounded_send(FeedMessage::NewEvent(e.clone()));
+                                }
                             }
                         }
                     }
