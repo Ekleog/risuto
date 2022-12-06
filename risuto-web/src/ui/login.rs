@@ -60,7 +60,7 @@ impl Component for Login {
                 let host = self.host.clone();
                 let user = self.user.clone();
                 ctx.link().send_future(
-                    api::auth(reqwest::Client::new(), self.host.clone(), session)
+                    api::auth(self.host.clone(), session)
                         .map(move |token| LoginMsg::Authed(host, user, token)),
                 );
                 // TODO: show some kind of indicator that auth is in progress?

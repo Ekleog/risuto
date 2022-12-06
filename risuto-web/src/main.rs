@@ -10,6 +10,10 @@ mod ui;
 
 const KEY_LOGIN: &str = "login";
 
+lazy_static::lazy_static! {
+    static ref CLIENT: reqwest::Client = reqwest::Client::new();
+}
+
 fn main() {
     tracing_wasm::set_as_global_default();
     yew::set_custom_panic_hook(Box::new(|info| {
@@ -57,7 +61,6 @@ pub enum MainMsg {
 }
 
 pub struct Main {
-    client: reqwest::Client,
     login: Option<LoginInfo>,
     logout: Option<LoginInfo>, // info saved from login info, without the token
 }
@@ -68,7 +71,6 @@ impl Component for Main {
 
     fn create(_ctx: &Context<Self>) -> Self {
         Main {
-            client: reqwest::Client::new(),
             login: LocalStorage::get(KEY_LOGIN).ok(),
             logout: None,
         }
@@ -84,11 +86,7 @@ impl Component for Main {
             MainMsg::Logout => {
                 // TODO: warn the user upon logout that unsynced changes may be lost
                 let login = self.login.take().expect("got logout while not logged in");
-                spawn_local(api::unauth(
-                    self.client.clone(),
-                    login.host.clone(),
-                    login.token,
-                ));
+                spawn_local(api::unauth(login.host.clone(), login.token));
                 LocalStorage::delete(KEY_LOGIN);
                 self.logout = Some(LoginInfo {
                     host: login.host,

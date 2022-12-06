@@ -1,5 +1,5 @@
-use yew::prelude::*;
 use crate::ui;
+use yew::prelude::*;
 
 #[derive(Clone, PartialEq, Properties)]
 pub struct OfflineBannerProps {

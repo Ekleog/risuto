@@ -36,7 +36,6 @@ pub enum ConnState {
 }
 
 pub struct App {
-    client: reqwest::Client,
     db: DbDump,
     connection_state: ConnState,
     tag: Option<TagId>,
@@ -99,14 +98,10 @@ impl Component for App {
     type Properties = AppProps;
 
     fn create(ctx: &Context<Self>) -> Self {
-        // Prepare basic metadata
-        let client = reqwest::Client::new();
-
         // Connect to websocket event feed
         let feed_sender = ctx.link().clone();
         let (feed_cancel_receiver, feed_canceller) = oneshot::channel();
         spawn_local(api::start_event_feed(
-            client.clone(),
             ctx.props().login.clone(),
             feed_sender,
             feed_cancel_receiver,
@@ -118,11 +113,10 @@ impl Component for App {
 
         // Start event submission if need be
         if !events_pending_submission.is_empty() {
-            send_event(&client, ctx, events_pending_submission[0].clone());
+            send_event(ctx, events_pending_submission[0].clone());
         }
 
         App {
-            client,
             db: DbDump::stub(),
             connection_state: ConnState::Disconnected,
             tag: Some(TagId::stub()), // A value that cannot happen when choosing an actual tag
@@ -188,7 +182,7 @@ impl Component for App {
                 tracing::trace!("events pending submission queue saved");
                 if self.events_pending_submission.len() == 1 {
                     // this is the first event from the queue
-                    send_event(&self.client, ctx, e.clone());
+                    send_event(ctx, e.clone());
                     tracing::debug!("started event submission with event {e:?}");
                 }
                 self.locally_insert_new_event(e.clone());
@@ -201,7 +195,7 @@ impl Component for App {
                     .expect("failed saving queue to local storage");
                 if !self.events_pending_submission.is_empty() {
                     let e = self.events_pending_submission[0].clone();
-                    send_event(&self.client, ctx, e);
+                    send_event(ctx, e);
                 }
             }
         }
@@ -363,11 +357,10 @@ fn compute_reordering_events(
         .collect()
 }
 
-fn send_event(client: &reqwest::Client, ctx: &Context<App>, e: NewEvent) {
-    let client = client.clone();
+fn send_event(ctx: &Context<App>, e: NewEvent) {
     let info = ctx.props().login.clone();
     ctx.link().send_future(async move {
-        api::send_event(&client, &info, e).await;
+        api::send_event(&info, e).await;
         AppMsg::EventSubmissionComplete
     });
 }

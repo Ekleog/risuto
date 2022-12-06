@@ -13,12 +13,8 @@ const DISCONNECT_INTERVAL_SECS: i64 = 20;
 // Space each reconnect attempt by ATTEMPT_SPACING
 const ATTEMPT_SPACING_SECS: i64 = 1;
 
-pub async fn auth(
-    client: reqwest::Client,
-    host: String,
-    session: NewSession,
-) -> anyhow::Result<AuthToken> {
-    Ok(client
+pub async fn auth(host: String, session: NewSession) -> anyhow::Result<AuthToken> {
+    Ok(crate::CLIENT
         .post(format!("{}/api/auth", host))
         .json(&session)
         .send()
@@ -27,9 +23,9 @@ pub async fn auth(
         .await?)
 }
 
-pub async fn unauth(client: reqwest::Client, host: String, token: AuthToken) {
+pub async fn unauth(host: String, token: AuthToken) {
     // TODO: make this a loop in case of network issues?
-    let resp = client
+    let resp = crate::CLIENT
         .post(format!("{}/api/unauth", host))
         .bearer_auth(token.0)
         .send()
@@ -43,9 +39,9 @@ pub async fn unauth(client: reqwest::Client, host: String, token: AuthToken) {
     }
 }
 
-pub async fn fetch_db_dump(client: &reqwest::Client, login: &LoginInfo) -> DbDump {
+pub async fn fetch_db_dump(login: &LoginInfo) -> DbDump {
     loop {
-        match try_fetch_db_dump(&client, &login).await {
+        match try_fetch_db_dump(&login).await {
             Ok(db) => return db,
             Err(e) if e.is_timeout() => continue,
             // TODO: at least handle unauthorized error
@@ -54,8 +50,8 @@ pub async fn fetch_db_dump(client: &reqwest::Client, login: &LoginInfo) -> DbDum
     }
 }
 
-async fn try_fetch_db_dump(client: &reqwest::Client, login: &LoginInfo) -> reqwest::Result<DbDump> {
-    client
+async fn try_fetch_db_dump(login: &LoginInfo) -> reqwest::Result<DbDump> {
+    crate::CLIENT
         .get(format!("{}/api/fetch-unarchived", login.host))
         .bearer_auth(login.token.0)
         .send()
@@ -75,7 +71,6 @@ async fn sleep_until(t: Time) {
 }
 
 pub async fn start_event_feed(
-    client: reqwest::Client,
     login: LoginInfo,
     feed_sender: yew::html::Scope<ui::App>,
     mut cancel: oneshot::Sender<()>,
@@ -119,7 +114,7 @@ pub async fn start_event_feed(
         // Fetch the database
         // TODO: this should happen async from the websocket handling to not risk stalling the connection.
         // ui::App should already be ready to handle it thanks to its connection_state member
-        let db = fetch_db_dump(&client, &login).await;
+        let db = fetch_db_dump(&login).await;
         tracing::info!("successfully fetched database");
         feed_sender.send_message(ui::AppMsg::ReceivedDb(db));
 
@@ -160,9 +155,9 @@ pub async fn start_event_feed(
     }
 }
 
-pub async fn send_event(client: &reqwest::Client, login: &LoginInfo, event: NewEvent) {
+pub async fn send_event(login: &LoginInfo, event: NewEvent) {
     loop {
-        let res = client
+        let res = crate::CLIENT
             .post(format!("{}/api/submit-event", login.host))
             .bearer_auth(login.token.0)
             .json(&event)
