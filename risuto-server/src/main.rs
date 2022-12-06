@@ -198,10 +198,13 @@ async fn event_feed(
                         if let Ok(_) = sock.send(Message::Text(String::from("ok"))).await {
                             tracing::debug!(?user, "event feed websocket auth success");
                             feeds.clone().add_for_user(user, sock).await;
+                            return;
                         }
                     }
                 }
             }
+            tracing::debug!(?token, "event feed websocket auth failure");
+            let _ = sock.send(Message::Text(String::from("permission denied"))).await;
         }
     }))
 }

@@ -1,8 +1,17 @@
-use futures::{channel::oneshot, select, FutureExt, SinkExt, StreamExt};
+use chrono::Utc;
+use futures::{channel::oneshot, pin_mut, select, FutureExt, SinkExt, StreamExt};
 use risuto_api::*;
 use ws_stream_wasm::{WsMessage, WsMeta};
 
 use crate::{ui, LoginInfo};
+
+// TODO: make below chrono::Duration once https://github.com/chronotope/chrono/issues/309 fixeds
+// Pings will be sent every PING_INTERVAL
+const PING_INTERVAL_SECS: i64 = 10;
+// If the interval between two pongs is more than DISCONNECT_INTERVAL, disconnect
+const DISCONNECT_INTERVAL_SECS: i64 = 20;
+// Space each reconnect attempt by ATTEMPT_SPACING
+const ATTEMPT_SPACING_SECS: i64 = 1;
 
 pub async fn auth(
     client: reqwest::Client,
@@ -55,55 +64,97 @@ async fn try_fetch_db_dump(client: &reqwest::Client, login: &LoginInfo) -> reqwe
         .await
 }
 
+async fn sleep_for(d: chrono::Duration) {
+    wasm_timer::Delay::new(d.to_std().unwrap_or(std::time::Duration::from_secs(0)))
+        .await
+        .expect("failed sleeping")
+}
+
+async fn sleep_until(t: Time) {
+    sleep_for(t - Utc::now()).await
+}
+
 pub async fn start_event_feed(
     client: reqwest::Client,
     login: LoginInfo,
     feed_sender: yew::html::Scope<ui::App>,
     mut cancel: oneshot::Sender<()>,
 ) {
-    // Connect to websocket
-    // TODO: split connect & auth into another function that returns an error on perm-denied
-    let ws_url = format!(
-        "ws{}/ws/event-feed",
-        login.host.strip_prefix("http").expect("TODO")
-    );
-    let (_, mut sock) = WsMeta::connect(ws_url, None).await.expect("TODO");
-
-    // Authentify
-    let mut buf = Uuid::encode_buffer();
-    sock.send(WsMessage::Text(
-        login.token.0.as_hyphenated().encode_lower(&mut buf).into(),
-    ))
-    .await
-    .expect("TODO");
-    let res = sock.next().await.expect("TODO");
-    assert_eq!(res, WsMessage::Text("ok".into()));
-    feed_sender.send_message(ui::AppMsg::WebsocketConnected);
-
-    // Fetch the database
-    // TODO: this should happen async from the websocket handling to not risk stalling the connection.
-    // ui::App should already be ready to handle it thanks to its connection_state member
-    let db = fetch_db_dump(&client, &login).await;
-    feed_sender.send_message(ui::AppMsg::ReceivedDb(db));
-
-    // Finally, run the event feed
-    let mut sock = sock.fuse();
-    let mut cancellation = cancel.cancellation().fuse();
-    loop {
-        // TODO: ping-pong to detect disconnection
-        select! {
-            _ = cancellation => {
-                sock.into_inner().close().await.expect("TODO");
-                tracing::info!("disconnected from event feed");
-                return;
+    let mut first_attempt = true;
+    'reconnect: loop {
+        match first_attempt {
+            true => first_attempt = false,
+            false => {
+                tracing::warn!("lost event feed connection");
+                feed_sender.send_message(ui::AppMsg::WebsocketDisconnected);
+                sleep_for(chrono::Duration::seconds(ATTEMPT_SPACING_SECS)).await;
             }
-            msg = sock.next() => {
-                let msg = match msg {
-                    None => panic!("TODO"),
-                    Some(WsMessage::Text(t)) => serde_json::from_str(&t),
-                    Some(WsMessage::Binary(b)) => serde_json::from_slice(&b),
-                }.expect("TODO");
-                feed_sender.send_message(ui::AppMsg::NewNetworkEvent(msg));
+        }
+
+        // Connect to websocket
+        let ws_url = format!(
+            "ws{}/ws/event-feed",
+            login.host.strip_prefix("http").expect("TODO")
+        );
+        let mut sock = match WsMeta::connect(ws_url, None).await {
+            Ok((_, s)) => s,
+            Err(_) => continue 'reconnect, // TODO: maybe the url is no tthe right one?
+        };
+
+        // Authentify
+        let mut buf = Uuid::encode_buffer();
+        sock.send(WsMessage::Text(
+            login.token.0.as_hyphenated().encode_lower(&mut buf).into(),
+        ))
+        .await
+        .expect("TODO");
+        let res = match sock.next().await {
+            Some(r) => r,
+            None => continue 'reconnect,
+        };
+        assert_eq!(res, WsMessage::Text("ok".into())); // TODO: handle permission denied response
+        tracing::info!("successfully authenticated to event feed");
+        feed_sender.send_message(ui::AppMsg::WebsocketConnected);
+
+        // Fetch the database
+        // TODO: this should happen async from the websocket handling to not risk stalling the connection.
+        // ui::App should already be ready to handle it thanks to its connection_state member
+        let db = fetch_db_dump(&client, &login).await;
+        tracing::info!("successfully fetched database");
+        feed_sender.send_message(ui::AppMsg::ReceivedDb(db));
+
+        // Finally, run the event feed
+        let mut next_ping = Utc::now();
+        let mut last_pong = Utc::now();
+        let mut sock = sock.fuse();
+        let mut cancellation = cancel.cancellation().fuse();
+        loop {
+            let delay_pong_reception =
+                sleep_until(last_pong + chrono::Duration::seconds(DISCONNECT_INTERVAL_SECS)).fuse();
+            let delay_ping_send = sleep_until(next_ping).fuse();
+            pin_mut!(delay_ping_send, delay_pong_reception);
+            select! {
+                _ = cancellation => {
+                    sock.into_inner().close().await.expect("TODO");
+                    tracing::info!("disconnected from event feed");
+                    return;
+                }
+                _ = delay_pong_reception => continue 'reconnect,
+                _ = delay_ping_send => {
+                    sock.send(WsMessage::Text("ping".to_string())).await.expect("TODO");
+                    next_ping += chrono::Duration::seconds(PING_INTERVAL_SECS);
+                }
+                msg = sock.next() => {
+                    let msg: FeedMessage = match msg {
+                        None => continue 'reconnect,
+                        Some(WsMessage::Text(t)) => serde_json::from_str(&t),
+                        Some(WsMessage::Binary(b)) => serde_json::from_slice(&b),
+                    }.expect("TODO");
+                    match msg {
+                        FeedMessage::Pong => last_pong = Utc::now(),
+                        FeedMessage::NewEvent(e) => feed_sender.send_message(ui::AppMsg::NewNetworkEvent(e)),
+                    }
+                }
             }
         }
     }

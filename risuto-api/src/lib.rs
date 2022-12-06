@@ -459,6 +459,12 @@ pub trait Db {
     async fn is_first_comment(&mut self, task: TaskId, comment: EventId) -> anyhow::Result<bool>;
 }
 
+#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
+pub enum FeedMessage {
+    Pong,
+    NewEvent(NewEvent),
+}
+
 #[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct NewEvent {
     pub id: EventId,

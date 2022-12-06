@@ -9,6 +9,7 @@ chrono = "0.4.22"
 futures = "0.3.25"
 getrandom = { version = "0.2", features = ["js"] }
 gloo-storage = "0.2.2"
+parking_lot = { version = "0.11.2", features = ["wasm-bindgen"] } # work around https://github.com/tomaka/wasm-timer/issues/14
 reqwest = { version = "0.11.12", features = ["json"] }
 risuto-api = { path = "../risuto-api" }
 serde = "1.0"
@@ -18,6 +19,7 @@ tracing = "0.1.37"
 tracing-wasm = "0.2.1"
 yew = "0.19.3"
 wasm-bindgen-futures = "0.4.33"
+wasm-timer = "0.2.5"
 web-sys = "0.3.60"
 whoami = "1.2"
 ws_stream_wasm = "0.7.3"
