@@ -8,7 +8,7 @@ pub struct EventSubmissionSpinnerProps {
 }
 
 #[function_component(EventSubmissionSpinner)]
-pub fn tag_list(p: &EventSubmissionSpinnerProps) -> Html {
+pub fn event_submission_spinner(p: &EventSubmissionSpinnerProps) -> Html {
     html! {
         <div class="dropdown">
             <button
