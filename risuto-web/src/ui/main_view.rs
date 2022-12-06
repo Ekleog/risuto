@@ -104,8 +104,8 @@ pub fn main_view(p: &MainViewProps) -> Html {
                 ) }
                 aria-hidden={ if offline { "false" } else { "true" } }
             >
-                <div class="spinner-border m-4" role="status"></div>
-                <div class="fs-5">{ offline_banner_message }</div>
+                <div class="spinner-border spinner-border-sm m-2" role="status"></div>
+                <div>{ offline_banner_message }</div>
             </div>
 
             // Top-right corner
