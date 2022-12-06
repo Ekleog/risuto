@@ -1,6 +1,9 @@
 mod app;
 pub use app::{App, AppMsg, ConnState};
 
+mod event_submission_spinner;
+pub use event_submission_spinner::EventSubmissionSpinner;
+
 mod login;
 pub use login::Login;
 

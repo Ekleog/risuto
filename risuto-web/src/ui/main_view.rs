@@ -90,7 +90,9 @@ pub fn main_view(p: &MainViewProps) -> Html {
     let offline = !matches!(p.connection_state, ui::ConnState::Connected);
     let offline_banner_message = match p.connection_state {
         ui::ConnState::Disconnected => "Currently offline. Trying to reconnect...",
-        ui::ConnState::WebsocketConnected(_) | ui::ConnState::Connected => "Currently reconnecting...",
+        ui::ConnState::WebsocketConnected(_) | ui::ConnState::Connected => {
+            "Currently reconnecting..."
+        }
     };
 
     // Put everything together
@@ -110,29 +112,9 @@ pub fn main_view(p: &MainViewProps) -> Html {
 
             // Top-right corner
             <div class="position-absolute top-0 end-0 float-above d-flex">
-                <div class="dropdown">
-                    <button
-                        class={ classes!(
-                            "events-pending-spinner",
-                            p.events_pending_submission.is_empty().then(|| "no-events"),
-                            "btn", "btn-secondary", "btn-circle", "m-3"
-                        ) }
-                        type="button"
-                        data-bs-toggle="dropdown"
-                    >
-                        <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
-                        <span class="visually-hidden">{ "Submitting events..." }</span>
-                    </button>
-                    <ul class={ classes!(
-                        "events-pending-list",
-                        p.events_pending_submission.is_empty().then(|| "no-events"),
-                        "dropdown-menu", "dropdown-menu-dark"
-                    ) }>
-                        { for p.events_pending_submission.iter().map(|e| html! {
-                            <li>{ format!("{:?}", e) }</li> // TODO: make events prettier
-                        }) }
-                    </ul>
-                </div>
+                <ui::EventSubmissionSpinner
+                    events_pending_submission={p.events_pending_submission.clone()}
+                />
                 <div>
                     <button onclick={p.on_logout.reform(|_| ())}>
                         { "Logout" }
