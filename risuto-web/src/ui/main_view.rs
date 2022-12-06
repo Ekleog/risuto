@@ -88,6 +88,11 @@ pub fn main_view(p: &MainViewProps) -> Html {
 
     // TODO: display different messages between Disconnected and WebsocketConnected
     let offline = !matches!(p.connection_state, ui::ConnState::Connected);
+    let offline_banner_message = match p.connection_state {
+        ui::ConnState::Disconnected => "Currently offline. Trying to reconnect...",
+        ui::ConnState::WebsocketConnected(_) => "Currently reconnecting...",
+        ui::ConnState::Connected => "Connected. You should not be seeing this banner, this is a bug!",
+    };
 
     // Put everything together
     html! {
@@ -101,7 +106,7 @@ pub fn main_view(p: &MainViewProps) -> Html {
                 aria-hidden={ if offline { "false" } else { "true" } }
             >
                 <div class="spinner-border m-4" role="status"></div>
-                <div class="fs-5">{ "Currently offline, trying to reconnect..." }</div>
+                <div class="fs-5">{ offline_banner_message }</div>
             </div>
 
             // Top-right corner
