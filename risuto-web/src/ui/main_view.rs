@@ -90,8 +90,7 @@ pub fn main_view(p: &MainViewProps) -> Html {
     let offline = !matches!(p.connection_state, ui::ConnState::Connected);
     let offline_banner_message = match p.connection_state {
         ui::ConnState::Disconnected => "Currently offline. Trying to reconnect...",
-        ui::ConnState::WebsocketConnected(_) => "Currently reconnecting...",
-        ui::ConnState::Connected => "Connected. You should not be seeing this banner, this is a bug!",
+        ui::ConnState::WebsocketConnected(_) | ui::ConnState::Connected => "Currently reconnecting...",
     };
 
     // Put everything together
