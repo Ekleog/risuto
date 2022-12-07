@@ -11,7 +11,15 @@ mod ui;
 const KEY_LOGIN: &str = "login";
 
 lazy_static::lazy_static! {
-    static ref CLIENT: reqwest::Client = reqwest::Client::new();
+    static ref CLIENT: reqwest_middleware::ClientWithMiddleware = reqwest_middleware::ClientBuilder::new(reqwest::Client::new())
+        .with(reqwest_retry::RetryTransientMiddleware::new_with_policy(
+            reqwest_retry::policies::ExponentialBackoff::builder()
+                .retry_bounds(std::time::Duration::from_secs(1), std::time::Duration::from_secs(30))
+                .build_with_max_retries(u32::MAX)
+                // we can stay a long time off-network, and concurrent requests are limited to 1 anyway with the submission queue
+                // (except for the unauth requests but we do want to try our best actually delivering them too anyway)
+        ))
+        .build();
 }
 
 fn main() {

@@ -24,7 +24,6 @@ pub async fn auth(host: String, session: NewSession) -> anyhow::Result<AuthToken
 }
 
 pub async fn unauth(host: String, token: AuthToken) {
-    // TODO: make this a loop in case of network issues?
     let resp = crate::CLIENT
         .post(format!("{}/api/unauth", host))
         .bearer_auth(token.0)
@@ -40,24 +39,16 @@ pub async fn unauth(host: String, token: AuthToken) {
 }
 
 pub async fn fetch_db_dump(login: &LoginInfo) -> DbDump {
-    loop {
-        match try_fetch_db_dump(&login).await {
-            Ok(db) => return db,
-            Err(e) if e.is_timeout() => continue,
-            // TODO: at least handle unauthorized error
-            _ => panic!("failed to fetch db dump"), // TODO: should eg be a popup
-        }
-    }
-}
-
-async fn try_fetch_db_dump(login: &LoginInfo) -> reqwest::Result<DbDump> {
+    // TODO: at least handle unauthorized error
     crate::CLIENT
         .get(format!("{}/api/fetch-unarchived", login.host))
         .bearer_auth(login.token.0)
         .send()
-        .await?
+        .await
+        .expect("failed to fetch db dump") // TODO: should eg be a popup
         .json()
         .await
+        .expect("failed to fetch db dump") // TODO: should eg be a popup
 }
 
 async fn sleep_for(d: chrono::Duration) {
@@ -156,20 +147,17 @@ pub async fn start_event_feed(
 }
 
 pub async fn send_event(login: &LoginInfo, event: NewEvent) {
-    loop {
-        let res = crate::CLIENT
-            .post(format!("{}/api/submit-event", login.host))
-            .bearer_auth(login.token.0)
-            .json(&event)
-            .send()
-            .await;
-        match res {
-            // TODO: panicking on server message is Bad(tm)
-            // TODO: at least handle 403 forbidden answers
-            Ok(r) if r.status().is_success() => break,
-            Ok(r) => panic!("got non-successful response to event submission: {:?}", r),
-            Err(e) if e.is_timeout() => continue,
-            Err(e) => panic!("got reqwest error {:?}", e),
-        }
+    let res = crate::CLIENT
+        .post(format!("{}/api/submit-event", login.host))
+        .bearer_auth(login.token.0)
+        .json(&event)
+        .send()
+        .await;
+    match res {
+        // TODO: panicking on server message is Bad(tm)
+        // TODO: at least handle 403 forbidden answers
+        Ok(r) if r.status().is_success() => (),
+        Ok(r) => panic!("got non-successful response to event submission: {:?}", r),
+        Err(e) => panic!("got reqwest error {:?}", e),
     }
 }

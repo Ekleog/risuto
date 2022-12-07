@@ -12,6 +12,8 @@ gloo-storage = "0.2.2"
 lazy_static = "1.4"
 parking_lot = { version = "0.11.2", features = ["wasm-bindgen"] } # work around https://github.com/tomaka/wasm-timer/issues/14
 reqwest = { version = "0.11.12", features = ["json"] }
+reqwest-middleware = { git = "https://github.com/ekleog/reqwest-middleware", rev = "7690746f07df7d6acd1576e8eb28fdda3b6f50f4" }
+reqwest-retry = { git = "https://github.com/ekleog/reqwest-middleware", rev = "7690746f07df7d6acd1576e8eb28fdda3b6f50f4" }
 risuto-api = { path = "../risuto-api" }
 serde = "1.0"
 serde_json = "1.0"
