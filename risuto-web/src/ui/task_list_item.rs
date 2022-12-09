@@ -10,14 +10,12 @@ pub struct TaskListItemProps {
 
 #[function_component(TaskListItem)]
 pub fn task_list(p: &TaskListItemProps) -> Html {
-    let title_edit = use_state(|| None);
-
     html! { // align items vertically but also let them stretch
         <li class="list-group-item d-flex align-items-stretch">
             <div class="drag-handle d-flex align-items-center">
                 <div class="bi-btn bi-grip-vertical pe-3"></div>
             </div>
-            { title_div(&p, title_edit) }
+            <TitleDiv ..p.clone() />
             <div class="d-flex align-items-center">
                 { button_done_change(&p.task, &p.on_done_change) }
             </div>
@@ -25,44 +23,40 @@ pub fn task_list(p: &TaskListItemProps) -> Html {
     }
 }
 
-fn title_div(p: &TaskListItemProps, edit: UseStateHandle<Option<String>>) -> Html {
-    let current_title = p.task.current_title.clone();
+#[function_component(TitleDiv)]
+fn title_div(p: &TaskListItemProps) -> Html {
+    let div_ref = use_node_ref();
+
     let on_validate = {
-        let edit = edit.clone();
-        p.on_title_change.reform(move |t| {
-            edit.set(None);
-            t
+        let div_ref = div_ref.clone();
+        let initial_title = p.task.current_title.clone();
+        let on_title_change = p.on_title_change.clone();
+        Callback::from(move |()| {
+            let text = div_ref
+                .get()
+                .expect("validated while div_ref is not attached to an html element")
+                .text_content()
+                .expect("div_ref has no text_content");
+            if text != initial_title {
+                on_title_change.emit(text);
+            }
         })
     };
-    match (*edit).clone() {
-        None => html! {
-            <div
-                class="flex-fill d-flex align-items-center"
-                ondblclick={ Callback::from(move |_| {
-                    edit.set(Some(current_title.clone()))
-                }) }
-            >
-                { &p.task.current_title }
-            </div>
-        },
-        Some(t) => html! {
-            <div class="flex-fill d-flex align-items-center">
-                <input
-                    type="text"
-                    value={ t.clone() }
-                    onchange={ Callback::from(move |e: web_sys::Event| {
-                        let input: web_sys::HtmlInputElement = e.target_unchecked_into();
-                        edit.set(Some(input.value()))
-                    }) }
-                    onfocusout={ let t = t.clone(); on_validate.reform(move |_| t.clone()) }
-                    onkeyup={ Callback::from(move |e: web_sys::KeyboardEvent| {
-                        if e.key() == "Enter" {
-                            on_validate.emit(t.clone())
-                        }
-                    }) }
-                />
-            </div>
-        },
+
+    html! {
+        <div
+            ref={div_ref}
+            class="flex-fill d-flex align-items-center"
+            contenteditable="true"
+            onfocusout={ on_validate.reform(|_| ()) }
+            onkeydown={ Callback::from(move |e: web_sys::KeyboardEvent| {
+                if e.key() == "Enter" {
+                    on_validate.emit(())
+                }
+            }) }
+        >
+            { &p.task.current_title }
+        </div>
     }
 }
 
