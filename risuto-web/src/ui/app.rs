@@ -205,6 +205,16 @@ impl Component for App {
     fn view(&self, ctx: &Context<Self>) -> Html {
         let tasks = self.current_task_lists();
 
+        let on_title_change = {
+            let owner = self.db.owner.clone();
+            ctx.link().callback(move |(task, title)| {
+                AppMsg::NewUserEvent(NewEvent::now(
+                    owner,
+                    NewEventContents::SetTitle { task, title },
+                ))
+            })
+        };
+
         let on_done_change = {
             let owner = self.db.owner.clone();
             ctx.link().callback(move |(task, now_done)| {
@@ -260,6 +270,7 @@ impl Component for App {
                             tasks_open={tasks.open}
                             tasks_backlog={tasks.backlog}
                             on_logout={ctx.link().callback(|_| AppMsg::Logout)}
+                            {on_title_change}
                             {on_done_change}
                             {on_order_change}
                         />

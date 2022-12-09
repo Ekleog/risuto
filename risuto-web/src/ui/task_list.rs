@@ -8,6 +8,7 @@ use crate::ui;
 pub struct TaskListProps {
     pub ref_this: NodeRef,
     pub tasks: Rc<Vec<(TaskId, Task)>>,
+    pub on_title_change: Callback<(TaskId, String)>,
     pub on_done_change: Callback<(TaskId, bool)>,
 }
 
@@ -15,6 +16,10 @@ pub struct TaskListProps {
 pub fn task_list(p: &TaskListProps) -> Html {
     // First, build the list items
     let list_items = p.tasks.iter().map(|(id, t)| {
+        let on_title_change = {
+            let id = *id;
+            p.on_title_change.reform(move |new_title| (id, new_title))
+        };
         let on_done_change = {
             let id = *id;
             let is_done = t.is_done;
@@ -23,6 +28,7 @@ pub fn task_list(p: &TaskListProps) -> Html {
         html! {
             <ui::TaskListItem
                 task={ t.clone() }
+                { on_title_change }
                 { on_done_change }
             />
         }

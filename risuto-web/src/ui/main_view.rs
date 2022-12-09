@@ -22,6 +22,7 @@ pub struct MainViewProps {
     pub tasks_open: Rc<Vec<(TaskId, Task)>>,
     pub tasks_backlog: Rc<Vec<(TaskId, Task)>>,
     pub on_logout: Callback<()>,
+    pub on_title_change: Callback<(TaskId, String)>,
     pub on_done_change: Callback<(TaskId, bool)>,
     pub on_order_change: Callback<TaskOrderChangeEvent>,
 }
@@ -106,6 +107,7 @@ pub fn main_view(p: &MainViewProps) -> Html {
                 <ui::TaskList
                     ref_this={ref_open}
                     tasks={p.tasks_open.clone()}
+                    on_title_change={p.on_title_change.clone()}
                     on_done_change={p.on_done_change.clone()}
                 />
             </div>
@@ -116,6 +118,7 @@ pub fn main_view(p: &MainViewProps) -> Html {
                 <ui::TaskList
                     ref_this={ref_backlog}
                     tasks={p.tasks_backlog.clone()}
+                    on_title_change={p.on_title_change.clone()}
                     on_done_change={p.on_done_change.clone()}
                 />
             </div>
