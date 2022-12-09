@@ -53,7 +53,7 @@ fn main() {
             .expect("no #panic-message element")
             .set_inner_html(&message);
     }));
-    yew::start_app::<Main>();
+    yew::Renderer::<Main>::new().render();
 }
 
 #[derive(Clone, Debug, PartialEq, serde::Deserialize, serde::Serialize)]

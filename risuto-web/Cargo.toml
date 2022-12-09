@@ -20,7 +20,7 @@ serde_json = "1.0"
 sortable-js = "0.1.5"
 tracing = "0.1.37"
 tracing-wasm = "0.2.1"
-yew = "0.19.3"
+yew = { version = "0.20.0", features = ["csr"] }
 wasm-bindgen-futures = "0.4.33"
 wasm-timer = "0.2.5"
 web-sys = "0.3.60"
