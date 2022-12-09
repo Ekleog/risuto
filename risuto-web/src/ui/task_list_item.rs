@@ -50,8 +50,13 @@ fn title_div(p: &TaskListItemProps) -> Html {
             contenteditable="true"
             onfocusout={ on_validate.reform(|_| ()) }
             onkeydown={ Callback::from(move |e: web_sys::KeyboardEvent| {
-                if e.key() == "Enter" {
-                    on_validate.emit(())
+                match &e.key() as &str {
+                    "Enter" => on_validate.emit(()),
+                    "Escape" => {
+                        let elt: web_sys::HtmlElement = e.target_unchecked_into();
+                        let _ = elt.blur();
+                    }
+                    _ => (),
                 }
             }) }
         >
