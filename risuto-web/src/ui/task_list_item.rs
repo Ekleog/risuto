@@ -9,11 +9,17 @@ pub struct TaskListItemProps {
 
 #[function_component(TaskListItem)]
 pub fn task_list(p: &TaskListItemProps) -> Html {
-    html! {
-        <li class="list-group-item d-flex align-items-center">
-            <span class="drag-handle bi-btn bi-grip-vertical pe-3"></span>
-            <span class="flex-fill">{ &p.task.current_title }</span>
-            { button_done_change(&p.task, &p.on_done_change) }
+    html! { // align items vertically but also let them stretch
+        <li class="list-group-item d-flex align-items-stretch">
+            <div class="drag-handle d-flex align-items-center">
+                <div class="bi-btn bi-grip-vertical pe-3"></div>
+            </div>
+            <div class="flex-fill d-flex align-items-center">
+                { &p.task.current_title }
+            </div>
+            <div class="d-flex align-items-center">
+                { button_done_change(&p.task, &p.on_done_change) }
+            </div>
         </li>
     }
 }
