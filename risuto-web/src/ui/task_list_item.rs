@@ -14,7 +14,13 @@ pub fn task_list(p: &TaskListItemProps) -> Html {
 
     let title_div = {
         let current_title = p.task.current_title.clone();
-        let title_edit2 = title_edit.clone();
+        let on_validate = {
+            let title_edit = title_edit.clone();
+            p.on_title_change.reform(move |t| {
+                title_edit.set(None);
+                t
+            })
+        };
         match (*title_edit).clone() {
             None => html! {
                 <div
@@ -35,9 +41,11 @@ pub fn task_list(p: &TaskListItemProps) -> Html {
                             let input: web_sys::HtmlInputElement = e.target_unchecked_into();
                             title_edit.set(Some(input.value()))
                         }) }
-                        onfocusout={ p.on_title_change.reform(move |_| {
-                            title_edit2.set(None);
-                            t.clone()
+                        onfocusout={ let t = t.clone(); on_validate.reform(move |_| t.clone()) }
+                        onkeyup={ Callback::from(move |e: web_sys::KeyboardEvent| {
+                            if e.key() == "Enter" {
+                                on_validate.emit(t.clone())
+                            }
                         }) }
                     />
                 </div>
