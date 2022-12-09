@@ -80,3 +80,7 @@ $primary: $red;
 .float-above {
     z-index: 10;
 }
+
+.drag-handle {
+    cursor: grab;
+}
