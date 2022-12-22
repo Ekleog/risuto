@@ -3,10 +3,10 @@ SELECT
     t.id as task_id,
     COALESCE(
         (
-            SELECT stae.now_archived
-            FROM set_task_archived_events stae
-            WHERE stae.task_id = t.id
-            ORDER BY stae.date DESC
+            SELECT e.new_val_bool
+            FROM events e
+            WHERE e.task_id = t.id AND e.type = 'set_archived'
+            ORDER BY e.date DESC
             LIMIT 1
         ),
         false
@@ -17,17 +17,18 @@ FROM
 CREATE VIEW v_tasks_tags AS
 SELECT DISTINCT
     t.id as task_id,
-    ate.tag_id as tag_id
+    adds.tag_id as tag_id
 FROM
     tasks t
-INNER JOIN add_tag_events ate
-    ON ate.task_id = t.id
+INNER JOIN events adds
+    ON adds.task_id = t.id AND adds.type = 'add_tag'
 WHERE NOT EXISTS (
     SELECT NULL
-    FROM remove_tag_events rte
-    WHERE rte.tag_id = ate.tag_id
-    AND rte.task_id = ate.task_id
-    AND rte.date > ate.date
+    FROM events rms
+    WHERE rms.tag_id = adds.tag_id
+    AND rms.task_id = adds.task_id
+    AND rms.type = 'remove_tag'
+    AND rms.date > adds.date
 );
 
 CREATE VIEW v_tags_users AS
