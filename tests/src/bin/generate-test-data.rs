@@ -204,7 +204,7 @@ fn main() {
                 if comments.is_empty() { continue; }
                 mk_bool(&mut rng);
                 mk_parent(&mut rng, &comments);
-                "set_comment_read"
+                "set_event_read"
             }
             _ => panic!(),
         };

@@ -19,7 +19,7 @@ CREATE TYPE event_type AS ENUM (
     'remove_tag',
     'add_comment',
     'edit_comment',
-    'set_comment_read'
+    'set_event_read'
 );
 
 CREATE TABLE events (
@@ -60,7 +60,7 @@ CREATE TABLE events (
             new_val_bool IS NOT NULL AND -- the new state
             title IS NULL AND time IS NULL AND tag_id IS NULL AND new_val_int IS NULL AND comment IS NULL AND parent_id IS NULL) OR
         ((type = 'blocked_until' OR type = 'schedule_for') AND
-            time IS NOT NULL AND -- date at which the task state will change
+            -- time is the date at which the task state will change, can be null to unset
             title IS NULL AND new_val_bool IS NULL AND tag_id IS NULL AND new_val_int IS NULL AND comment IS NULL AND parent_id IS NULL) OR
         (type = 'add_tag' AND
             new_val_bool IS NOT NULL AND -- whether the task is in this tag's backlog
@@ -78,7 +78,7 @@ CREATE TABLE events (
             comment IS NOT NULL AND -- comment text
             parent_id IS NOT NULL AND -- edited comment
             title IS NULL AND new_val_bool IS NULL AND time IS NULL AND tag_id IS NULL AND new_val_int IS NULL) OR
-        (type = 'set_comment_read' AND
+        (type = 'set_event_read' AND
             parent_id IS NOT NULL AND -- the comment or comment edit marked as (un)read
             new_val_bool IS NOT NULL AND -- true iff the comment (edit) is now read
             title IS NULL AND time IS NULL AND tag_id IS NULL AND new_val_int IS NULL AND comment IS NULL)

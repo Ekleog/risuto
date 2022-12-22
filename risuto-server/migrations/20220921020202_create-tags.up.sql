@@ -20,7 +20,7 @@ CREATE TABLE perms (
     can_edit BOOLEAN NOT NULL,
         -- SetTitle, EditComment for first comment
     can_triage BOOLEAN NOT NULL,
-        -- SetDone, SetArchived, Schedule, Add/Rm-Dep-Before/After-Self
+        -- SetDone, SetArchived, BlockedUntil/ScheduleFor
         -- AddTag for tags that are already on the task (setting prio/backlog)
     can_relabel_to_any BOOLEAN NOT NULL,
         -- Add/Rm-Tag for all tags (beware privilege escalation)
