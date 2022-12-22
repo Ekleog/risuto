@@ -3,7 +3,7 @@ use axum::async_trait;
 use chrono::Utc;
 use futures::{Stream, StreamExt, TryStreamExt};
 use risuto_api::{
-    AuthInfo, AuthToken, DbDump, Event, EventId, EventType, NewEvent, NewEventContents, NewSession,
+    AuthInfo, AuthToken, DbDump, Event, EventId, EventType, NewSession,
     Tag, TagId, Task, TaskId, Time, User, UserId, Uuid,
 };
 use sqlx::Row;
@@ -14,6 +14,107 @@ use crate::Error;
 pub struct PostgresDb<'a> {
     pub conn: &'a mut sqlx::PgConnection,
     pub user: UserId,
+}
+
+#[derive(sqlx::Type)]
+#[sqlx(rename_all = "snake_case")]
+enum DbType {
+    SetTitle,
+    SetDone,
+    SetArchived,
+    BlockedUntil,
+    ScheduleFor,
+    AddTag,
+    RemoveTag,
+    AddComment,
+    EditComment,
+    SetEventRead,
+}
+
+#[derive(sqlx::FromRow)]
+struct DbEvent {
+    id: Uuid,
+    owner_id: Uuid,
+    date: Time,
+
+    #[sqlx(rename = "type")]
+    type_: DbType,
+    task_id: Uuid,
+
+    title: Option<String>,
+    new_val_bool: Option<bool>,
+    time: Option<Time>,
+    tag_id: Option<Uuid>,
+    new_val_int: Option<i64>,
+    comment: Option<String>,
+    parent_id: Option<Uuid>,
+}
+
+impl DbEvent {
+    fn type_(mut self, t: DbType) -> DbEvent {
+        self.type_ = t;
+        self
+    }
+    fn title(mut self, t: String) -> DbEvent {
+        self.title = Some(t);
+        self
+    }
+    fn new_val_bool(mut self, b: bool) -> DbEvent {
+        self.new_val_bool = Some(b);
+        self
+    }
+    fn time(mut self, t: Option<Time>) -> DbEvent {
+        self.time = t;
+        self
+    }
+    fn tag_id(mut self, t: TagId) -> DbEvent {
+        self.tag_id = Some(t.0);
+        self
+    }
+    fn new_val_int(mut self, i: i64) -> DbEvent {
+        self.new_val_int = Some(i);
+        self
+    }
+    fn comment(mut self, c: String) -> DbEvent {
+        self.comment = Some(c);
+        self
+    }
+    fn parent_id(mut self, p: Option<EventId>) -> DbEvent {
+        self.parent_id = p.map(|p| p.0);
+        self
+    }
+}
+
+impl From<Event> for DbEvent {
+    fn from(e: Event) -> DbEvent {
+        let res = DbEvent {
+            id: e.id.0,
+            owner_id: e.owner.0,
+            date: e.date,
+            task_id: e.task.0,
+            type_: DbType::SetTitle, // will be overwritten below
+            title: None,
+            new_val_bool: None,
+            time: None,
+            tag_id: None,
+            new_val_int: None,
+            comment: None,
+            parent_id: None,
+        };
+        use EventType::*;
+        match e.contents {
+            SetTitle(t) => res.type_(DbType::SetTitle).title(t),
+            SetDone(b) => res.type_(DbType::SetDone).new_val_bool(b),
+            SetArchived(b) => res.type_(DbType::SetArchived).new_val_bool(b),
+            BlockedUntil(t) => res.type_(DbType::BlockedUntil).time(t),
+            ScheduleFor(t) => res.type_(DbType::ScheduleFor).time(t),
+            AddTag { tag, prio, backlog } => res.type_(DbType::AddTag).tag_id(tag).new_val_int(prio).new_val_bool(backlog),
+            RmTag(t) => res.type_(DbType::RemoveTag).tag_id(t),
+            AddComment { text, parent_id } => res.type_(DbType::AddComment).comment(text).parent_id(parent_id),
+            EditComment { text, comment_id } => res.type_(DbType::EditComment).comment(text).parent_id(Some(comment_id)),
+            SetEventRead { event_id, now_read } => res.type_(DbType::SetEventRead).new_val_bool(now_read).parent_id(Some(event_id)),
+        }
+    }
 }
 
 #[async_trait]
@@ -76,9 +177,9 @@ impl<'a> risuto_api::Db for PostgresDb<'a> {
         .await?)
     }
 
-    async fn get_comment_info(&mut self, event: EventId) -> anyhow::Result<(UserId, Time)> {
+    async fn get_event_info(&mut self, event: EventId) -> anyhow::Result<(UserId, Time, TaskId)> {
         let res = sqlx::query!(
-            "SELECT owner_id, date FROM add_comment_events WHERE id = $1",
+            "SELECT owner_id, date, task_id FROM events WHERE id = $1",
             event.0
         )
         .fetch_one(&mut *self.conn)
@@ -86,24 +187,17 @@ impl<'a> risuto_api::Db for PostgresDb<'a> {
         Ok((
             UserId(res.owner_id),
             res.date.and_local_timezone(Utc).unwrap(),
-        ))
-    }
-
-    async fn get_task_for_comment(&mut self, comment: EventId) -> anyhow::Result<TaskId> {
-        Ok(TaskId(
-            sqlx::query!(
-                "SELECT task_id FROM add_comment_events WHERE id = $1",
-                comment.0
-            )
-            .fetch_one(&mut *self.conn)
-            .await?
-            .task_id,
+            TaskId(res.task_id),
         ))
     }
 
     async fn is_first_comment(&mut self, task: TaskId, comment: EventId) -> anyhow::Result<bool> {
         Ok(sqlx::query!(
-            "SELECT id FROM add_comment_events WHERE task_id = $1 ORDER BY date LIMIT 1",
+            "SELECT id FROM events
+            WHERE task_id = $1
+                AND type = 'add_comment'
+                AND parent_id IS NULL
+            ORDER BY date LIMIT 1",
             task.0
         )
         .fetch_one(&mut *self.conn)
@@ -358,6 +452,7 @@ async fn fetch_tasks_from_tmp_tasks_table(
 
                 is_done: false,
                 is_archived: false,
+                blocked_until: None,
                 scheduled_for: None,
                 current_tags: HashMap::new(),
 
@@ -372,186 +467,49 @@ async fn fetch_tasks_from_tmp_tasks_table(
     }
     std::mem::drop(tasks_query); // free conn borrow
 
-    macro_rules! query_events {
-        (full: $query:expr, $table:expr, $task_id:expr, |$e:ident| $c:expr,) => {{
-            let mut query = sqlx::query($query).fetch(&mut *conn);
-            while let Some($e) =
-                query
-                    .try_next()
-                    .await
-                    .context(concat!("querying ", $table, " table"))?
-            {
-                let task_id = $e.try_get($task_id).context("retrieving task_id field")?;
-                if let Some(t) = tasks.get_mut(&TaskId(task_id)) {
-                    let date: chrono::NaiveDateTime =
-                        $e.try_get("date").context("retrieving date field")?;
-                    let date = date.and_local_timezone(Utc).unwrap();
-                    let id = $e.try_get("id").context("retrieving id field")?;
-                    let owner = $e
-                        .try_get("owner_id")
-                        .context("retrieving owner_id field")?;
-                    t.add_event(Event {
-                        id: EventId(id),
-                        owner: UserId(owner),
-                        date,
-                        contents: $c,
-                    });
+    let mut events_query = sqlx::query_as::<_, DbEvent>(
+        "
+            SELECT e.*
+            FROM tmp_tasks t
+            INNER JOIN events e
+            ON t.id = e.task_id
+        "
+    ).fetch(&mut *conn);
+    while let Some(e) = events_query.try_next().await.context("querying events table")? {
+        if let Some(t) = tasks.get_mut(&TaskId(e.task_id)) {
+            t.add_event(Event {
+                id: EventId(e.id),
+                owner: UserId(e.owner_id),
+                date: e.date,
+                task: TaskId(e.task_id),
+                contents: match e.type_ {
+                    DbType::SetTitle => EventType::SetTitle(e.title.expect("set_title event without title")),
+                    DbType::SetDone => EventType::SetDone(e.new_val_bool.expect("set_done event without new_val_bool")),
+                    DbType::SetArchived => EventType::SetArchived(e.new_val_bool.expect("set_archived event without new_val_bool")),
+                    DbType::BlockedUntil => EventType::BlockedUntil(e.time),
+                    DbType::ScheduleFor => EventType::ScheduleFor(e.time),
+                    DbType::AddTag => EventType::AddTag {
+                        tag: TagId(e.tag_id.expect("add_tag event without tag_id")),
+                        prio: e.new_val_int.expect("add_tag event without new_val_int"),
+                        backlog: e.new_val_bool.expect("add_tag event without new_val_bool"),
+                    },
+                    DbType::RemoveTag => EventType::RmTag(TagId(e.tag_id.expect("remove_tag event without tag_id"))),
+                    DbType::AddComment => EventType::AddComment {
+                        text: e.comment.expect("add_comment event without text"),
+                        parent_id: e.parent_id.map(EventId),
+                    },
+                    DbType::EditComment => EventType::EditComment {
+                        text: e.comment.expect("edit_comment event without text"),
+                        comment_id: EventId(e.parent_id.expect("edit_comment event without parent_id")),
+                    },
+                    DbType::SetEventRead => EventType::SetEventRead {
+                        event_id: EventId(e.parent_id.expect("set_event_read event without parent_id")),
+                        now_read: e.new_val_bool.expect("set_event_read event without new_val_bool"),
+                    },
                 }
-            }
-        }};
-
-        (fields: $additional_fields:expr, $table:expr, $task_id:expr, |$e:ident| $c:expr,) => {
-            query_events!(
-                full: concat!(
-                    "SELECT e.id, e.owner_id, e.date, ",
-                    $additional_fields,
-                    " FROM tmp_tasks t
-                    INNER JOIN ",
-                    $table,
-                    " e ON t.id = e.",
-                    $task_id
-                ),
-                $table,
-                $task_id,
-                |$e| $c,
-            )
-        };
+            })
+        }
     }
-
-    query_events!(
-        fields: "e.task_id, e.title",
-        "set_title_events",
-        "task_id",
-        |e| EventType::SetTitle(e.try_get("title").context("retrieving title field")?),
-    );
-
-    query_events!(
-        fields: "e.task_id, e.now_done",
-        "set_task_done_events",
-        "task_id",
-        |e| EventType::SetDone(e.try_get("now_done").context("retrieving now_done field")?),
-    );
-
-    query_events!(
-        fields: "e.task_id, e.now_archived",
-        "set_task_archived_events",
-        "task_id",
-        |e| EventType::SetArchived(e.try_get("now_archived").context("retrieving now_archived field")?),
-    );
-
-    query_events!(
-        fields: "e.task_id, e.scheduled_date",
-        "schedule_events",
-        "task_id",
-        |e| EventType::Schedule(
-            e.try_get::<Option<chrono::NaiveDateTime>, _>("scheduled_date")
-                .context("retrieving scheduled_date field")?
-                .map(|d| d.and_local_timezone(Utc).unwrap())
-        ),
-    );
-
-    query_events!(
-        fields: "e.first_id, e.then_id",
-        "add_dependency_events",
-        "first_id",
-        |e| EventType::AddDepAfterSelf(TaskId(
-            e.try_get("then_id").context("retrieving then_id field")?
-        )),
-    );
-
-    query_events!(
-        fields: "e.first_id, e.then_id",
-        "add_dependency_events",
-        "then_id",
-        |e| EventType::AddDepBeforeSelf(TaskId(
-            e.try_get("first_id").context("retrieving first_id field")?
-        )),
-    );
-
-    query_events!(
-        fields: "e.first_id, e.then_id",
-        "remove_dependency_events",
-        "first_id",
-        |e| EventType::RmDepAfterSelf(TaskId(
-            e.try_get("then_id").context("retrieving then_id field")?
-        )),
-    );
-
-    query_events!(
-        fields: "e.first_id, e.then_id",
-        "remove_dependency_events",
-        "then_id",
-        |e| EventType::RmDepBeforeSelf(TaskId(
-            e.try_get("first_id").context("retrieving first_id field")?
-        )),
-    );
-
-    query_events!(
-        fields: "e.task_id, e.tag_id, e.priority, e.backlog",
-        "add_tag_events",
-        "task_id",
-        |e| EventType::AddTag {
-            tag: TagId(e.try_get("tag_id").context("retrieving tag_id field")?),
-            prio: e.try_get("priority").context("retrieving prio field")?,
-            backlog: e.try_get("backlog").context("retrieving backlog field")?,
-        },
-    );
-
-    query_events!(
-        fields: "e.task_id, e.tag_id",
-        "remove_tag_events",
-        "task_id",
-        |e| EventType::RmTag(TagId(
-            e.try_get("tag_id").context("retrieving tag_id field")?
-        )),
-    );
-
-    query_events!(
-        fields: "e.task_id, e.text",
-        "add_comment_events",
-        "task_id",
-        |e| EventType::AddComment(e.try_get("text").context("retrieving text field")?),
-    );
-
-    query_events!(
-        full: "
-            SELECT e.id, e.owner_id, e.date, e.comment_id, e.text, ace.task_id
-                FROM tmp_tasks t
-            INNER JOIN add_comment_events ace
-                ON t.id = ace.task_id
-            INNER JOIN edit_comment_events e
-                ON ace.id = e.comment_id
-        ",
-        "edit_comment_events",
-        "task_id",
-        |e| EventType::EditComment(
-            EventId(
-                e.try_get("comment_id")
-                    .context("retrieving comment_id field")?
-            ),
-            e.try_get("text").context("retrieving text field")?
-        ),
-    );
-
-    query_events!(
-        full: "
-            SELECT e.id, e.owner_id, e.date, e.comment_id, e.read, ace.task_id
-                FROM tmp_tasks t
-            INNER JOIN add_comment_events ace
-                ON t.id = ace.task_id
-            INNER JOIN set_comment_read_events e
-                ON ace.id = e.comment_id
-        ",
-        "set_comment_read_events",
-        "task_id",
-        |e| EventType::SetCommentRead(
-            EventId(
-                e.try_get("comment_id")
-                    .context("retrieving comment_id field")?
-            ),
-            e.try_get("read").context("retrieving read field")?
-        ),
-    );
 
     for t in tasks.values_mut() {
         t.refresh_metadata();
@@ -560,7 +518,7 @@ async fn fetch_tasks_from_tmp_tasks_table(
     Ok(tasks)
 }
 
-pub async fn submit_event(conn: &mut sqlx::PgConnection, e: NewEvent) -> Result<(), Error> {
+pub async fn submit_event(conn: &mut sqlx::PgConnection, e: Event) -> Result<(), Error> {
     let event_id = e.id;
 
     // Check authorization
@@ -577,80 +535,24 @@ pub async fn submit_event(conn: &mut sqlx::PgConnection, e: NewEvent) -> Result<
         return Err(Error::PermissionDenied);
     }
 
-    macro_rules! insert_event {
-        ($table:expr, $repeat:expr, $( $v:expr ),*) => {{
-            sqlx::query(
-                concat!(
-                    "INSERT INTO ",
-                    $table,
-                    " VALUES ($1, $2, $3, ",
-                    $repeat,
-                    ")",
-                )
-            )
-            .bind(e.id.0)
-            .bind(e.owner.0)
-            .bind(e.date)
-            $(.bind($v))*
-            .execute(&mut *db.conn)
-            .await
-            .with_context(|| format!("inserting {} {:?}", $table, event_id))?
-        }}
-    }
-
-    let res = match e.contents {
-        NewEventContents::SetTitle { task, title } => {
-            insert_event!("set_title_events", "$4, $5", task.0, title)
-        }
-        NewEventContents::SetDone { task, now_done } => {
-            insert_event!("set_task_done_events", "$4, $5", task.0, now_done)
-        }
-        NewEventContents::SetArchived { task, now_archived } => {
-            insert_event!("set_task_archived_events", "$4, $5", task.0, now_archived)
-        }
-        NewEventContents::Schedule {
-            task,
-            scheduled_date,
-        } => insert_event!(
-            "schedule_events",
-            "$4, $5",
-            task.0,
-            scheduled_date.map(|d| d.naive_utc())
-        ),
-        NewEventContents::AddDep { first, then } => {
-            insert_event!("add_dependency_events", "$4, $5", first.0, then.0)
-        }
-        NewEventContents::RmDep { first, then } => {
-            insert_event!("remove_dependency_events", "$4, $5", first.0, then.0)
-        }
-        NewEventContents::AddTag {
-            task,
-            tag,
-            prio,
-            backlog,
-        } => insert_event!(
-            "add_tag_events",
-            "$4, $5, $6, $7",
-            task.0,
-            tag.0,
-            prio,
-            backlog
-        ),
-        NewEventContents::RmTag { task, tag } => {
-            insert_event!("remove_tag_events", "$4, $5", task.0, tag.0)
-        }
-        NewEventContents::AddComment { task, text } => {
-            insert_event!("add_comment_events", "$4, $5", task.0, text)
-        }
-        NewEventContents::EditComment { comment, text, .. } => {
-            insert_event!("edit_comment_events", "$4, $5", comment.0, text)
-        }
-        NewEventContents::SetCommentRead {
-            comment, now_read, ..
-        } => {
-            insert_event!("set_comment_read_events", "$4, $5", comment.0, now_read)
-        }
-    };
+    let e = DbEvent::from(e);
+    let res = sqlx::query!(
+        "INSERT INTO events VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)",
+        e.id,
+        e.owner_id,
+        e.date.naive_utc(),
+        e.type_ as DbType,
+        e.task_id,
+        e.title,
+        e.new_val_bool,
+        e.time.map(|t| t.naive_utc()),
+        e.tag_id,
+        e.new_val_int,
+        e.comment,
+        e.parent_id,
+    ).execute(&mut *db.conn)
+    .await
+    .with_context(|| format!("inserting event {:?}", event_id))?;
 
     if res.rows_affected() != 1 {
         Err(anyhow!(

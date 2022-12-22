@@ -1,5 +1,4 @@
 use anyhow::{anyhow, Context};
-use arrayvec::ArrayVec;
 use async_trait::async_trait;
 use chrono::Utc;
 use std::{
@@ -76,11 +75,17 @@ pub struct TaskId(pub Uuid);
 
 #[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct Comment {
+    /// EventId of this comment's creation
+    creation_id: EventId,
+
     /// List of edits in chronological order
     edits: BTreeMap<Time, Vec<String>>,
 
     /// Set of users who already read this comment
     read: HashSet<UserId>,
+
+    /// Child comments
+    children: BTreeMap<Time, Vec<Comment>>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
@@ -93,6 +98,7 @@ pub struct Task {
 
     pub is_done: bool,
     pub is_archived: bool,
+    pub blocked_until: Option<Time>,
     pub scheduled_for: Option<Time>,
     pub current_tags: HashMap<TagId, TaskInTag>,
 
@@ -105,6 +111,18 @@ pub struct Task {
     pub events: BTreeMap<Time, Vec<Event>>,
 }
 
+fn find_comment<'a>(comments: &'a mut BTreeMap<Time, Vec<Comment>>, creation_id: &EventId) -> Option<&'a mut Comment> {
+    for c in comments.values_mut().flat_map(|v| v.iter_mut()) {
+        if c.creation_id == *creation_id {
+            return Some(c);
+        }
+        if let Some(res) = find_comment(&mut c.children, &creation_id) {
+            return Some(res);
+        }
+    }
+    None
+}
+
 impl Task {
     pub fn prio(&self, tag: &TagId) -> Option<i64> {
         self.current_tags.get(tag).map(|t| t.priority)
@@ -115,18 +133,6 @@ impl Task {
         if insert_into.iter().find(|evt| **evt == e).is_none() {
             insert_into.push(e);
         }
-    }
-
-    /// Returns (index within same-date events, event)
-    fn find_event(&self, evt: &EventId) -> Option<(usize, &Event)> {
-        self.events
-            .values()
-            .flat_map(|v| {
-                v.iter()
-                    .filter(|e| matches!(e.contents, EventType::AddComment(_)))
-                    .enumerate()
-            })
-            .find(|(_, e)| &e.id == evt)
     }
 
     pub fn refresh_metadata(&mut self) {
@@ -143,19 +149,8 @@ impl Task {
                     EventType::SetTitle(title) => self.current_title = title.clone(),
                     EventType::SetDone(now_done) => self.is_done = *now_done,
                     EventType::SetArchived(now_archived) => self.is_archived = *now_archived,
-                    EventType::Schedule(time) => self.scheduled_for = *time,
-                    EventType::AddDepBeforeSelf(task) => {
-                        self.deps_before_self.insert(*task);
-                    }
-                    EventType::AddDepAfterSelf(task) => {
-                        self.deps_after_self.insert(*task);
-                    }
-                    EventType::RmDepBeforeSelf(task) => {
-                        self.deps_before_self.remove(task);
-                    }
-                    EventType::RmDepAfterSelf(task) => {
-                        self.deps_after_self.remove(task);
-                    }
+                    EventType::BlockedUntil(time) => self.blocked_until = *time,
+                    EventType::ScheduleFor(time) => self.scheduled_for = *time,
                     EventType::AddTag { tag, prio, backlog } => {
                         self.current_tags.insert(
                             *tag,
@@ -168,51 +163,44 @@ impl Task {
                     EventType::RmTag(tag) => {
                         self.current_tags.remove(tag);
                     }
-                    EventType::AddComment(txt) => {
+                    EventType::AddComment { text, parent_id } => {
                         let mut edits = BTreeMap::new();
-                        edits.insert(e.date, vec![txt.clone()]);
+                        edits.insert(e.date, vec![text.clone()]);
                         let mut read = HashSet::new();
                         read.insert(e.owner);
-                        self.current_comments
-                            .entry(e.date)
-                            .or_insert(Vec::new())
-                            .push(Comment { edits, read });
+                        let children = BTreeMap::new();
+                        let creation_id = e.id;
+                        if let Some(parent) = parent_id.and_then(|p| find_comment(&mut self.current_comments, &p)) {
+                            parent.children
+                                .entry(e.date)
+                                .or_insert(Vec::new())
+                                .push(Comment { creation_id, edits, read, children });
+                        } else { // Also add as a top-level comment if the parent could not be found (TODO: log a warning)
+                            self.current_comments
+                                .entry(e.date)
+                                .or_insert(Vec::new())
+                                .push(Comment { creation_id, edits, read, children });
+                        }
                     }
-                    EventType::EditComment(comment, txt) => {
-                        if let Some((id, comment)) = self.find_event(comment) {
-                            let comment = comment.clone();
-                            let comment = match self.current_comments.get_mut(&comment.date) {
-                                None => {
-                                    tracing::error!(?comment, edit=?e, "ill-formed task: comment edition comes before comment creation!");
-                                    continue;
-                                }
-                                Some(c) => &mut c[id],
-                            };
+                    EventType::EditComment { comment_id, text } => {
+                        if let Some(comment) = find_comment(&mut self.current_comments, comment_id) {
                             comment
                                 .edits
                                 .entry(e.date)
                                 .or_insert(Vec::new())
-                                .push(txt.clone());
+                                .push(text.clone());
                             comment.read = HashSet::new();
                             comment.read.insert(e.owner);
                         }
                     }
-                    EventType::SetCommentRead(comment, now_read) => {
-                        if let Some((id, comment)) = self.find_event(comment) {
-                            let comment = comment.clone();
-                            let read_set = match self.current_comments.get_mut(&comment.date) {
-                                None => {
-                                    tracing::error!(?comment, set_read=?e, "ill-formed task: setting comment read comes before comment creation!");
-                                    continue;
-                                }
-                                Some(c) => &mut c[id].read,
-                            };
+                    EventType::SetEventRead { event_id, now_read } => {
+                        if let Some(comment) = find_comment(&mut self.current_comments, event_id) {
                             if *now_read {
-                                read_set.insert(e.owner);
+                                comment.read.insert(e.owner);
                             } else {
-                                read_set.remove(&e.owner);
+                                comment.read.remove(&e.owner);
                             }
-                        }
+                        } // ignore non-comment events
                     }
                 }
             }
@@ -228,6 +216,7 @@ pub struct Event {
     pub id: EventId,
     pub owner: UserId,
     pub date: Time,
+    pub task: TaskId,
 
     pub contents: EventType,
 }
@@ -237,20 +226,99 @@ pub enum EventType {
     SetTitle(String),
     SetDone(bool),
     SetArchived(bool),
-    Schedule(Option<Time>),
-    AddDepBeforeSelf(TaskId),
-    AddDepAfterSelf(TaskId),
-    RmDepBeforeSelf(TaskId),
-    RmDepAfterSelf(TaskId),
+    BlockedUntil(Option<Time>),
+    ScheduleFor(Option<Time>),
     AddTag {
         tag: TagId,
         prio: i64,
         backlog: bool,
     },
     RmTag(TagId),
-    AddComment(String),
-    EditComment(EventId, String),
-    SetCommentRead(EventId, bool),
+    AddComment {
+        text: String,
+        parent_id: Option<EventId>,
+    },
+    EditComment {
+        text: String,
+        comment_id: EventId,
+    },
+    SetEventRead {
+        event_id: EventId,
+        now_read: bool,
+    },
+}
+
+impl Event {
+    pub fn now(owner: UserId, task: TaskId, contents: EventType) -> Event {
+        Event {
+            id: EventId(Uuid::new_v4()),
+            owner,
+            date: Utc::now(),
+            task,
+            contents,
+        }
+    }
+
+    /// Takes AuthInfo as the authorization status for the user for self.task
+    pub async fn is_authorized<D: Db>(&self, db: &mut D) -> anyhow::Result<bool> {
+        macro_rules! auth {
+            ($t:expr) => {{
+                let t = $t;
+                db.auth_info_for(t)
+                    .await
+                    .with_context(|| format!("fetching auth info for task {:?}", t))?
+            }};
+        }
+        macro_rules! check_parent_event {
+            ($c:expr) => {{
+                let (par_owner, par_date, par_task) = db
+                    .get_event_info($c)
+                    .await
+                    .with_context(|| format!("getting info of comment {:?}", $c))?;
+                if par_date >= self.date { // TODO: remove this requirement by fixing event insertion into tasks
+                    return Ok(false);
+                }
+                (par_owner, par_date, par_task)
+            }};
+        }
+        Ok(match self.contents {
+            EventType::SetTitle { .. } => auth!(self.task).can_edit,
+            EventType::SetDone { .. }
+            | EventType::SetArchived { .. }
+            | EventType::BlockedUntil { .. }
+            | EventType::ScheduleFor { .. } => auth!(self.task).can_triage,
+            EventType::AddTag { tag, .. } => {
+                let auth = auth!(self.task);
+                auth.can_relabel_to_any
+                    || (auth.can_triage
+                        && db
+                            .list_tags_for(self.task)
+                            .await
+                            .with_context(|| format!("listing tags for task {:?}", self.task))?
+                            .contains(&tag))
+            }
+            EventType::RmTag { .. } => auth!(self.task).can_relabel_to_any,
+            EventType::AddComment { parent_id, .. } => {
+                if let Some(parent_id) = parent_id {
+                    check_parent_event!(parent_id);
+                }
+                auth!(self.task).can_comment
+            }
+            EventType::EditComment { comment_id, .. } => {
+                let (comm_owner, _, comm_task) = check_parent_event!(comment_id);
+                let is_comment_owner = self.owner == comm_owner;
+                let is_first_comment =
+                    db.is_first_comment(comm_task, comment_id).await.with_context(|| {
+                        format!("checking if comment {:?} is first comment", comment_id)
+                    })?;
+                is_comment_owner || (auth!(comm_task).can_edit && is_first_comment)
+            }
+            EventType::SetEventRead { event_id, .. } => {
+                let (_, _, par_task) = check_parent_event!(event_id);
+                auth!(par_task).can_read
+            }
+        })
+    }
 }
 
 #[derive(Debug, serde::Deserialize, serde::Serialize)]
@@ -269,6 +337,24 @@ impl DbDump {
             tags: HashMap::new(),
             tasks: HashMap::new(),
         }
+    }
+}
+
+impl DbDump {
+    fn get_task_for_event(&mut self, event: EventId) -> anyhow::Result<TaskId> {
+        for (task, t) in self.tasks.iter() {
+            for evts in t.events.values() {
+                for e in evts.iter() {
+                    if e.id == event {
+                        return Ok(*task);
+                    }
+                }
+            }
+        }
+        Err(anyhow!(
+            "requested task for event {:?} that is not in db",
+            event
+        ))
     }
 }
 
@@ -305,28 +391,12 @@ impl Db for DbDump {
             .collect())
     }
 
-    async fn get_task_for_comment(&mut self, comment: EventId) -> anyhow::Result<TaskId> {
-        for (task, t) in self.tasks.iter() {
-            for evts in t.events.values() {
-                for e in evts.iter() {
-                    if e.id == comment {
-                        return Ok(*task);
-                    }
-                }
-            }
-        }
-        Err(anyhow!(
-            "requested task for comment {:?} that is not in db",
-            comment
-        ))
-    }
-
-    async fn get_comment_info(&mut self, e: EventId) -> anyhow::Result<(UserId, Time)> {
-        let t = self.get_task_for_comment(e).await?;
-        let t = self.tasks.get(&t).ok_or_else(|| {
-            anyhow!("requested comment owner for event {e:?} for which task {t:?} is not in db",)
+    async fn get_event_info(&mut self, e: EventId) -> anyhow::Result<(UserId, Time, TaskId)> {
+        let task_id = self.get_task_for_event(e)?;
+        let t = self.tasks.get(&task_id).ok_or_else(|| {
+            anyhow!("requested comment owner for event {e:?} for which task {task_id:?} is not in db",)
         })?;
-        Ok((t.owner, t.date))
+        Ok((t.owner, t.date, task_id))
     }
 
     async fn is_first_comment(&mut self, task: TaskId, comment: EventId) -> anyhow::Result<bool> {
@@ -340,17 +410,17 @@ impl Db for DbDump {
                         task
                     )
                 })?
-                .events
-                .iter()
-                .flat_map(|(_, evts)| evts.iter())
-                .find(|e| matches!(e.contents, EventType::AddComment(_)))
+                .current_comments
+                .values()
+                .flat_map(|comms| comms.iter())
+                .next()
                 .ok_or_else(|| {
                     anyhow!(
                         "requested is_first_comment for task {:?} that has no comment",
                         task
                     )
                 })?
-                .id)
+                .creation_id)
     }
 }
 
@@ -398,249 +468,16 @@ impl BitOr for AuthInfo {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
-pub enum NewEventContents {
-    SetTitle {
-        task: TaskId,
-        title: String,
-    },
-    SetDone {
-        task: TaskId,
-        now_done: bool,
-    },
-    SetArchived {
-        task: TaskId,
-        now_archived: bool,
-    },
-    Schedule {
-        task: TaskId,
-        scheduled_date: Option<Time>,
-    },
-    AddDep {
-        first: TaskId,
-        then: TaskId,
-    },
-    RmDep {
-        first: TaskId,
-        then: TaskId,
-    },
-    AddTag {
-        task: TaskId,
-        tag: TagId,
-        prio: i64,
-        backlog: bool,
-    },
-    RmTag {
-        task: TaskId,
-        tag: TagId,
-    },
-    AddComment {
-        task: TaskId,
-        text: String,
-    },
-    EditComment {
-        untrusted_task: TaskId,
-        comment: EventId,
-        text: String,
-    },
-    SetCommentRead {
-        untrusted_task: TaskId,
-        comment: EventId,
-        now_read: bool,
-    },
-}
-
 #[async_trait]
 pub trait Db {
     async fn auth_info_for(&mut self, t: TaskId) -> anyhow::Result<AuthInfo>;
     async fn list_tags_for(&mut self, t: TaskId) -> anyhow::Result<Vec<TagId>>;
-    async fn get_comment_info(&mut self, e: EventId) -> anyhow::Result<(UserId, Time)>;
-    async fn get_task_for_comment(&mut self, comment: EventId) -> anyhow::Result<TaskId>;
+    async fn get_event_info(&mut self, e: EventId) -> anyhow::Result<(UserId, Time, TaskId)>;
     async fn is_first_comment(&mut self, task: TaskId, comment: EventId) -> anyhow::Result<bool>;
 }
 
 #[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
 pub enum FeedMessage {
     Pong,
-    NewEvent(NewEvent),
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
-pub struct NewEvent {
-    pub id: EventId,
-    pub owner: UserId,
-    pub date: Time,
-    pub contents: NewEventContents,
-}
-
-impl NewEvent {
-    pub fn now(owner: UserId, contents: NewEventContents) -> NewEvent {
-        NewEvent {
-            id: EventId(Uuid::new_v4()),
-            owner,
-            date: Utc::now(),
-            contents,
-        }
-    }
-
-    pub async fn make_untrusted_trusted<D: Db>(&mut self, db: &mut D) -> anyhow::Result<()> {
-        match self.contents {
-            NewEventContents::EditComment {
-                ref mut untrusted_task,
-                comment,
-                ..
-            } => {
-                let real_task = db
-                    .get_task_for_comment(comment)
-                    .await
-                    .with_context(|| format!("getting task for comment {:?}", comment))?;
-                if *untrusted_task != real_task {
-                    *untrusted_task = real_task;
-                    tracing::warn!(event=?self, ?real_task, "got event that lied on its attached task");
-                }
-            }
-            _ => (),
-        }
-        Ok(())
-    }
-
-    pub fn untrusted_task_event_list(&self) -> ArrayVec<(TaskId, Event), 2> {
-        let mut res = ArrayVec::new();
-        macro_rules! event {
-            ($task_id:expr, $type:expr) => {
-                res.push((
-                    $task_id,
-                    Event {
-                        id: self.id,
-                        owner: self.owner,
-                        date: self.date,
-                        contents: $type,
-                    },
-                ))
-            };
-        }
-        match &self.contents {
-            NewEventContents::SetTitle { task, title } => {
-                event!(*task, EventType::SetTitle(title.clone()))
-            }
-            NewEventContents::SetDone { task, now_done } => {
-                event!(*task, EventType::SetDone(*now_done))
-            }
-            NewEventContents::SetArchived { task, now_archived } => {
-                event!(*task, EventType::SetArchived(*now_archived))
-            }
-            NewEventContents::Schedule {
-                task,
-                scheduled_date,
-            } => event!(*task, EventType::Schedule(*scheduled_date)),
-            NewEventContents::AddDep { first, then } => {
-                event!(*first, EventType::AddDepAfterSelf(*then));
-                event!(*then, EventType::AddDepBeforeSelf(*then));
-            }
-            NewEventContents::RmDep { first, then } => {
-                event!(*first, EventType::RmDepAfterSelf(*then));
-                event!(*then, EventType::RmDepBeforeSelf(*then));
-            }
-            NewEventContents::AddTag {
-                task,
-                tag,
-                prio,
-                backlog,
-            } => event!(
-                *task,
-                EventType::AddTag {
-                    tag: *tag,
-                    prio: *prio,
-                    backlog: *backlog
-                }
-            ),
-            NewEventContents::RmTag { task, tag } => event!(*task, EventType::RmTag(*tag)),
-            NewEventContents::AddComment { task, text } => {
-                event!(*task, EventType::AddComment(text.clone()))
-            }
-            NewEventContents::EditComment {
-                untrusted_task,
-                comment,
-                text,
-            } => event!(
-                *untrusted_task,
-                EventType::EditComment(*comment, text.clone())
-            ),
-            NewEventContents::SetCommentRead {
-                untrusted_task,
-                comment,
-                now_read,
-            } => event!(
-                *untrusted_task,
-                EventType::SetCommentRead(*comment, *now_read)
-            ),
-        }
-        res
-    }
-
-    /// Takes AuthInfo as the authorization status for the user for self.task
-    pub async fn is_authorized<D: Db>(&self, db: &mut D) -> anyhow::Result<bool> {
-        macro_rules! auth {
-            ($t:expr) => {{
-                let t = $t;
-                db.auth_info_for(t)
-                    .await
-                    .with_context(|| format!("fetching auth info for task {:?}", t))?
-            }};
-        }
-        macro_rules! check_comment_event {
-            ($c:expr) => {{
-                let (comm_owner, comm_date) = db
-                    .get_comment_info($c)
-                    .await
-                    .with_context(|| format!("getting info of comment {:?}", $c))?;
-                if comm_date >= self.date {
-                    return Ok(false);
-                }
-                (comm_owner, comm_date)
-            }};
-        }
-        Ok(match self.contents {
-            NewEventContents::SetTitle { task, .. } => auth!(task).can_edit,
-            NewEventContents::SetDone { task, .. }
-            | NewEventContents::SetArchived { task, .. }
-            | NewEventContents::Schedule { task, .. } => auth!(task).can_triage,
-            NewEventContents::AddDep { first, then } | NewEventContents::RmDep { first, then } => {
-                auth!(first).can_triage && auth!(then).can_triage
-            }
-            NewEventContents::AddTag { task, tag, .. } => {
-                let auth = auth!(task);
-                auth.can_relabel_to_any
-                    || (auth.can_triage
-                        && db
-                            .list_tags_for(task)
-                            .await
-                            .with_context(|| format!("listing tags for task {:?}", task))?
-                            .contains(&tag))
-            }
-            NewEventContents::RmTag { task, .. } => auth!(task).can_relabel_to_any,
-            NewEventContents::AddComment { task, .. } => auth!(task).can_comment,
-            NewEventContents::EditComment { comment, .. } => {
-                let (comm_owner, _) = check_comment_event!(comment);
-                let is_comment_owner = self.owner == comm_owner;
-                let task = db
-                    .get_task_for_comment(comment)
-                    .await
-                    .with_context(|| format!("getting task for comment {:?}", comment))?;
-                let is_first_comment =
-                    db.is_first_comment(task, comment).await.with_context(|| {
-                        format!("checking if comment {:?} is first comment", comment)
-                    })?;
-                is_comment_owner || (auth!(task).can_edit && is_first_comment)
-            }
-            NewEventContents::SetCommentRead { comment, .. } => {
-                check_comment_event!(comment);
-                let task = db
-                    .get_task_for_comment(comment)
-                    .await
-                    .with_context(|| format!("getting task for comment {:?}", comment))?;
-                auth!(task).can_read
-            }
-        })
-    }
+    NewEvent(Event),
 }

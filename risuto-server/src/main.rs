@@ -1,5 +1,4 @@
 use anyhow::Context;
-use arrayvec::ArrayVec;
 use axum::{
     async_trait,
     extract::{
@@ -164,7 +163,7 @@ async fn fetch_unarchived(
 }
 
 async fn submit_event(
-    Json(e): Json<risuto_api::NewEvent>,
+    Json(e): Json<risuto_api::Event>,
     Auth(user): Auth,
     Extension(db): Extension<sqlx::PgPool>,
     Extension(feeds): Extension<UserFeeds>,
@@ -287,20 +286,9 @@ impl UserFeeds {
         });
     }
 
-    async fn relay_event(&self, mut db: db::PostgresDb<'_>, mut e: risuto_api::NewEvent) {
-        if let Err(err) = e.make_untrusted_trusted(&mut db).await {
-            tracing::error!(?err, "failed to make untrusted event {:?} trusted", e);
-            return;
-        }
-
-        let tasks = e
-            .untrusted_task_event_list()
-            .into_iter()
-            .map(|(t, _)| t.0)
-            .collect::<ArrayVec<_, 2>>();
-
+    async fn relay_event(&self, mut db: db::PostgresDb<'_>, e: risuto_api::Event) {
         // TODO: magic numbers below should be at least explained
-        db::users_interested_by(&mut db.conn, &tasks)
+        db::users_interested_by(&mut db.conn, &[e.task.0])
             .for_each_concurrent(Some(16), |u| {
                 let e = e.clone();
                 async move {
