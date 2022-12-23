@@ -5,7 +5,11 @@ use std::{collections::VecDeque, rc::Rc};
 use wasm_bindgen_futures::spawn_local;
 use yew::prelude::*;
 
-use crate::{api, ui, ui::TaskOrderChangeEvent, LoginInfo};
+use crate::{
+    api, ui,
+    ui::{ListType, TaskOrderChangeEvent},
+    LoginInfo,
+};
 
 const KEY_EVTS_PENDING_SUBMISSION: &str = "events-pending-submission";
 
@@ -46,6 +50,7 @@ pub struct App {
 #[derive(Clone)]
 struct TaskLists {
     open: Rc<Vec<(TaskId, Task)>>,
+    done: Rc<Vec<(TaskId, Task)>>,
     backlog: Rc<Vec<(TaskId, Task)>>,
 }
 
@@ -61,32 +66,40 @@ impl App {
     }
 
     fn current_task_lists(&self) -> TaskLists {
-        let tasks = self.db.tasks.iter();
-        let (backlog, open) = if let Some(tag) = self.tag {
-            let mut tasks = tasks
-                .filter_map(|(id, task)| {
-                    task.current_tags
-                        .get(&tag)
-                        .map(|prio| (prio, *id, task.clone()))
-                })
-                .collect::<Vec<_>>();
-            tasks.sort_unstable_by_key(|(meta, id, _)| (meta.priority, *id));
-            tasks
-                .into_iter()
-                .map(|(_prio, id, task)| (id, task))
-                .partition(|(_, t)| t.current_tags.get(&tag).unwrap().backlog)
-        } else {
-            (
-                Vec::new(),
-                tasks
-                    .filter(|(_, task)| task.current_tags.len() == 0)
-                    .map(|(id, task)| (*id, task.clone()))
-                    .collect(),
-            )
+        let mut open = Vec::new();
+        let mut done = Vec::new();
+        let mut backlog = Vec::new();
+        for (&task_id, t) in self.db.tasks.iter() {
+            if let Some(tag) = self.tag {
+                if let Some(info) = t.current_tags.get(&tag) {
+                    if t.is_done {
+                        done.push((info.priority, task_id, t.clone()));
+                    } else if info.backlog {
+                        backlog.push((info.priority, task_id, t.clone()));
+                    } else {
+                        open.push((info.priority, task_id, t.clone()));
+                    }
+                }
+            } else {
+                if t.current_tags.len() == 0 {
+                    if t.is_done {
+                        done.push((0, task_id, t.clone()));
+                    } else {
+                        open.push((0, task_id, t.clone()));
+                    }
+                }
+            }
+        }
+        open.sort_unstable_by_key(|&(prio, id, _)| (prio, id));
+        done.sort_unstable_by_key(|&(prio, id, _)| (prio, id));
+        backlog.sort_unstable_by_key(|&(prio, id, _)| (prio, id));
+        let cleanup = |v: Vec<(i64, TaskId, Task)>| {
+            Rc::new(v.into_iter().map(|(_, id, t)| (id, t)).collect())
         };
         TaskLists {
-            open: Rc::new(open),
-            backlog: Rc::new(backlog),
+            open: cleanup(open),
+            done: cleanup(done),
+            backlog: cleanup(backlog),
         }
     }
 }
@@ -222,25 +235,35 @@ impl Component for App {
             let tag = self.tag.clone();
             let tasks = tasks.clone();
             ctx.link().batch_callback(move |e: TaskOrderChangeEvent| {
-                let task_id = match e.before.in_backlog {
-                    true => tasks.backlog[e.before.index].0,
-                    false => tasks.open[e.before.index].0,
+                let task_id = match e.before.list {
+                    ListType::Open => tasks.open[e.before.index].0,
+                    ListType::Done => tasks.done[e.before.index].0,
+                    ListType::Backlog => tasks.backlog[e.before.index].0,
                 };
-                let mut insert_into = match e.after.in_backlog {
-                    true => (*tasks.backlog).clone(),
-                    false => (*tasks.open).clone(),
+                let mut insert_into = match e.after.list {
+                    ListType::Open => (*tasks.open).clone(),
+                    ListType::Done => (*tasks.done).clone(),
+                    ListType::Backlog => (*tasks.backlog).clone(),
                 };
-                if e.before.in_backlog == e.after.in_backlog {
+                if e.before.list == e.after.list {
                     insert_into.remove(e.before.index);
                 }
-                compute_reordering_events(
+                let mut evts = compute_reordering_events(
                     owner,
                     tag.expect("attempted to reorder in untagged list"),
                     task_id,
                     e.after.index,
-                    e.after.in_backlog,
+                    e.after.list.is_backlog(),
                     insert_into,
-                )
+                );
+                if e.before.list.is_done() != e.after.list.is_done() {
+                    evts.push(AppMsg::NewUserEvent(Event::now(
+                        owner,
+                        task_id,
+                        EventType::SetDone(e.after.list.is_done()),
+                    )));
+                }
+                evts
             })
         };
 
@@ -260,6 +283,7 @@ impl Component for App {
                             connection_state={self.connection_state.clone()}
                             events_pending_submission={self.events_pending_submission.clone()}
                             tasks_open={tasks.open}
+                            tasks_done={tasks.done}
                             tasks_backlog={tasks.backlog}
                             on_logout={ctx.link().callback(|_| AppMsg::Logout)}
                             {on_title_change}

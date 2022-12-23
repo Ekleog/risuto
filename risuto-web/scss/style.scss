@@ -52,6 +52,10 @@ $primary: $red;
     color: $body-color;
 }
 
+.done-task-list {
+    filter: brightness(50%);
+}
+
 ::-webkit-scrollbar {
     height: 5px;
     width: 5px;

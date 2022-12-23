@@ -8,7 +8,7 @@ mod login;
 pub use login::Login;
 
 mod main_view;
-pub use main_view::{MainView, TaskOrderChangeEvent, TaskPosition};
+pub use main_view::{ListType, MainView, TaskOrderChangeEvent, TaskPosition};
 
 mod offline_banner;
 pub use offline_banner::OfflineBanner;
