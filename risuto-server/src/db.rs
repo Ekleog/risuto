@@ -17,7 +17,7 @@ pub struct PostgresDb<'a> {
 }
 
 #[derive(sqlx::Type)]
-#[sqlx(rename_all = "snake_case")]
+#[sqlx(type_name = "event_type", rename_all = "snake_case")]
 enum DbType {
     SetTitle,
     SetDone,
@@ -35,7 +35,7 @@ enum DbType {
 struct DbEvent {
     id: Uuid,
     owner_id: Uuid,
-    date: Time,
+    date: chrono::NaiveDateTime,
 
     #[sqlx(rename = "type")]
     type_: DbType,
@@ -43,7 +43,7 @@ struct DbEvent {
 
     title: Option<String>,
     new_val_bool: Option<bool>,
-    time: Option<Time>,
+    time: Option<chrono::NaiveDateTime>,
     tag_id: Option<Uuid>,
     new_val_int: Option<i64>,
     comment: Option<String>,
@@ -64,7 +64,7 @@ impl DbEvent {
         self
     }
     fn time(mut self, t: Option<Time>) -> DbEvent {
-        self.time = t;
+        self.time = t.map(|t| t.naive_utc());
         self
     }
     fn tag_id(mut self, t: TagId) -> DbEvent {
@@ -90,7 +90,7 @@ impl From<Event> for DbEvent {
         let res = DbEvent {
             id: e.id.0,
             owner_id: e.owner.0,
-            date: e.date,
+            date: e.date.naive_utc(),
             task_id: e.task.0,
             type_: DbType::SetTitle, // will be overwritten below
             title: None,
@@ -498,7 +498,7 @@ async fn fetch_tasks_from_tmp_tasks_table(
             t.add_event(Event {
                 id: EventId(e.id),
                 owner: UserId(e.owner_id),
-                date: e.date,
+                date: e.date.and_local_timezone(chrono::Utc).unwrap(),
                 task: TaskId(e.task_id),
                 contents: match e.type_ {
                     DbType::SetTitle => {
@@ -511,8 +511,12 @@ async fn fetch_tasks_from_tmp_tasks_table(
                         e.new_val_bool
                             .expect("set_archived event without new_val_bool"),
                     ),
-                    DbType::BlockedUntil => EventType::BlockedUntil(e.time),
-                    DbType::ScheduleFor => EventType::ScheduleFor(e.time),
+                    DbType::BlockedUntil => EventType::BlockedUntil(
+                        e.time.map(|t| t.and_local_timezone(chrono::Utc).unwrap()),
+                    ),
+                    DbType::ScheduleFor => EventType::ScheduleFor(
+                        e.time.map(|t| t.and_local_timezone(chrono::Utc).unwrap()),
+                    ),
                     DbType::AddTag => EventType::AddTag {
                         tag: TagId(e.tag_id.expect("add_tag event without tag_id")),
                         prio: e.new_val_int.expect("add_tag event without new_val_int"),
@@ -573,12 +577,12 @@ pub async fn submit_event(conn: &mut sqlx::PgConnection, e: Event) -> Result<(),
         "INSERT INTO events VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)",
         e.id,
         e.owner_id,
-        e.date.naive_utc(),
+        e.date,
         e.type_ as DbType,
         e.task_id,
         e.title,
         e.new_val_bool,
-        e.time.map(|t| t.naive_utc()),
+        e.time,
         e.tag_id,
         e.new_val_int,
         e.comment,
