@@ -123,9 +123,48 @@ pub fn main_view(p: &MainViewProps) -> Html {
         ),
     );
 
+    let backlog_list_ref = use_node_ref();
+    let on_backlog_handle_drag = {
+        let backlog_list_ref = backlog_list_ref.clone();
+        Callback::from(move |e: web_sys::DragEvent| {
+            let mouse_y = e.client_y();
+            if mouse_y == 0 {
+                return; // out of window
+            }
+            let window_height = web_sys::window()
+                .expect("no web_sys window")
+                .inner_height()
+                .expect("failed retrieving inner_height of window")
+                .as_f64()
+                .expect("inner_height was not a float");
+            let backlog_height = format!("{}px", window_height as i32 - mouse_y);
+            let backlog_list = backlog_list_ref
+                .cast::<web_sys::HtmlElement>()
+                .expect("no main task list html element");
+            let style = backlog_list.style();
+            style
+                .set_property("min-height", &backlog_height)
+                .expect("failed setting min-height property");
+            style
+                .set_property("max-height", &backlog_height)
+                .expect("failed setting max-height property");
+        })
+    };
+
+    let empty_ref = use_node_ref();
+    let hide_drag_image = {
+        let empty_ref = empty_ref.clone();
+        Callback::from(move |e: web_sys::DragEvent| {
+            if let Some(t) = e.data_transfer() {
+                t.set_drag_image(&empty_ref.cast().expect("no empty element"), 0, 0);
+            }
+        })
+    };
+
     // Put everything together
     html! {
-        <div class="h-100 d-flex flex-column">
+        <div class="h-100 d-flex flex-column overflow-hidden">
+            <div ref={empty_ref}></div>
             <ui::OfflineBanner connection_state={p.connection_state.clone()} />
 
             // Top-right corner
@@ -139,15 +178,17 @@ pub fn main_view(p: &MainViewProps) -> Html {
             </div>
 
             // Main task list
-            <div class="flex-fill overflow-auto p-lg-5">
-                <ui::TaskList
-                    ref_this={ref_open}
-                    tasks={p.tasks_open.clone()}
-                    on_title_change={p.on_title_change.clone()}
-                    on_done_change={p.on_done_change.clone()}
-                />
+            <div class="flex-fill overflow-auto p-0">
+                <div class="m-lg-5">
+                    <ui::TaskList
+                        ref_this={ref_open}
+                        tasks={p.tasks_open.clone()}
+                        on_title_change={p.on_title_change.clone()}
+                        on_done_change={p.on_done_change.clone()}
+                    />
+                </div>
 
-                <div class="mt-4 done-task-list">
+                <div class="done-task-list m-lg-5">
                     <ui::TaskList
                         ref_this={ref_done}
                         tasks={p.tasks_done.clone()}
@@ -158,18 +199,30 @@ pub fn main_view(p: &MainViewProps) -> Html {
             </div>
 
             // Backlog task list
-            <div class="backlog-task-list p-0" style="min-height: 50%; max-height: 50%">
-                <button class="backlog-drag-handle translate-middle btn btn-primary btn-circle" type="button">
+            <div
+                ref={backlog_list_ref}
+                class="backlog-task-list p-0"
+                style="min-height: 0px; max-height: 0px"
+            >
+                <button
+                    class="backlog-drag-handle translate-middle btn btn-primary btn-circle"
+                    type="button"
+                    draggable="true"
+                    ondragstart={hide_drag_image}
+                    ondrag={on_backlog_handle_drag}
+                >
                     <span class="bi-journal-text" aria-hidden="true"></span>
                     <span class="visually-hidden">{ "Backlog" }</span>
                 </button>
-                <div class="overflow-auto p-lg-5 mh-100">
-                    <ui::TaskList
-                        ref_this={ref_backlog}
-                        tasks={p.tasks_backlog.clone()}
-                        on_title_change={p.on_title_change.clone()}
-                        on_done_change={p.on_done_change.clone()}
-                    />
+                <div class="overflow-auto p-0 mh-100">
+                    <div class="m-lg-5">
+                        <ui::TaskList
+                            ref_this={ref_backlog}
+                            tasks={p.tasks_backlog.clone()}
+                            on_title_change={p.on_title_change.clone()}
+                            on_done_change={p.on_done_change.clone()}
+                        />
+                    </div>
                 </div>
             </div>
         </div>

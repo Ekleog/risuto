@@ -1618,6 +1618,7 @@ dependencies = [
  "sortable-js",
  "tracing",
  "tracing-wasm",
+ "wasm-bindgen",
  "wasm-bindgen-futures",
  "wasm-timer",
  "web-sys",
