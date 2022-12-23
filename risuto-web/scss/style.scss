@@ -56,6 +56,19 @@ $primary: $red;
     filter: brightness(50%);
 }
 
+.backlog-task-list {
+    position: relative;
+    border-top-style: groove;
+    border-color: $red-700;
+}
+
+.backlog-drag-handle {
+    position: absolute;
+    z-index: 9;
+    top: 0%;
+    left: 50%;
+}
+
 ::-webkit-scrollbar {
     height: 5px;
     width: 5px;

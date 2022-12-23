@@ -158,14 +158,19 @@ pub fn main_view(p: &MainViewProps) -> Html {
             </div>
 
             // Backlog task list
-            <div class="overflow-auto p-lg-5" style="min-height: 50%; max-height: 50%;">
-                <h2>{ "Backlog" }</h2>
-                <ui::TaskList
-                    ref_this={ref_backlog}
-                    tasks={p.tasks_backlog.clone()}
-                    on_title_change={p.on_title_change.clone()}
-                    on_done_change={p.on_done_change.clone()}
-                />
+            <div class="backlog-task-list p-0" style="min-height: 50%; max-height: 50%">
+                <button class="backlog-drag-handle translate-middle btn btn-primary btn-circle" type="button">
+                    <span class="bi-journal-text" aria-hidden="true"></span>
+                    <span class="visually-hidden">{ "Backlog" }</span>
+                </button>
+                <div class="overflow-auto p-lg-5 mh-100">
+                    <ui::TaskList
+                        ref_this={ref_backlog}
+                        tasks={p.tasks_backlog.clone()}
+                        on_title_change={p.on_title_change.clone()}
+                        on_done_change={p.on_done_change.clone()}
+                    />
+                </div>
             </div>
         </div>
     }

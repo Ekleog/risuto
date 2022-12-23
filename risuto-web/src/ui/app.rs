@@ -278,7 +278,7 @@ impl Component for App {
                             on_select_tag={ctx.link().callback(|id| AppMsg::SetTag(id))}
                         />
                     </nav>
-                    <main class="col-md-10 h-100">
+                    <main class="col-md-10 h-100 p-0">
                         <ui::MainView
                             connection_state={self.connection_state.clone()}
                             events_pending_submission={self.events_pending_submission.clone()}
