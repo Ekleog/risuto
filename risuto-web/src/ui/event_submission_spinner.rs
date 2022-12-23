@@ -1,10 +1,10 @@
-use risuto_api::NewEvent;
+use risuto_api::Event;
 use std::collections::VecDeque;
 use yew::prelude::*;
 
 #[derive(Clone, PartialEq, Properties)]
 pub struct EventSubmissionSpinnerProps {
-    pub events_pending_submission: VecDeque<NewEvent>,
+    pub events_pending_submission: VecDeque<Event>,
 }
 
 #[function_component(EventSubmissionSpinner)]

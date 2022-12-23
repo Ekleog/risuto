@@ -1,5 +1,5 @@
 use crate::ui;
-use risuto_api::{NewEvent, Task, TaskId};
+use risuto_api::{Event, Task, TaskId};
 use std::{collections::VecDeque, rc::Rc};
 use yew::prelude::*;
 
@@ -18,7 +18,7 @@ pub struct TaskOrderChangeEvent {
 #[derive(Clone, PartialEq, Properties)]
 pub struct MainViewProps {
     pub connection_state: ui::ConnState,
-    pub events_pending_submission: VecDeque<NewEvent>,
+    pub events_pending_submission: VecDeque<Event>,
     pub tasks_open: Rc<Vec<(TaskId, Task)>>,
     pub tasks_backlog: Rc<Vec<(TaskId, Task)>>,
     pub on_logout: Callback<()>,

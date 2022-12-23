@@ -146,7 +146,7 @@ pub async fn start_event_feed(
     }
 }
 
-pub async fn send_event(login: &LoginInfo, event: NewEvent) {
+pub async fn send_event(login: &LoginInfo, event: Event) {
     let res = crate::CLIENT
         .post(format!("{}/api/submit-event", login.host))
         .bearer_auth(login.token.0)

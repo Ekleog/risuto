@@ -1,6 +1,6 @@
 use futures::{channel::oneshot, executor::block_on};
 use gloo_storage::{LocalStorage, Storage};
-use risuto_api::*;
+use risuto_api::{DbDump, Event, EventType, TagId, Task, TaskId, UserId};
 use std::{collections::VecDeque, rc::Rc};
 use wasm_bindgen_futures::spawn_local;
 use yew::prelude::*;
@@ -23,15 +23,15 @@ pub enum AppMsg {
     WebsocketDisconnected,
 
     SetTag(Option<TagId>),
-    NewUserEvent(NewEvent),
-    NewNetworkEvent(NewEvent),
+    NewUserEvent(Event),
+    NewNetworkEvent(Event),
     EventSubmissionComplete,
 }
 
 #[derive(Clone, PartialEq)]
 pub enum ConnState {
     Disconnected,
-    WebsocketConnected(VecDeque<NewEvent>),
+    WebsocketConnected(VecDeque<Event>),
     Connected,
 }
 
@@ -39,7 +39,7 @@ pub struct App {
     db: DbDump,
     connection_state: ConnState,
     tag: Option<TagId>,
-    events_pending_submission: VecDeque<NewEvent>, // push_back, pop_front
+    events_pending_submission: VecDeque<Event>, // push_back, pop_front
     feed_canceller: oneshot::Receiver<()>,
 }
 
@@ -50,14 +50,12 @@ struct TaskLists {
 }
 
 impl App {
-    fn locally_insert_new_event(&mut self, e: NewEvent) {
-        for (t, e) in e.untrusted_task_event_list().into_iter() {
-            match self.db.tasks.get_mut(&t) {
-                None => tracing::warn!(evt=?e, "got event for task not in db"),
-                Some(t) => {
-                    t.add_event(e);
-                    t.refresh_metadata();
-                }
+    fn locally_insert_new_event(&mut self, e: Event) {
+        match self.db.tasks.get_mut(&e.task) {
+            None => tracing::warn!(evt=?e, "got event for task not in db"),
+            Some(t) => {
+                t.add_event(e);
+                t.refresh_metadata();
             }
         }
     }
@@ -108,7 +106,7 @@ impl Component for App {
         ));
 
         // Load event submission queue
-        let events_pending_submission: VecDeque<NewEvent> =
+        let events_pending_submission: VecDeque<Event> =
             LocalStorage::get(KEY_EVTS_PENDING_SUBMISSION).unwrap_or(VecDeque::new());
 
         // Start event submission if need be
@@ -208,20 +206,14 @@ impl Component for App {
         let on_title_change = {
             let owner = self.db.owner.clone();
             ctx.link().callback(move |(task, title)| {
-                AppMsg::NewUserEvent(NewEvent::now(
-                    owner,
-                    NewEventContents::SetTitle { task, title },
-                ))
+                AppMsg::NewUserEvent(Event::now(owner, task, EventType::SetTitle(title)))
             })
         };
 
         let on_done_change = {
             let owner = self.db.owner.clone();
             ctx.link().callback(move |(task, now_done)| {
-                AppMsg::NewUserEvent(NewEvent::now(
-                    owner,
-                    NewEventContents::SetDone { task, now_done },
-                ))
+                AppMsg::NewUserEvent(Event::now(owner, task, EventType::SetDone(now_done)))
             })
         };
 
@@ -291,10 +283,10 @@ fn compute_reordering_events(
 ) -> Vec<AppMsg> {
     macro_rules! evt {
         ( $task:expr, $prio:expr ) => {
-            AppMsg::NewUserEvent(NewEvent::now(
+            AppMsg::NewUserEvent(Event::now(
                 owner,
-                NewEventContents::AddTag {
-                    task: $task,
+                $task,
+                EventType::AddTag {
                     tag,
                     prio: $prio,
                     backlog: into_backlog,
@@ -368,7 +360,7 @@ fn compute_reordering_events(
         .collect()
 }
 
-fn send_event(ctx: &Context<App>, e: NewEvent) {
+fn send_event(ctx: &Context<App>, e: Event) {
     let info = ctx.props().login.clone();
     ctx.link().send_future(async move {
         api::send_event(&info, e).await;
