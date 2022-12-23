@@ -111,7 +111,10 @@ pub struct Task {
     pub events: BTreeMap<Time, Vec<Event>>,
 }
 
-fn find_comment<'a>(comments: &'a mut BTreeMap<Time, Vec<Comment>>, creation_id: &EventId) -> Option<&'a mut Comment> {
+fn find_comment<'a>(
+    comments: &'a mut BTreeMap<Time, Vec<Comment>>,
+    creation_id: &EventId,
+) -> Option<&'a mut Comment> {
     for c in comments.values_mut().flat_map(|v| v.iter_mut()) {
         if c.creation_id == *creation_id {
             return Some(c);
@@ -170,20 +173,35 @@ impl Task {
                         read.insert(e.owner);
                         let children = BTreeMap::new();
                         let creation_id = e.id;
-                        if let Some(parent) = parent_id.and_then(|p| find_comment(&mut self.current_comments, &p)) {
-                            parent.children
+                        if let Some(parent) =
+                            parent_id.and_then(|p| find_comment(&mut self.current_comments, &p))
+                        {
+                            parent
+                                .children
                                 .entry(e.date)
                                 .or_insert(Vec::new())
-                                .push(Comment { creation_id, edits, read, children });
-                        } else { // Also add as a top-level comment if the parent could not be found (TODO: log a warning)
+                                .push(Comment {
+                                    creation_id,
+                                    edits,
+                                    read,
+                                    children,
+                                });
+                        } else {
+                            // Also add as a top-level comment if the parent could not be found (TODO: log a warning)
                             self.current_comments
                                 .entry(e.date)
                                 .or_insert(Vec::new())
-                                .push(Comment { creation_id, edits, read, children });
+                                .push(Comment {
+                                    creation_id,
+                                    edits,
+                                    read,
+                                    children,
+                                });
                         }
                     }
                     EventType::EditComment { comment_id, text } => {
-                        if let Some(comment) = find_comment(&mut self.current_comments, comment_id) {
+                        if let Some(comment) = find_comment(&mut self.current_comments, comment_id)
+                        {
                             comment
                                 .edits
                                 .entry(e.date)
@@ -275,7 +293,8 @@ impl Event {
                     .get_event_info($c)
                     .await
                     .with_context(|| format!("getting info of comment {:?}", $c))?;
-                if par_date >= self.date { // TODO: remove this requirement by fixing event insertion into tasks
+                if par_date >= self.date {
+                    // TODO: remove this requirement by fixing event insertion into tasks
                     return Ok(false);
                 }
                 (par_owner, par_date, par_task)
@@ -307,8 +326,10 @@ impl Event {
             EventType::EditComment { comment_id, .. } => {
                 let (comm_owner, _, comm_task) = check_parent_event!(comment_id);
                 let is_comment_owner = self.owner == comm_owner;
-                let is_first_comment =
-                    db.is_first_comment(comm_task, comment_id).await.with_context(|| {
+                let is_first_comment = db
+                    .is_first_comment(comm_task, comment_id)
+                    .await
+                    .with_context(|| {
                         format!("checking if comment {:?} is first comment", comment_id)
                     })?;
                 is_comment_owner || (auth!(comm_task).can_edit && is_first_comment)
@@ -394,7 +415,9 @@ impl Db for DbDump {
     async fn get_event_info(&mut self, e: EventId) -> anyhow::Result<(UserId, Time, TaskId)> {
         let task_id = self.get_task_for_event(e)?;
         let t = self.tasks.get(&task_id).ok_or_else(|| {
-            anyhow!("requested comment owner for event {e:?} for which task {task_id:?} is not in db",)
+            anyhow!(
+                "requested comment owner for event {e:?} for which task {task_id:?} is not in db",
+            )
         })?;
         Ok((t.owner, t.date, task_id))
     }

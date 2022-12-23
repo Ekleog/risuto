@@ -3,8 +3,8 @@ use axum::async_trait;
 use chrono::Utc;
 use futures::{Stream, StreamExt, TryStreamExt};
 use risuto_api::{
-    AuthInfo, AuthToken, DbDump, Event, EventId, EventType, NewSession,
-    Tag, TagId, Task, TaskId, Time, User, UserId, Uuid,
+    AuthInfo, AuthToken, DbDump, Event, EventId, EventType, NewSession, Tag, TagId, Task, TaskId,
+    Time, User, UserId, Uuid,
 };
 use sqlx::Row;
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -108,11 +108,24 @@ impl From<Event> for DbEvent {
             SetArchived(b) => res.type_(DbType::SetArchived).new_val_bool(b),
             BlockedUntil(t) => res.type_(DbType::BlockedUntil).time(t),
             ScheduleFor(t) => res.type_(DbType::ScheduleFor).time(t),
-            AddTag { tag, prio, backlog } => res.type_(DbType::AddTag).tag_id(tag).new_val_int(prio).new_val_bool(backlog),
+            AddTag { tag, prio, backlog } => res
+                .type_(DbType::AddTag)
+                .tag_id(tag)
+                .new_val_int(prio)
+                .new_val_bool(backlog),
             RmTag(t) => res.type_(DbType::RemoveTag).tag_id(t),
-            AddComment { text, parent_id } => res.type_(DbType::AddComment).comment(text).parent_id(parent_id),
-            EditComment { text, comment_id } => res.type_(DbType::EditComment).comment(text).parent_id(Some(comment_id)),
-            SetEventRead { event_id, now_read } => res.type_(DbType::SetEventRead).new_val_bool(now_read).parent_id(Some(event_id)),
+            AddComment { text, parent_id } => res
+                .type_(DbType::AddComment)
+                .comment(text)
+                .parent_id(parent_id),
+            EditComment { text, comment_id } => res
+                .type_(DbType::EditComment)
+                .comment(text)
+                .parent_id(Some(comment_id)),
+            SetEventRead { event_id, now_read } => res
+                .type_(DbType::SetEventRead)
+                .new_val_bool(now_read)
+                .parent_id(Some(event_id)),
         }
     }
 }
@@ -473,9 +486,14 @@ async fn fetch_tasks_from_tmp_tasks_table(
             FROM tmp_tasks t
             INNER JOIN events e
             ON t.id = e.task_id
-        "
-    ).fetch(&mut *conn);
-    while let Some(e) = events_query.try_next().await.context("querying events table")? {
+        ",
+    )
+    .fetch(&mut *conn);
+    while let Some(e) = events_query
+        .try_next()
+        .await
+        .context("querying events table")?
+    {
         if let Some(t) = tasks.get_mut(&TaskId(e.task_id)) {
             t.add_event(Event {
                 id: EventId(e.id),
@@ -483,9 +501,16 @@ async fn fetch_tasks_from_tmp_tasks_table(
                 date: e.date,
                 task: TaskId(e.task_id),
                 contents: match e.type_ {
-                    DbType::SetTitle => EventType::SetTitle(e.title.expect("set_title event without title")),
-                    DbType::SetDone => EventType::SetDone(e.new_val_bool.expect("set_done event without new_val_bool")),
-                    DbType::SetArchived => EventType::SetArchived(e.new_val_bool.expect("set_archived event without new_val_bool")),
+                    DbType::SetTitle => {
+                        EventType::SetTitle(e.title.expect("set_title event without title"))
+                    }
+                    DbType::SetDone => EventType::SetDone(
+                        e.new_val_bool.expect("set_done event without new_val_bool"),
+                    ),
+                    DbType::SetArchived => EventType::SetArchived(
+                        e.new_val_bool
+                            .expect("set_archived event without new_val_bool"),
+                    ),
                     DbType::BlockedUntil => EventType::BlockedUntil(e.time),
                     DbType::ScheduleFor => EventType::ScheduleFor(e.time),
                     DbType::AddTag => EventType::AddTag {
@@ -493,20 +518,28 @@ async fn fetch_tasks_from_tmp_tasks_table(
                         prio: e.new_val_int.expect("add_tag event without new_val_int"),
                         backlog: e.new_val_bool.expect("add_tag event without new_val_bool"),
                     },
-                    DbType::RemoveTag => EventType::RmTag(TagId(e.tag_id.expect("remove_tag event without tag_id"))),
+                    DbType::RemoveTag => {
+                        EventType::RmTag(TagId(e.tag_id.expect("remove_tag event without tag_id")))
+                    }
                     DbType::AddComment => EventType::AddComment {
                         text: e.comment.expect("add_comment event without text"),
                         parent_id: e.parent_id.map(EventId),
                     },
                     DbType::EditComment => EventType::EditComment {
                         text: e.comment.expect("edit_comment event without text"),
-                        comment_id: EventId(e.parent_id.expect("edit_comment event without parent_id")),
+                        comment_id: EventId(
+                            e.parent_id.expect("edit_comment event without parent_id"),
+                        ),
                     },
                     DbType::SetEventRead => EventType::SetEventRead {
-                        event_id: EventId(e.parent_id.expect("set_event_read event without parent_id")),
-                        now_read: e.new_val_bool.expect("set_event_read event without new_val_bool"),
+                        event_id: EventId(
+                            e.parent_id.expect("set_event_read event without parent_id"),
+                        ),
+                        now_read: e
+                            .new_val_bool
+                            .expect("set_event_read event without new_val_bool"),
                     },
-                }
+                },
             })
         }
     }
@@ -550,7 +583,8 @@ pub async fn submit_event(conn: &mut sqlx::PgConnection, e: Event) -> Result<(),
         e.new_val_int,
         e.comment,
         e.parent_id,
-    ).execute(&mut *db.conn)
+    )
+    .execute(&mut *db.conn)
     .await
     .with_context(|| format!("inserting event {:?}", event_id))?;
 
