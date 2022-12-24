@@ -352,7 +352,7 @@ pub async fn fetch_dump_unarchived(
         .await
         .with_context(|| format!("fetching tags for user {:?}", owner))?;
 
-    let fetched_tasks = with_tmp_tasks_table(&mut *conn, |conn| {
+    let tasks = with_tmp_tasks_table(&mut *conn, |conn| {
         Box::pin(async move {
             sqlx::query(
                 "
@@ -376,8 +376,6 @@ pub async fn fetch_dump_unarchived(
         })
     })
     .await?;
-
-    let tasks = fetched_tasks;
 
     Ok(DbDump {
         owner,
