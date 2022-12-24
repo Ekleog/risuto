@@ -8,8 +8,10 @@ $red: #8D0801;
 
 $body-bg: darken($dark, 4%);
 $text: darken($white, 15%);
+$text-inverted: lighten($black, 15%);
+
 $input-title-bg: $dark;
-$offline-banner-bg: lighten($dark, 3%);
+$offline-banner-bg: $yellow;
 $offline-banner-border: lighten($dark, 5%);
 $tag-list-bg: darken($dark, 2%);
 $tag-list-active-bg: lighten($dark, 3%);
@@ -22,6 +24,7 @@ $scrollbar-thumb-hover: lighten($dark, 20%);
 
 $body-color: $text;
 $primary: $red;
+$secondary: $yellow;
 
 @import "../vendor/bootstrap-5.2.2/scss/bootstrap";
 @import "../vendor/bootstrap-icons-1.10.2/bootstrap-icons";
@@ -35,6 +38,7 @@ $primary: $red;
     width: 100%;
     z-index: 5;
 
+    color: $text-inverted;
     background-color: $offline-banner-bg;
     border-bottom-style: solid;
     border-color: $offline-banner-border;
