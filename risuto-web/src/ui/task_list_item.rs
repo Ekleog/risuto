@@ -48,6 +48,7 @@ fn title_div(p: &TaskListItemProps) -> Html {
             ref={div_ref}
             class="flex-fill d-flex align-items-center"
             contenteditable="true"
+            spellcheck="false"
             onfocusout={ on_validate.reform(|_| ()) }
             onkeydown={ Callback::from(move |e: web_sys::KeyboardEvent| {
                 match &e.key() as &str {
