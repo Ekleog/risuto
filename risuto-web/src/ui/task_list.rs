@@ -1,5 +1,5 @@
 use risuto_api::{Task, TaskId};
-use std::rc::Rc;
+use std::{rc::Rc, sync::Arc};
 use yew::prelude::*;
 
 use crate::ui;
@@ -7,7 +7,7 @@ use crate::ui;
 #[derive(Clone, PartialEq, Properties)]
 pub struct TaskListProps {
     pub ref_this: NodeRef,
-    pub tasks: Rc<Vec<(TaskId, Task)>>,
+    pub tasks: Rc<Vec<(TaskId, Arc<Task>)>>,
     pub on_title_change: Callback<(TaskId, String)>,
     pub on_done_change: Callback<(TaskId, bool)>,
 }

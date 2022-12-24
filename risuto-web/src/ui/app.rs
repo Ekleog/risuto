@@ -1,7 +1,7 @@
 use futures::{channel::oneshot, executor::block_on};
 use gloo_storage::{LocalStorage, Storage};
 use risuto_api::{DbDump, Event, EventType, TagId, Task, TaskId, UserId};
-use std::{collections::VecDeque, rc::Rc};
+use std::{collections::VecDeque, rc::Rc, sync::Arc};
 use wasm_bindgen_futures::spawn_local;
 use yew::prelude::*;
 
@@ -49,9 +49,9 @@ pub struct App {
 
 #[derive(Clone)]
 struct TaskLists {
-    open: Rc<Vec<(TaskId, Task)>>,
-    done: Rc<Vec<(TaskId, Task)>>,
-    backlog: Rc<Vec<(TaskId, Task)>>,
+    open: Rc<Vec<(TaskId, Arc<Task>)>>,
+    done: Rc<Vec<(TaskId, Arc<Task>)>>,
+    backlog: Rc<Vec<(TaskId, Arc<Task>)>>,
 }
 
 impl App {
@@ -59,8 +59,10 @@ impl App {
         match self.db.tasks.get_mut(&e.task) {
             None => tracing::warn!(evt=?e, "got event for task not in db"),
             Some(t) => {
-                t.add_event(e);
-                t.refresh_metadata();
+                let mut task = (**t).clone();
+                task.add_event(e);
+                task.refresh_metadata();
+                *t = Arc::new(task);
             }
         }
     }
@@ -93,7 +95,7 @@ impl App {
         open.sort_unstable_by_key(|&(prio, id, _)| (prio, id));
         done.sort_unstable_by_key(|&(prio, id, _)| (prio, id));
         backlog.sort_unstable_by_key(|&(prio, id, _)| (prio, id));
-        let cleanup = |v: Vec<(i64, TaskId, Task)>| {
+        let cleanup = |v: Vec<(i64, TaskId, Arc<Task>)>| {
             Rc::new(v.into_iter().map(|(_, id, t)| (id, t)).collect())
         };
         TaskLists {
@@ -254,7 +256,7 @@ impl Component for App {
                     task_id,
                     e.after.index,
                     e.after.list.is_backlog(),
-                    insert_into,
+                    &insert_into,
                 );
                 if e.before.list.is_done() != e.after.list.is_done() {
                     evts.push(AppMsg::NewUserEvent(Event::now(
@@ -303,7 +305,7 @@ fn compute_reordering_events(
     task: TaskId,
     index: usize,
     into_backlog: bool,
-    into: Vec<(TaskId, Task)>,
+    into: &Vec<(TaskId, Arc<Task>)>,
 ) -> Vec<AppMsg> {
     macro_rules! evt {
         ( $task:expr, $prio:expr ) => {

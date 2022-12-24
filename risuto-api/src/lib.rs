@@ -3,7 +3,7 @@ use async_trait::async_trait;
 use chrono::Utc;
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
-    ops::BitOr,
+    ops::BitOr, sync::Arc,
 };
 
 pub use uuid::{uuid, Uuid};
@@ -347,7 +347,7 @@ pub struct DbDump {
     pub owner: UserId,
     pub users: HashMap<UserId, User>,
     pub tags: HashMap<TagId, (Tag, AuthInfo)>,
-    pub tasks: HashMap<TaskId, Task>,
+    pub tasks: HashMap<TaskId, Arc<Task>>,
 }
 
 impl DbDump {

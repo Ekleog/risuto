@@ -1,9 +1,11 @@
+use std::sync::Arc;
+
 use risuto_api::Task;
 use yew::prelude::*;
 
 #[derive(Clone, PartialEq, Properties)]
 pub struct TaskListItemProps {
-    pub task: Task,
+    pub task: Arc<Task>,
     pub on_title_change: Callback<String>,
     pub on_done_change: Callback<()>,
 }

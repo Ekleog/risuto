@@ -7,6 +7,6 @@ edition = "2021"
 anyhow = "1.0"
 async-trait = "0.1.58"
 chrono = { version = "0.4.22", features = ["serde"] }
-serde = { version = "1.0", features = ["derive"] }
+serde = { version = "1.0", features = ["derive", "rc"] }
 tracing = "0.1.36"
 uuid = { version = "1.2", features = ["serde", "v4"] }
