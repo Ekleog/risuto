@@ -1,21 +1,45 @@
-@import "bootstrap-colors"; // TODO: there must be a way of not having to copy-paste all that...
+$white: #FFFFFF;
+$black: #000000;
+$dark: #001427;
+$green: #708D81;
+$yellow: #F4D58D;
+$orange: #BF0603;
+$red: #8D0801;
 
-$body-bg: $black;
-$body-color: $gray-200;
+$body-bg: darken($dark, 4%);
+$text: darken($white, 15%);
+$input-title-bg: $dark;
+$offline-banner-bg: lighten($dark, 3%);
+$offline-banner-border: lighten($dark, 5%);
+$tag-list-bg: darken($dark, 2%);
+$tag-list-active-bg: lighten($dark, 3%);
+$tag-list-hover: lighten($dark, 70%);
+$task-list-bg: lighten($dark, 2%);
+$backlog-handle: $red;
+$scrollbar-track: $dark;
+$scrollbar-thumb: lighten($dark, 10%);
+$scrollbar-thumb-hover: lighten($dark, 20%);
+
+$body-color: $text;
 $primary: $red;
 
 @import "../vendor/bootstrap-5.2.2/scss/bootstrap";
 @import "../vendor/bootstrap-icons-1.10.2/bootstrap-icons";
 
 .login-form .input-group-text {
-    background-color: $gray-900;
+    background-color: $input-title-bg;
 }
 
 .offline-banner {
     position: fixed;
     width: 100%;
     z-index: 5;
-    background-color: $gray-700;
+
+    background-color: $offline-banner-bg;
+    border-bottom-style: solid;
+    border-color: $offline-banner-border;
+    border-width: 1px;
+
     transition: .3s ease-in-out;
 }
 
@@ -24,23 +48,23 @@ $primary: $red;
 }
 
 .sidebar {
-    background-color: $gray-900;
+    background-color: $tag-list-bg;
 }
 
 .sidebar a {
-    color: $body-color;
+    color: $text;
 }
 
 .sidebar a.active {
-    color: $body-color;
+    color: $text;
 }
 
 .sidebar a:hover {
-    color: $primary;
+    color: $tag-list-hover;
 }
 
 .sidebar .nav-item.active {
-    background-color: $gray-700;
+    background-color: $tag-list-active-bg;
     font-weight: bold;
 }
 
@@ -57,8 +81,8 @@ $primary: $red;
 }
 
 .task-list li {
-    background-color: $gray-900;
-    color: $body-color;
+    background-color: $task-list-bg;
+    color: $text;
 }
 
 .done-task-list {
@@ -68,7 +92,7 @@ $primary: $red;
 .backlog-task-list {
     position: relative;
     border-top-style: groove;
-    border-color: $red-700;
+    border-color: $backlog-handle;
 }
 
 .backlog-drag-handle {
@@ -85,15 +109,15 @@ $primary: $red;
 }
 
 ::-webkit-scrollbar-track {
-    background: $gray-800;
+    background: $scrollbar-track;
 }
 
 ::-webkit-scrollbar-thumb {
-    background: $gray-600;
+    background: $scrollbar-thumb;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-    background: $gray-500;
+    background: $scrollbar-thumb-hover;
 }
 
 .bi-btn {
