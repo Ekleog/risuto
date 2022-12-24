@@ -270,7 +270,7 @@ impl Component for App {
         html! {
             <div class="container-fluid vh-100">
                 <div class="row h-100">
-                    <nav class="col-md-2 sidebar overflow-auto">
+                    <nav class="col-md-2 sidebar overflow-auto p-0">
                         <ui::TagList
                             tags={self.db.tags.clone()}
                             current_user={self.db.owner}

@@ -31,8 +31,17 @@ $primary: $red;
     color: $body-color;
 }
 
-.sidebar .nav-item .active {
-    background-color: $primary;
+.sidebar a.active {
+    color: $body-color;
+}
+
+.sidebar a:hover {
+    color: $primary;
+}
+
+.sidebar .nav-item.active {
+    background-color: $gray-700;
+    font-weight: bold;
 }
 
 .events-pending-spinner {
