@@ -1,30 +1,32 @@
 $white: #FFFFFF;
 $black: #000000;
-$dark: #001427;
+$blue: #001427;
 $green: #708D81;
 $yellow: #F4D58D;
 $orange: #BF0603;
 $red: #8D0801;
 
-$body-bg: darken($dark, 4%);
+$body-bg: darken($blue, 4%);
 $text: darken($white, 15%);
 $text-inverted: lighten($black, 15%);
 
-$input-title-bg: $dark;
+$input-title-bg: $blue;
 $offline-banner-bg: $yellow;
-$offline-banner-border: lighten($dark, 5%);
-$tag-list-bg: darken($dark, 2%);
-$tag-list-active-bg: lighten($dark, 3%);
-$tag-list-hover: lighten($dark, 70%);
-$task-list-bg: lighten($dark, 2%);
+$offline-banner-border: lighten($blue, 5%);
+$tag-list-bg: darken($blue, 2%);
+$tag-list-active-bg: lighten($blue, 3%);
+$tag-list-hover: lighten($blue, 70%);
+$task-list-bg: lighten($blue, 2%);
 $backlog-handle: $red;
-$scrollbar-track: $dark;
-$scrollbar-thumb: lighten($dark, 10%);
-$scrollbar-thumb-hover: lighten($dark, 20%);
+$scrollbar-track: $blue;
+$scrollbar-thumb: lighten($blue, 10%);
+$scrollbar-thumb-hover: lighten($blue, 20%);
 
 $body-color: $text;
 $primary: $red;
 $secondary: $yellow;
+$light: lighten($blue, 70%);
+$dark: lighten($blue, 3%);
 
 @import "../vendor/bootstrap-5.2.2/scss/bootstrap";
 @import "../vendor/bootstrap-icons-1.10.2/bootstrap-icons";

@@ -15,7 +15,7 @@ pub fn event_submission_spinner(p: &EventSubmissionSpinnerProps) -> Html {
                 class={ classes!(
                     "events-pending-spinner",
                     p.events_pending_submission.is_empty().then(|| "no-events"),
-                    "btn", "btn-secondary", "btn-circle", "m-3"
+                    "btn", "btn-secondary", "btn-circle", "mt-3"
                 ) }
                 type="button"
                 data-bs-toggle="dropdown"

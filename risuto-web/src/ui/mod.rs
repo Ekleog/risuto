@@ -13,6 +13,9 @@ pub use main_view::{ListType, MainView, TaskOrderChangeEvent, TaskPosition};
 mod offline_banner;
 pub use offline_banner::OfflineBanner;
 
+mod settings_menu;
+pub use settings_menu::SettingsMenu;
+
 mod tag_list;
 pub use tag_list::TagList;
 

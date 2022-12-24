@@ -170,11 +170,7 @@ pub fn main_view(p: &MainViewProps) -> Html {
             // Top-right corner
             <div class="position-absolute top-0 end-0 float-above d-flex">
                 <ui::EventSubmissionSpinner events_pending_submission={p.events_pending_submission.clone()} />
-                <div>
-                    <button onclick={p.on_logout.reform(|_| ())}>
-                        { "Logout" }
-                    </button>
-                </div>
+                <ui::SettingsMenu on_logout={p.on_logout.clone()} />
             </div>
 
             // Main task list
