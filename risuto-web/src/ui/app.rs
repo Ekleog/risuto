@@ -357,11 +357,12 @@ fn compute_reordering_events(
         }
     } else {
         // Inserting in-between two elements
+        use num::integer::Average;
         let prio_before = prio!(into[index - 1]);
         let prio_after = prio!(into[index]);
-        let add = (prio_after - prio_before) / 2;
-        if add > 0 {
-            return vec![evt!(task, prio_before + add)];
+        let new_prio = prio_before.average_floor(&prio_after); // no overflow here
+        if new_prio != prio_before {
+            return vec![evt!(task, new_prio)];
         }
     }
 
