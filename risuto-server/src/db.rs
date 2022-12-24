@@ -1,13 +1,16 @@
 use anyhow::{anyhow, Context};
 use axum::async_trait;
 use chrono::Utc;
-use futures::{Stream, StreamExt, TryStreamExt};
+use futures::{Future, Stream, StreamExt, TryStreamExt};
 use risuto_api::{
     AuthInfo, AuthToken, DbDump, Event, EventId, EventType, NewSession, Tag, TagId, Task, TaskId,
     Time, User, UserId, Uuid,
 };
 use sqlx::Row;
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::{
+    collections::{BTreeMap, HashMap, HashSet},
+    pin::Pin,
+};
 
 use crate::Error;
 
@@ -316,6 +319,30 @@ pub fn users_interested_by<'conn>(
     .map(|r| r.map(|u| UserId(u.user_id)).map_err(anyhow::Error::from))
 }
 
+async fn with_tmp_tasks_table<R, F>(conn: &mut sqlx::PgConnection, f: F) -> anyhow::Result<R>
+where
+    F: for<'a> FnOnce(
+        &'a mut sqlx::PgConnection,
+    ) -> Pin<Box<dyn 'a + Send + Future<Output = anyhow::Result<R>>>>,
+{
+    sqlx::query("CREATE TEMPORARY TABLE tmp_tasks (id UUID NOT NULL)")
+        .execute(&mut *conn)
+        .await
+        .context("creating temp table")?;
+
+    let res = f(&mut *conn).await;
+
+    let drop_res = sqlx::query("DROP TABLE tmp_tasks")
+        .execute(&mut *conn)
+        .await
+        .context("dropping temp table");
+    if let Err(err) = drop_res {
+        tracing::error!(?err, "failed dropping temp table");
+    }
+
+    res
+}
+
 pub async fn fetch_dump_unarchived(
     conn: &mut sqlx::PgConnection,
     owner: UserId,
@@ -325,36 +352,32 @@ pub async fn fetch_dump_unarchived(
         .await
         .with_context(|| format!("fetching tags for user {:?}", owner))?;
 
-    sqlx::query("CREATE TEMPORARY TABLE tmp_tasks (id UUID NOT NULL)")
-        .execute(&mut *conn)
-        .await
-        .context("creating temp table")?;
-    sqlx::query(
-        "
-            INSERT INTO tmp_tasks
-            SELECT t.id
-                FROM tasks t
-            LEFT JOIN v_tasks_archived vta
-                ON vta.task_id = t.id
-            LEFT JOIN v_tasks_users vtu
-                ON vtu.task_id = t.id
-            WHERE vtu.user_id = $1
-            AND vta.archived = false
-        ",
-    )
-    .bind(owner.0)
-    .execute(&mut *conn)
-    .await
-    .context("filling temp table with interesting task ids")?;
+    let fetched_tasks = with_tmp_tasks_table(&mut *conn, |conn| {
+        Box::pin(async move {
+            sqlx::query(
+                "
+                INSERT INTO tmp_tasks
+                SELECT t.id
+                    FROM tasks t
+                LEFT JOIN v_tasks_archived vta
+                    ON vta.task_id = t.id
+                LEFT JOIN v_tasks_users vtu
+                    ON vtu.task_id = t.id
+                WHERE vtu.user_id = $1
+                AND vta.archived = false
+            ",
+            )
+            .bind(owner.0)
+            .execute(&mut *conn)
+            .await
+            .context("filling temp table with interesting task ids")?;
 
-    let fetched_tasks = fetch_tasks_from_tmp_tasks_table(&mut *conn).await;
+            fetch_tasks_from_tmp_tasks_table(&mut *conn).await
+        })
+    })
+    .await?;
 
-    sqlx::query("DROP TABLE tmp_tasks")
-        .execute(conn)
-        .await
-        .context("dropping temp table")?;
-
-    let tasks = fetched_tasks?;
+    let tasks = fetched_tasks;
 
     Ok(DbDump {
         owner,
