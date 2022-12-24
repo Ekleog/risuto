@@ -12,7 +12,7 @@ pub fn settings_menu(p: &SettingsMenuProps) -> Html {
             <button
                 type="button"
                 class="btn btn-light btn-circle m-3 bi-btn bi-gear-fill fs-6"
-                aria-label="Settings"
+                title="Settings"
                 data-bs-toggle="dropdown"
             >
             </button>
