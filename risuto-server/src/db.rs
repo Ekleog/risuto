@@ -9,7 +9,7 @@ use risuto_api::{
 use sqlx::Row;
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
-    pin::Pin,
+    pin::Pin, sync::Arc,
 };
 
 use crate::Error;
@@ -450,7 +450,7 @@ async fn fetch_tags_for_user(
 
 async fn fetch_tasks_from_tmp_tasks_table(
     conn: &mut sqlx::PgConnection,
-) -> anyhow::Result<HashMap<TaskId, Task>> {
+) -> anyhow::Result<HashMap<TaskId, Arc<Task>>> {
     let mut tasks = HashMap::new();
     let mut tasks_query = sqlx::query(
         "
@@ -569,11 +569,10 @@ async fn fetch_tasks_from_tmp_tasks_table(
         }
     }
 
-    for t in tasks.values_mut() {
+    Ok(tasks.into_iter().map(|(id, mut t)| {
         t.refresh_metadata();
-    }
-
-    Ok(tasks)
+        (id, Arc::new(t))
+    }).collect())
 }
 
 pub async fn submit_event(conn: &mut sqlx::PgConnection, e: Event) -> Result<(), Error> {
