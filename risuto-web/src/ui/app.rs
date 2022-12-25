@@ -218,31 +218,10 @@ impl Component for App {
     fn view(&self, ctx: &Context<Self>) -> Html {
         let tasks = self.current_task_lists();
 
-        let on_title_change = {
+        let on_event = {
             let owner = self.db.owner.clone();
-            ctx.link().callback(move |(task, title)| {
-                AppMsg::NewUserEvent(Event::now(owner, task, EventType::SetTitle(title)))
-            })
-        };
-
-        let on_done_change = {
-            let owner = self.db.owner.clone();
-            ctx.link().callback(move |(task, now_done)| {
-                AppMsg::NewUserEvent(Event::now(owner, task, EventType::SetDone(now_done)))
-            })
-        };
-
-        let on_schedule_for = {
-            let owner = self.db.owner.clone();
-            ctx.link().callback(move |(task, time)| {
-                AppMsg::NewUserEvent(Event::now(owner, task, EventType::ScheduleFor(time)))
-            })
-        };
-
-        let on_blocked_until = {
-            let owner = self.db.owner.clone();
-            ctx.link().callback(move |(task, time)| {
-                AppMsg::NewUserEvent(Event::now(owner, task, EventType::BlockedUntil(time)))
+            ctx.link().callback(move |(task, evt)| {
+                AppMsg::NewUserEvent(Event::now(owner, task, evt))
             })
         };
 
@@ -302,10 +281,7 @@ impl Component for App {
                             tasks_done={tasks.done}
                             tasks_backlog={tasks.backlog}
                             on_logout={ctx.link().callback(|_| AppMsg::Logout)}
-                            {on_title_change}
-                            {on_done_change}
-                            {on_schedule_for}
-                            {on_blocked_until}
+                            {on_event}
                             {on_order_change}
                         />
                     </main>

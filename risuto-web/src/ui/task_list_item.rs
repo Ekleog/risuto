@@ -1,17 +1,14 @@
 use std::{sync::Arc, str::FromStr};
 
 use chrono::{Datelike, Timelike};
-use risuto_api::{Task, Time};
+use risuto_api::{Task, Time, EventType};
 use wasm_bindgen::prelude::*;
 use yew::prelude::*;
 
 #[derive(Clone, PartialEq, Properties)]
 pub struct TaskListItemProps {
     pub task: Arc<Task>,
-    pub on_title_change: Callback<String>,
-    pub on_done_change: Callback<bool>,
-    pub on_schedule_for: Callback<Option<Time>>,
-    pub on_blocked_until: Callback<Option<Time>>,
+    pub on_event: Callback<EventType>,
 }
 
 #[function_component(TaskListItem)]
@@ -25,7 +22,7 @@ pub fn task_list(p: &TaskListItemProps) -> Html {
             <div class="d-flex align-items-center">
                 <ButtonBlockedUntil ..p.clone() />
                 <ButtonScheduleFor ..p.clone() />
-                { button_done_change(&p.task, &p.on_done_change) }
+                { button_done_change(&p.task, &p.on_event) }
             </div>
         </li>
     }
@@ -38,7 +35,7 @@ fn title_div(p: &TaskListItemProps) -> Html {
     let on_validate = {
         let div_ref = div_ref.clone();
         let initial_title = p.task.current_title.clone();
-        let on_title_change = p.on_title_change.clone();
+        let on_event = p.on_event.clone();
         Callback::from(move |()| {
             let text = div_ref
                 .get()
@@ -46,7 +43,7 @@ fn title_div(p: &TaskListItemProps) -> Html {
                 .text_content()
                 .expect("div_ref has no text_content");
             if text != initial_title {
-                on_title_change.emit(text);
+                on_event.emit(EventType::SetTitle(text));
             }
         })
     };
@@ -74,7 +71,7 @@ fn title_div(p: &TaskListItemProps) -> Html {
     }
 }
 
-fn button_done_change(t: &Task, on_done_change: &Callback<bool>) -> Html {
+fn button_done_change(t: &Task, on_event: &Callback<EventType>) -> Html {
     let icon_class = match t.is_done {
         true => "bi-arrow-counterclockwise",
         false => "bi-check-lg",
@@ -89,7 +86,7 @@ fn button_done_change(t: &Task, on_done_change: &Callback<bool>) -> Html {
             type="button"
             class={ classes!("btn", "bi-btn", icon_class, "ps-2") }
             title={ aria_label }
-            onclick={ on_done_change.reform(move |_| !currently_done) }
+            onclick={ on_event.reform(move |_| EventType::SetDone(!currently_done)) }
         >
         </button>
     }
@@ -173,11 +170,11 @@ fn timeset_button(input_ref: NodeRef, current_date: &Option<Time>, label: &'stat
 #[function_component(ButtonScheduleFor)]
 fn button_schedule_for(p: &TaskListItemProps) -> Html {
     let input_ref = use_node_ref();
-    timeset_button(input_ref, &p.task.scheduled_for, "Schedule for", "bi-alarm", &p.on_schedule_for)
+    timeset_button(input_ref, &p.task.scheduled_for, "Schedule for", "bi-alarm", &p.on_event.reform(EventType::ScheduleFor))
 }
 
 #[function_component(ButtonBlockedUntil)]
 fn button_blocked_until(p: &TaskListItemProps) -> Html {
     let input_ref = use_node_ref();
-    timeset_button(input_ref, &p.task.blocked_until, "Blocked until", "bi-hourglass-split", &p.on_blocked_until)
+    timeset_button(input_ref, &p.task.blocked_until, "Blocked until", "bi-hourglass-split", &p.on_event.reform(EventType::BlockedUntil))
 }

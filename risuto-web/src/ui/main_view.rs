@@ -1,5 +1,5 @@
 use crate::ui;
-use risuto_api::{Event, Task, TaskId, Time};
+use risuto_api::{Event, Task, TaskId, EventType};
 use std::{collections::VecDeque, rc::Rc, sync::Arc};
 use yew::prelude::*;
 
@@ -50,10 +50,7 @@ pub struct MainViewProps {
     pub tasks_done: Rc<Vec<(TaskId, Arc<Task>)>>,
     pub tasks_backlog: Rc<Vec<(TaskId, Arc<Task>)>>,
     pub on_logout: Callback<()>,
-    pub on_title_change: Callback<(TaskId, String)>,
-    pub on_done_change: Callback<(TaskId, bool)>,
-    pub on_schedule_for: Callback<(TaskId, Option<Time>)>,
-    pub on_blocked_until: Callback<(TaskId, Option<Time>)>,
+    pub on_event: Callback<(TaskId, EventType)>,
     pub on_order_change: Callback<TaskOrderChangeEvent>,
 }
 
@@ -181,10 +178,7 @@ pub fn main_view(p: &MainViewProps) -> Html {
                     <ui::TaskList
                         ref_this={ref_open}
                         tasks={p.tasks_open.clone()}
-                        on_title_change={p.on_title_change.clone()}
-                        on_done_change={p.on_done_change.clone()}
-                        on_schedule_for={p.on_schedule_for.clone()}
-                        on_blocked_until={p.on_blocked_until.clone()}
+                        on_event={p.on_event.clone()}
                     />
                 </div>
 
@@ -192,10 +186,7 @@ pub fn main_view(p: &MainViewProps) -> Html {
                     <ui::TaskList
                         ref_this={ref_done}
                         tasks={p.tasks_done.clone()}
-                        on_title_change={p.on_title_change.clone()}
-                        on_done_change={p.on_done_change.clone()}
-                        on_schedule_for={p.on_schedule_for.clone()}
-                        on_blocked_until={p.on_blocked_until.clone()}
+                        on_event={p.on_event.clone()}
                     />
                 </div>
             </div>
@@ -221,10 +212,7 @@ pub fn main_view(p: &MainViewProps) -> Html {
                         <ui::TaskList
                             ref_this={ref_backlog}
                             tasks={p.tasks_backlog.clone()}
-                            on_title_change={p.on_title_change.clone()}
-                            on_done_change={p.on_done_change.clone()}
-                            on_schedule_for={p.on_schedule_for.clone()}
-                            on_blocked_until={p.on_blocked_until.clone()}
+                            on_event={p.on_event.clone()}
                         />
                     </div>
                 </div>
