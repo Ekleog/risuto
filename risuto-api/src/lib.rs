@@ -347,6 +347,7 @@ impl Event {
 pub enum Query {
     Any(Vec<Query>),
     All(Vec<Query>),
+    Not(Box<Query>),
     Archived(bool),
     Tag(TagId),
     // TODO: Phrase(String), // full-text search of one contiguous word vec
@@ -398,6 +399,10 @@ impl Query {
                     q.add_to_postgres(first_bind_idx, &mut *res);
                 }
                 res.where_clause.push(')');
+            }
+            Query::Not(q) => {
+                res.where_clause.push_str("NOT ");
+                q.add_to_postgres(first_bind_idx, &mut *res);
             }
             Query::Archived(b) => {
                 res.where_clause.push_str("(vta.archived = $");
