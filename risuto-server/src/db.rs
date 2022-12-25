@@ -3,13 +3,14 @@ use axum::async_trait;
 use chrono::Utc;
 use futures::{Future, Stream, StreamExt, TryStreamExt};
 use risuto_api::{
-    AuthInfo, AuthToken, DbDump, Event, EventId, EventData, NewSession, Tag, TagId, Task, TaskId,
+    AuthInfo, AuthToken, DbDump, Event, EventData, EventId, NewSession, Tag, TagId, Task, TaskId,
     Time, User, UserId, Uuid,
 };
 use sqlx::Row;
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
-    pin::Pin, sync::Arc,
+    pin::Pin,
+    sync::Arc,
 };
 
 use crate::Error;
@@ -569,10 +570,13 @@ async fn fetch_tasks_from_tmp_tasks_table(
         }
     }
 
-    Ok(tasks.into_iter().map(|(id, mut t)| {
-        t.refresh_metadata();
-        (id, Arc::new(t))
-    }).collect())
+    Ok(tasks
+        .into_iter()
+        .map(|(id, mut t)| {
+            t.refresh_metadata();
+            (id, Arc::new(t))
+        })
+        .collect())
 }
 
 pub async fn submit_event(conn: &mut sqlx::PgConnection, e: Event) -> Result<(), Error> {

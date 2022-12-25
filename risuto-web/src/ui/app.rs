@@ -220,9 +220,8 @@ impl Component for App {
 
         let on_event = {
             let owner = self.db.owner.clone();
-            ctx.link().callback(move |(task, evt)| {
-                AppMsg::NewUserEvent(Event::now(owner, task, evt))
-            })
+            ctx.link()
+                .callback(move |(task, evt)| AppMsg::NewUserEvent(Event::now(owner, task, evt)))
         };
 
         let on_order_change = {

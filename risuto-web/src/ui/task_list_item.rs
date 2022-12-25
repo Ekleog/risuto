@@ -1,7 +1,7 @@
-use std::{sync::Arc, str::FromStr};
+use std::{str::FromStr, sync::Arc};
 
 use chrono::{Datelike, Timelike};
-use risuto_api::{Task, Time, EventData};
+use risuto_api::{EventData, Task, Time};
 use wasm_bindgen::prelude::*;
 use yew::prelude::*;
 
@@ -109,41 +109,63 @@ fn local_timezone() -> chrono_tz::Tz {
     chrono_tz::Tz::from_str(&get_timezone()).expect("host js timezone is not in chrono-tz database")
 }
 
-fn timeset_button(input_ref: NodeRef, current_date: &Option<Time>, label: &'static str, icon: &'static str, callback: &Callback<Option<Time>>) -> Html {
+fn timeset_button(
+    input_ref: NodeRef,
+    current_date: &Option<Time>,
+    label: &'static str,
+    icon: &'static str,
+    callback: &Callback<Option<Time>>,
+) -> Html {
     let on_button_click = {
         let input_ref = input_ref.clone();
         Callback::from(move |_| {
-            let input = input_ref.cast::<web_sys::HtmlInputElement>().expect("input is not an html element");
+            let input = input_ref
+                .cast::<web_sys::HtmlInputElement>()
+                .expect("input is not an html element");
             show_picker(&input);
         })
     };
     let on_input = callback.reform(|e: web_sys::InputEvent| {
         let input: web_sys::HtmlInputElement = e.target_unchecked_into();
-        let date = chrono::NaiveDateTime::parse_from_str(&input.value(), "%Y-%m-%dT%H:%M").expect("datepicker value not in expected format");
+        let date = chrono::NaiveDateTime::parse_from_str(&input.value(), "%Y-%m-%dT%H:%M")
+            .expect("datepicker value not in expected format");
         let timezone = local_timezone();
         while date.and_local_timezone(timezone) == chrono::LocalResult::None {
-            date.checked_sub_signed(chrono::Duration::minutes(1)).expect("overflow while looking for a date that exists in local timezone");
+            date.checked_sub_signed(chrono::Duration::minutes(1))
+                .expect("overflow while looking for a date that exists in local timezone");
         }
         let date = date.and_local_timezone(timezone).earliest().unwrap();
         let date = date.with_timezone(&chrono::Utc);
         Some(date)
     });
-    let current_date = current_date
-        .map(|t| t.with_timezone(&local_timezone()));
-    let timeset_label = current_date.map(|d| {
-        let remaining = d.signed_duration_since(chrono::Utc::now());
-        match remaining {
-            r if r > chrono::Duration::days(365) => format!("{}", d.year()),
-            r if r > chrono::Duration::days(1) => format!("{}/{}", d.month(), d.day()),
-            r if r > chrono::Duration::seconds(0) => format!("{}h{}", d.hour(), d.minute()),
-            _ => "past".to_string(),
-        }
-    }).map(|l| html! {
-        <span class="timeset-label rounded-pill">
-            { l }
-        </span>
+    let current_date = current_date.map(|t| t.with_timezone(&local_timezone()));
+    let timeset_label = current_date
+        .map(|d| {
+            let remaining = d.signed_duration_since(chrono::Utc::now());
+            match remaining {
+                r if r > chrono::Duration::days(365) => format!("{}", d.year()),
+                r if r > chrono::Duration::days(1) => format!("{}/{}", d.month(), d.day()),
+                r if r > chrono::Duration::seconds(0) => format!("{}h{}", d.hour(), d.minute()),
+                _ => "past".to_string(),
+            }
+        })
+        .map(|l| {
+            html! {
+                <span class="timeset-label rounded-pill">
+                    { l }
+                </span>
+            }
+        });
+    let start_value = current_date.map(|d| {
+        format!(
+            "{:04}-{:02}-{:02}T{:02}:{:02}",
+            d.year(),
+            d.month(),
+            d.day(),
+            d.hour(),
+            d.minute()
+        )
     });
-    let start_value = current_date.map(|d| format!("{:04}-{:02}-{:02}T{:02}:{:02}", d.year(), d.month(), d.day(), d.hour(), d.minute()));
     html! {
         <>
             <div class="size-zero overflow-hidden">
@@ -170,11 +192,23 @@ fn timeset_button(input_ref: NodeRef, current_date: &Option<Time>, label: &'stat
 #[function_component(ButtonScheduleFor)]
 fn button_schedule_for(p: &TaskListItemProps) -> Html {
     let input_ref = use_node_ref();
-    timeset_button(input_ref, &p.task.scheduled_for, "Schedule for", "bi-alarm", &p.on_event.reform(EventData::ScheduleFor))
+    timeset_button(
+        input_ref,
+        &p.task.scheduled_for,
+        "Schedule for",
+        "bi-alarm",
+        &p.on_event.reform(EventData::ScheduleFor),
+    )
 }
 
 #[function_component(ButtonBlockedUntil)]
 fn button_blocked_until(p: &TaskListItemProps) -> Html {
     let input_ref = use_node_ref();
-    timeset_button(input_ref, &p.task.blocked_until, "Blocked until", "bi-hourglass-split", &p.on_event.reform(EventData::BlockedUntil))
+    timeset_button(
+        input_ref,
+        &p.task.blocked_until,
+        "Blocked until",
+        "bi-hourglass-split",
+        &p.on_event.reform(EventData::BlockedUntil),
+    )
 }

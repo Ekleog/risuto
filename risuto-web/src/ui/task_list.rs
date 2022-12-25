@@ -1,4 +1,4 @@
-use risuto_api::{Task, TaskId, EventData};
+use risuto_api::{EventData, Task, TaskId};
 use std::{rc::Rc, sync::Arc};
 use yew::prelude::*;
 

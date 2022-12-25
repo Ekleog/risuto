@@ -3,7 +3,8 @@ use async_trait::async_trait;
 use chrono::Utc;
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
-    ops::BitOr, sync::Arc,
+    ops::BitOr,
+    sync::Arc,
 };
 
 pub use uuid::{uuid, Uuid};

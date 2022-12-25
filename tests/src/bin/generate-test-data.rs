@@ -169,7 +169,9 @@ fn main() {
         let mut mk_bool =
             |rng: &mut StdRng| new_val_bool = if rng.gen() { "true" } else { "false" };
         let mut mk_time_maybe = |rng: &mut StdRng| {
-            if rng.gen() { time = format!("'{}'", gen_date(rng)); }
+            if rng.gen() {
+                time = format!("'{}'", gen_date(rng));
+            }
         };
         let mut mk_tag = |rng: &mut StdRng| tag_id = format!("'{}'", gen_tag(rng));
         let mut mk_comment = |rng: &mut StdRng| comment = format!("'{}'", gen_comment_text(rng));
