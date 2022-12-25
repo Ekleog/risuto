@@ -3,8 +3,8 @@ use axum::async_trait;
 use chrono::Utc;
 use futures::{Future, Stream, StreamExt, TryStreamExt};
 use risuto_api::{
-    AuthInfo, AuthToken, Event, EventData, EventId, NewSession, Tag, TagId, Task, TaskId, Time,
-    User, UserId, Uuid,
+    AuthInfo, AuthToken, Event, EventData, EventId, NewSession, Query, QueryBind, SqlQuery, Tag,
+    TagId, Task, TaskId, Time, User, UserId, Uuid,
 };
 use sqlx::Row;
 use std::{
@@ -399,29 +399,42 @@ pub async fn fetch_tags_for_user(
     .context("querying tags table")?)
 }
 
-pub async fn fetch_tasks_for_user(
+pub async fn search_tasks_for_user(
     conn: &mut sqlx::PgConnection,
     owner: UserId,
+    query: &Query,
 ) -> anyhow::Result<HashMap<TaskId, Arc<Task>>> {
+    let SqlQuery {
+        where_clause,
+        binds,
+    } = query.to_postgres(2);
     with_tmp_tasks_table(&mut *conn, |conn| {
         Box::pin(async move {
-            sqlx::query(
+            let query = format!(
                 "
-                INSERT INTO tmp_tasks
-                SELECT t.id
-                    FROM tasks t
-                LEFT JOIN v_tasks_archived vta
-                    ON vta.task_id = t.id
-                LEFT JOIN v_tasks_users vtu
-                    ON vtu.task_id = t.id
-                WHERE vtu.user_id = $1
-                AND vta.archived = false
-            ",
-            )
-            .bind(owner.0)
-            .execute(&mut *conn)
-            .await
-            .context("filling temp table with interesting task ids")?;
+                    INSERT INTO tmp_tasks
+                    SELECT t.id
+                        FROM tasks t
+                    LEFT JOIN v_tasks_users vtu
+                        ON vtu.task_id = t.id
+                    LEFT JOIN v_tasks_archived vta
+                        ON vta.task_id = t.id
+                    LEFT JOIN v_tasks_tags vtt
+                        ON vtt.task_id = t.id
+                    WHERE vtu.user_id = $1
+                    AND {where_clause}
+                "
+            );
+            let mut q = sqlx::query(&query).bind(owner.0);
+            for b in binds {
+                match b {
+                    QueryBind::Bool(b) => q = q.bind(b),
+                    QueryBind::Uuid(u) => q = q.bind(u),
+                };
+            }
+            q.execute(&mut *conn)
+                .await
+                .context("filling temp table with interesting task ids")?;
 
             fetch_tasks_from_tmp_tasks_table(&mut *conn).await
         })

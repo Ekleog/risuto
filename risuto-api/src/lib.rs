@@ -344,6 +344,78 @@ impl Event {
 }
 
 #[derive(Debug, serde::Deserialize, serde::Serialize)]
+pub enum Query {
+    Any(Vec<Query>),
+    All(Vec<Query>),
+    Archived(bool),
+    Tag(TagId),
+    // TODO: Phrase(String), // full-text search of one contiguous word vec
+}
+
+pub enum QueryBind {
+    Bool(bool),
+    Uuid(Uuid),
+}
+
+#[derive(Default)]
+pub struct SqlQuery {
+    pub where_clause: String,
+    pub binds: Vec<QueryBind>,
+    // TODO: order_clause: Option<String>,
+}
+
+impl SqlQuery {
+    /// Adds a QueryBind, returning the index that should be used to refer to it assuming the first bind is at index first_bind_idx
+    fn add_bind(&mut self, first_bind_idx: usize, b: QueryBind) -> usize {
+        let res = first_bind_idx + self.binds.len();
+        self.binds.push(b);
+        res
+    }
+}
+
+impl Query {
+    /// Assumes tables vta (v_tasks_archived) and vtt (v_tasks_tags) are available
+    pub fn to_postgres(&self, first_bind_idx: usize) -> SqlQuery {
+        let mut res = Default::default();
+        self.add_to_postgres(first_bind_idx, &mut res);
+        res
+    }
+
+    fn add_to_postgres(&self, first_bind_idx: usize, res: &mut SqlQuery) {
+        match self {
+            Query::Any(queries) => {
+                res.where_clause.push_str("(false");
+                for q in queries {
+                    res.where_clause.push_str(" OR ");
+                    q.add_to_postgres(first_bind_idx, &mut *res);
+                }
+                res.where_clause.push(')');
+            }
+            Query::All(queries) => {
+                res.where_clause.push_str("(true");
+                for q in queries {
+                    res.where_clause.push_str(" AND ");
+                    q.add_to_postgres(first_bind_idx, &mut *res);
+                }
+                res.where_clause.push(')');
+            }
+            Query::Archived(b) => {
+                res.where_clause.push_str("(vta.archived = $");
+                let idx = res.add_bind(first_bind_idx, QueryBind::Bool(*b));
+                res.where_clause.push_str(&format!("{}", idx));
+                res.where_clause.push_str(")");
+            },
+            Query::Tag(t) => {
+                res.where_clause.push_str("(vtt.is_in = true AND vtt.tag_id = $");
+                let idx = res.add_bind(first_bind_idx, QueryBind::Uuid(t.0));
+                res.where_clause.push_str(&format!("{}", idx));
+                res.where_clause.push_str(")");
+            },
+        }
+    }
+}
+
+#[derive(Debug, serde::Deserialize, serde::Serialize)]
 pub struct DbDump {
     pub owner: UserId,
     pub users: HashMap<UserId, User>,

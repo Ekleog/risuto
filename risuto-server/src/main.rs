@@ -38,7 +38,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/whoami", get(whoami))
         .route("/api/fetch-users", get(fetch_users))
         .route("/api/fetch-tags", get(fetch_tags))
-        .route("/api/fetch-tasks", get(fetch_tasks))
+        .route("/api/search-tasks", post(search_tasks))
         .route("/ws/event-feed", get(event_feed))
         .route("/api/submit-event", post(submit_event))
         .layer(Extension(db))
@@ -181,13 +181,14 @@ async fn fetch_tags(
     ))
 }
 
-async fn fetch_tasks(
+async fn search_tasks(
+    Json(q): Json<risuto_api::Query>,
     Auth(user): Auth,
     Extension(db): Extension<sqlx::PgPool>,
 ) -> Result<Json<HashMap<TaskId, Arc<Task>>>, Error> {
     let mut conn = db.acquire().await.context("acquiring db connection")?;
     Ok(Json(
-        db::fetch_tasks_for_user(&mut conn, user)
+        db::search_tasks_for_user(&mut conn, user, &q)
             .await
             .with_context(|| format!("fetching task list for {:?}", user))?,
     ))

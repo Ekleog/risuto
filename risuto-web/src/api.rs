@@ -38,14 +38,18 @@ pub async fn unauth(host: String, token: AuthToken) {
     }
 }
 
-async fn fetch<T>(login: &LoginInfo, fetcher: &str) -> T
+async fn fetch<R>(login: &LoginInfo, fetcher: &str, body: Option<&Query>) -> R
 where
-    T: for<'de> serde::Deserialize<'de>,
+    R: for<'de> serde::Deserialize<'de>,
 {
     // TODO: at least handle unauthorized error
-    crate::CLIENT
-        .get(format!("{}/api/{}", login.host, fetcher))
-        .bearer_auth(login.token.0)
+    let req = match body {
+        None => crate::CLIENT.get(format!("{}/api/{}", login.host, fetcher)),
+        Some(body) => crate::CLIENT
+            .post(format!("{}/api/{}", login.host, fetcher))
+            .json(body),
+    };
+    req.bearer_auth(login.token.0)
         .send()
         .await
         .expect("failed to fetch data from server") // TODO: should eg be a popup
@@ -56,10 +60,10 @@ where
 
 async fn fetch_db_dump(login: &LoginInfo) -> DbDump {
     DbDump {
-        owner: fetch(login, "whoami").await,
-        users: fetch(login, "fetch-users").await,
-        tags: fetch(login, "fetch-tags").await,
-        tasks: fetch(login, "fetch-tasks").await,
+        owner: fetch(login, "whoami", None).await,
+        users: fetch(login, "fetch-users", None).await,
+        tags: fetch(login, "fetch-tags", None).await,
+        tasks: fetch(login, "search-tasks", Some(&Query::Archived(false))).await,
     }
 }
 
