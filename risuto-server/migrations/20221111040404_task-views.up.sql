@@ -1,35 +1,24 @@
 CREATE VIEW v_tasks_archived AS
-SELECT
-    t.id as task_id,
-    COALESCE(
-        (
-            SELECT e.new_val_bool
-            FROM events e
-            WHERE e.task_id = t.id AND e.type = 'set_archived'
-            ORDER BY e.date DESC
-            LIMIT 1
-        ),
-        false
-    ) as archived
-FROM
-    tasks t;
+SELECT DISTINCT ON (t.id)
+    t.id AS task_id,
+    e.d_bool AS archived
+FROM tasks t
+INNER JOIN events e
+    ON e.task_id = t.id
+WHERE e.d_type = 'set_archived'
+ORDER BY t.id, e.date DESC;
 
 CREATE VIEW v_tasks_tags AS
-SELECT DISTINCT
-    t.id as task_id,
-    adds.tag_id as tag_id
+SELECT DISTINCT ON (t.id, e.d_tag_id)
+    t.id AS task_id,
+    e.d_tag_id AS tag_id,
+    (e.d_type = 'add_tag') AS is_in
 FROM
     tasks t
-INNER JOIN events adds
-    ON adds.task_id = t.id AND adds.type = 'add_tag'
-WHERE NOT EXISTS (
-    SELECT NULL
-    FROM events rms
-    WHERE rms.tag_id = adds.tag_id
-    AND rms.task_id = adds.task_id
-    AND rms.type = 'remove_tag'
-    AND rms.date > adds.date
-);
+INNER JOIN events e
+    ON e.task_id = t.id
+WHERE (e.d_type = 'add_tag' OR e.d_type = 'remove_tag')
+ORDER BY t.id, e.d_tag_id, e.date DESC;
 
 CREATE VIEW v_tags_users AS
 SELECT

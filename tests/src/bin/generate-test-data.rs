@@ -158,36 +158,34 @@ fn main() {
         let owner_id = gen_user(&mut rng);
         let date = RefCell::new(gen_date(&mut rng));
         let task_id = RefCell::new(gen_task(&mut rng));
-        let mut title = "NULL".to_string();
-        let mut new_val_bool = "NULL";
-        let mut time = "NULL".to_string();
-        let mut tag_id = "NULL".to_string();
-        let mut new_val_int = "NULL".to_string();
-        let mut comment = "NULL".to_string();
-        let mut parent_id = "NULL".to_string();
-        let mut mk_title = |rng: &mut StdRng| title = format!("'{}'", gen_task_title(rng));
+        let mut d_text = "NULL".to_string();
+        let mut d_bool = "NULL";
+        let mut d_int = "NULL".to_string();
+        let mut d_time = "NULL".to_string();
+        let mut d_tag_id = "NULL".to_string();
+        let mut d_parent_id = "NULL".to_string();
+        let mut mk_text = |rng: &mut StdRng, is_title| d_text = format!("'{}'", if is_title { gen_task_title(rng) } else { gen_comment_text(rng) });
         let mut mk_bool =
-            |rng: &mut StdRng| new_val_bool = if rng.gen() { "true" } else { "false" };
+            |rng: &mut StdRng| d_bool = if rng.gen() { "true" } else { "false" };
         let mut mk_time_maybe = |rng: &mut StdRng| {
             if rng.gen() {
-                time = format!("'{}'", gen_date(rng));
+                d_time = format!("'{}'", gen_date(rng));
             }
         };
-        let mut mk_tag = |rng: &mut StdRng| tag_id = format!("'{}'", gen_tag(rng));
-        let mut mk_comment = |rng: &mut StdRng| comment = format!("'{}'", gen_comment_text(rng));
+        let mut mk_tag = |rng: &mut StdRng| d_tag_id = format!("'{}'", gen_tag(rng));
         let mut mk_parent =
             |rng: &mut StdRng, comments: &Vec<(String, String, chrono::DateTime<chrono::Utc>)>| {
                 let (par_id, par_task, par_date) = comments.choose(&mut *rng).unwrap().clone();
-                parent_id = format!("'{}'", par_id);
+                d_parent_id = format!("'{}'", par_id);
                 *task_id.borrow_mut() = par_task.clone();
                 let offset = Duration::milliseconds(rng.gen_range(0..1_000_000_000));
                 let millis = Duration::milliseconds(1);
                 let failover = date.borrow().checked_add_signed(millis).unwrap();
                 *date.borrow_mut() = par_date.checked_add_signed(offset).unwrap_or(failover);
             };
-        let type_ = match rng.gen_range(0..10) {
+        let d_type = match rng.gen_range(0..10) {
             0 => {
-                mk_title(&mut rng);
+                mk_text(&mut rng, true);
                 "set_title"
             }
             1 => {
@@ -209,7 +207,7 @@ fn main() {
             5 => {
                 mk_tag(&mut rng);
                 mk_bool(&mut rng);
-                new_val_int = format!("{}", rng.gen::<i64>());
+                d_int = format!("{}", rng.gen::<i64>());
                 "add_tag"
             }
             6 => {
@@ -217,7 +215,7 @@ fn main() {
                 "remove_tag"
             }
             7 => {
-                mk_comment(&mut rng);
+                mk_text(&mut rng, false);
                 if !comments.is_empty() && rng.gen() {
                     mk_parent(&mut rng, &comments);
                 }
@@ -228,7 +226,7 @@ fn main() {
                 if comments.is_empty() {
                     continue;
                 }
-                mk_comment(&mut rng);
+                mk_text(&mut rng, false);
                 mk_parent(&mut rng, &comments);
                 "edit_comment"
             }
@@ -244,7 +242,7 @@ fn main() {
         };
         let date = *date.borrow();
         let task_id = task_id.borrow().clone();
-        print!("    ('{id}', '{owner_id}', '{date}', '{type_}', '{task_id}', {title}, {new_val_bool}, {time}, {tag_id}, {new_val_int}, {comment}, {parent_id})");
+        print!("    ('{id}', '{owner_id}', '{date}', '{task_id}', '{d_type}', {d_text}, {d_bool}, {d_int}, {d_time}, {d_tag_id}, {d_parent_id})");
         generated += 1;
         if generated < NUM_EVENTS {
             println!(",");

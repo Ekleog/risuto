@@ -186,7 +186,7 @@ impl<'a> risuto_api::Db for PostgresDb<'a> {
 
     async fn list_tags_for(&mut self, task: TaskId) -> anyhow::Result<Vec<TagId>> {
         Ok(sqlx::query!(
-            r#"SELECT tag_id AS "tag_id!" FROM v_tasks_tags WHERE task_id = $1"#,
+            r#"SELECT tag_id AS "tag_id!" FROM v_tasks_tags WHERE task_id = $1 AND is_in = true"#,
             task.0
         )
         .map(|r| TagId(r.tag_id))
