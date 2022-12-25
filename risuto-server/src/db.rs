@@ -3,7 +3,7 @@ use axum::async_trait;
 use chrono::Utc;
 use futures::{Future, Stream, StreamExt, TryStreamExt};
 use risuto_api::{
-    AuthInfo, AuthToken, DbDump, Event, EventId, EventType, NewSession, Tag, TagId, Task, TaskId,
+    AuthInfo, AuthToken, DbDump, Event, EventId, EventData, NewSession, Tag, TagId, Task, TaskId,
     Time, User, UserId, Uuid,
 };
 use sqlx::Row;
@@ -104,8 +104,8 @@ impl From<Event> for DbEvent {
             comment: None,
             parent_id: None,
         };
-        use EventType::*;
-        match e.contents {
+        use EventData::*;
+        match e.data {
             SetTitle(t) => res.type_(DbType::SetTitle).title(t),
             SetDone(b) => res.type_(DbType::SetDone).new_val_bool(b),
             SetArchived(b) => res.type_(DbType::SetArchived).new_val_bool(b),
@@ -521,42 +521,42 @@ async fn fetch_tasks_from_tmp_tasks_table(
                 owner: UserId(e.owner_id),
                 date: e.date.and_local_timezone(chrono::Utc).unwrap(),
                 task: TaskId(e.task_id),
-                contents: match e.type_ {
+                data: match e.type_ {
                     DbType::SetTitle => {
-                        EventType::SetTitle(e.title.expect("set_title event without title"))
+                        EventData::SetTitle(e.title.expect("set_title event without title"))
                     }
-                    DbType::SetDone => EventType::SetDone(
+                    DbType::SetDone => EventData::SetDone(
                         e.new_val_bool.expect("set_done event without new_val_bool"),
                     ),
-                    DbType::SetArchived => EventType::SetArchived(
+                    DbType::SetArchived => EventData::SetArchived(
                         e.new_val_bool
                             .expect("set_archived event without new_val_bool"),
                     ),
-                    DbType::BlockedUntil => EventType::BlockedUntil(
+                    DbType::BlockedUntil => EventData::BlockedUntil(
                         e.time.map(|t| t.and_local_timezone(chrono::Utc).unwrap()),
                     ),
-                    DbType::ScheduleFor => EventType::ScheduleFor(
+                    DbType::ScheduleFor => EventData::ScheduleFor(
                         e.time.map(|t| t.and_local_timezone(chrono::Utc).unwrap()),
                     ),
-                    DbType::AddTag => EventType::AddTag {
+                    DbType::AddTag => EventData::AddTag {
                         tag: TagId(e.tag_id.expect("add_tag event without tag_id")),
                         prio: e.new_val_int.expect("add_tag event without new_val_int"),
                         backlog: e.new_val_bool.expect("add_tag event without new_val_bool"),
                     },
                     DbType::RemoveTag => {
-                        EventType::RmTag(TagId(e.tag_id.expect("remove_tag event without tag_id")))
+                        EventData::RmTag(TagId(e.tag_id.expect("remove_tag event without tag_id")))
                     }
-                    DbType::AddComment => EventType::AddComment {
+                    DbType::AddComment => EventData::AddComment {
                         text: e.comment.expect("add_comment event without text"),
                         parent_id: e.parent_id.map(EventId),
                     },
-                    DbType::EditComment => EventType::EditComment {
+                    DbType::EditComment => EventData::EditComment {
                         text: e.comment.expect("edit_comment event without text"),
                         comment_id: EventId(
                             e.parent_id.expect("edit_comment event without parent_id"),
                         ),
                     },
-                    DbType::SetEventRead => EventType::SetEventRead {
+                    DbType::SetEventRead => EventData::SetEventRead {
                         event_id: EventId(
                             e.parent_id.expect("set_event_read event without parent_id"),
                         ),

@@ -1,6 +1,6 @@
 use futures::{channel::oneshot, executor::block_on};
 use gloo_storage::{LocalStorage, Storage};
-use risuto_api::{DbDump, Event, EventType, TagId, Task, TaskId, UserId};
+use risuto_api::{DbDump, Event, EventData, TagId, Task, TaskId, UserId};
 use std::{collections::VecDeque, rc::Rc, sync::Arc};
 use wasm_bindgen_futures::spawn_local;
 use yew::prelude::*;
@@ -255,7 +255,7 @@ impl Component for App {
                     evts.push(AppMsg::NewUserEvent(Event::now(
                         owner,
                         task_id,
-                        EventType::SetDone(e.after.list.is_done()),
+                        EventData::SetDone(e.after.list.is_done()),
                     )));
                 }
                 evts
@@ -304,7 +304,7 @@ fn compute_reordering_events(
             AppMsg::NewUserEvent(Event::now(
                 owner,
                 $task,
-                EventType::AddTag {
+                EventData::AddTag {
                     tag,
                     prio: $prio,
                     backlog: into_backlog,

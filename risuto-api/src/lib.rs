@@ -148,13 +148,13 @@ impl Task {
                 )
             }
             for e in evts {
-                match &e.contents {
-                    EventType::SetTitle(title) => self.current_title = title.clone(),
-                    EventType::SetDone(now_done) => self.is_done = *now_done,
-                    EventType::SetArchived(now_archived) => self.is_archived = *now_archived,
-                    EventType::BlockedUntil(time) => self.blocked_until = *time,
-                    EventType::ScheduleFor(time) => self.scheduled_for = *time,
-                    EventType::AddTag { tag, prio, backlog } => {
+                match &e.data {
+                    EventData::SetTitle(title) => self.current_title = title.clone(),
+                    EventData::SetDone(now_done) => self.is_done = *now_done,
+                    EventData::SetArchived(now_archived) => self.is_archived = *now_archived,
+                    EventData::BlockedUntil(time) => self.blocked_until = *time,
+                    EventData::ScheduleFor(time) => self.scheduled_for = *time,
+                    EventData::AddTag { tag, prio, backlog } => {
                         self.current_tags.insert(
                             *tag,
                             TaskInTag {
@@ -163,10 +163,10 @@ impl Task {
                             },
                         );
                     }
-                    EventType::RmTag(tag) => {
+                    EventData::RmTag(tag) => {
                         self.current_tags.remove(tag);
                     }
-                    EventType::AddComment { text, parent_id } => {
+                    EventData::AddComment { text, parent_id } => {
                         let mut edits = BTreeMap::new();
                         edits.insert(e.date, vec![text.clone()]);
                         let mut read = HashSet::new();
@@ -199,7 +199,7 @@ impl Task {
                                 });
                         }
                     }
-                    EventType::EditComment { comment_id, text } => {
+                    EventData::EditComment { comment_id, text } => {
                         if let Some(comment) = find_comment(&mut self.current_comments, comment_id)
                         {
                             comment
@@ -211,7 +211,7 @@ impl Task {
                             comment.read.insert(e.owner);
                         }
                     }
-                    EventType::SetEventRead { event_id, now_read } => {
+                    EventData::SetEventRead { event_id, now_read } => {
                         if let Some(comment) = find_comment(&mut self.current_comments, event_id) {
                             if *now_read {
                                 comment.read.insert(e.owner);
@@ -236,11 +236,11 @@ pub struct Event {
     pub date: Time,
     pub task: TaskId,
 
-    pub contents: EventType,
+    pub data: EventData,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
-pub enum EventType {
+pub enum EventData {
     SetTitle(String),
     SetDone(bool),
     SetArchived(bool),
@@ -267,13 +267,13 @@ pub enum EventType {
 }
 
 impl Event {
-    pub fn now(owner: UserId, task: TaskId, contents: EventType) -> Event {
+    pub fn now(owner: UserId, task: TaskId, data: EventData) -> Event {
         Event {
             id: EventId(Uuid::new_v4()),
             owner,
             date: Utc::now(),
             task,
-            contents,
+            data,
         }
     }
 
@@ -300,13 +300,13 @@ impl Event {
                 (par_owner, par_date, par_task)
             }};
         }
-        Ok(match self.contents {
-            EventType::SetTitle { .. } => auth!(self.task).can_edit,
-            EventType::SetDone { .. }
-            | EventType::SetArchived { .. }
-            | EventType::BlockedUntil { .. }
-            | EventType::ScheduleFor { .. } => auth!(self.task).can_triage,
-            EventType::AddTag { tag, .. } => {
+        Ok(match self.data {
+            EventData::SetTitle { .. } => auth!(self.task).can_edit,
+            EventData::SetDone { .. }
+            | EventData::SetArchived { .. }
+            | EventData::BlockedUntil { .. }
+            | EventData::ScheduleFor { .. } => auth!(self.task).can_triage,
+            EventData::AddTag { tag, .. } => {
                 let auth = auth!(self.task);
                 auth.can_relabel_to_any
                     || (auth.can_triage
@@ -316,14 +316,14 @@ impl Event {
                             .with_context(|| format!("listing tags for task {:?}", self.task))?
                             .contains(&tag))
             }
-            EventType::RmTag { .. } => auth!(self.task).can_relabel_to_any,
-            EventType::AddComment { parent_id, .. } => {
+            EventData::RmTag { .. } => auth!(self.task).can_relabel_to_any,
+            EventData::AddComment { parent_id, .. } => {
                 if let Some(parent_id) = parent_id {
                     check_parent_event!(parent_id);
                 }
                 auth!(self.task).can_comment
             }
-            EventType::EditComment { comment_id, .. } => {
+            EventData::EditComment { comment_id, .. } => {
                 let (comm_owner, _, comm_task) = check_parent_event!(comment_id);
                 let is_comment_owner = self.owner == comm_owner;
                 let is_first_comment = db
@@ -334,7 +334,7 @@ impl Event {
                     })?;
                 is_comment_owner || (auth!(comm_task).can_edit && is_first_comment)
             }
-            EventType::SetEventRead { event_id, .. } => {
+            EventData::SetEventRead { event_id, .. } => {
                 let (_, _, par_task) = check_parent_event!(event_id);
                 auth!(par_task).can_read
             }

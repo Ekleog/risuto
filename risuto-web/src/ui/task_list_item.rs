@@ -1,14 +1,14 @@
 use std::{sync::Arc, str::FromStr};
 
 use chrono::{Datelike, Timelike};
-use risuto_api::{Task, Time, EventType};
+use risuto_api::{Task, Time, EventData};
 use wasm_bindgen::prelude::*;
 use yew::prelude::*;
 
 #[derive(Clone, PartialEq, Properties)]
 pub struct TaskListItemProps {
     pub task: Arc<Task>,
-    pub on_event: Callback<EventType>,
+    pub on_event: Callback<EventData>,
 }
 
 #[function_component(TaskListItem)]
@@ -43,7 +43,7 @@ fn title_div(p: &TaskListItemProps) -> Html {
                 .text_content()
                 .expect("div_ref has no text_content");
             if text != initial_title {
-                on_event.emit(EventType::SetTitle(text));
+                on_event.emit(EventData::SetTitle(text));
             }
         })
     };
@@ -71,7 +71,7 @@ fn title_div(p: &TaskListItemProps) -> Html {
     }
 }
 
-fn button_done_change(t: &Task, on_event: &Callback<EventType>) -> Html {
+fn button_done_change(t: &Task, on_event: &Callback<EventData>) -> Html {
     let icon_class = match t.is_done {
         true => "bi-arrow-counterclockwise",
         false => "bi-check-lg",
@@ -86,7 +86,7 @@ fn button_done_change(t: &Task, on_event: &Callback<EventType>) -> Html {
             type="button"
             class={ classes!("btn", "bi-btn", icon_class, "ps-2") }
             title={ aria_label }
-            onclick={ on_event.reform(move |_| EventType::SetDone(!currently_done)) }
+            onclick={ on_event.reform(move |_| EventData::SetDone(!currently_done)) }
         >
         </button>
     }
@@ -170,11 +170,11 @@ fn timeset_button(input_ref: NodeRef, current_date: &Option<Time>, label: &'stat
 #[function_component(ButtonScheduleFor)]
 fn button_schedule_for(p: &TaskListItemProps) -> Html {
     let input_ref = use_node_ref();
-    timeset_button(input_ref, &p.task.scheduled_for, "Schedule for", "bi-alarm", &p.on_event.reform(EventType::ScheduleFor))
+    timeset_button(input_ref, &p.task.scheduled_for, "Schedule for", "bi-alarm", &p.on_event.reform(EventData::ScheduleFor))
 }
 
 #[function_component(ButtonBlockedUntil)]
 fn button_blocked_until(p: &TaskListItemProps) -> Html {
     let input_ref = use_node_ref();
-    timeset_button(input_ref, &p.task.blocked_until, "Blocked until", "bi-hourglass-split", &p.on_event.reform(EventType::BlockedUntil))
+    timeset_button(input_ref, &p.task.blocked_until, "Blocked until", "bi-hourglass-split", &p.on_event.reform(EventData::BlockedUntil))
 }

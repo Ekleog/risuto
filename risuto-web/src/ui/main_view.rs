@@ -1,5 +1,5 @@
 use crate::ui;
-use risuto_api::{Event, Task, TaskId, EventType};
+use risuto_api::{Event, Task, TaskId, EventData};
 use std::{collections::VecDeque, rc::Rc, sync::Arc};
 use yew::prelude::*;
 
@@ -50,7 +50,7 @@ pub struct MainViewProps {
     pub tasks_done: Rc<Vec<(TaskId, Arc<Task>)>>,
     pub tasks_backlog: Rc<Vec<(TaskId, Arc<Task>)>>,
     pub on_logout: Callback<()>,
-    pub on_event: Callback<(TaskId, EventType)>,
+    pub on_event: Callback<(TaskId, EventData)>,
     pub on_order_change: Callback<TaskOrderChangeEvent>,
 }
 

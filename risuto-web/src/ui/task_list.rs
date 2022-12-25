@@ -1,4 +1,4 @@
-use risuto_api::{Task, TaskId, EventType};
+use risuto_api::{Task, TaskId, EventData};
 use std::{rc::Rc, sync::Arc};
 use yew::prelude::*;
 
@@ -8,7 +8,7 @@ use crate::ui;
 pub struct TaskListProps {
     pub ref_this: NodeRef,
     pub tasks: Rc<Vec<(TaskId, Arc<Task>)>>,
-    pub on_event: Callback<(TaskId, EventType)>,
+    pub on_event: Callback<(TaskId, EventData)>,
 }
 
 #[function_component(TaskList)]
