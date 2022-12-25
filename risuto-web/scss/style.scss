@@ -1,3 +1,4 @@
+// Color definitions
 $white: #FFFFFF;
 $black: #000000;
 $blue: #001427;
@@ -6,22 +7,32 @@ $yellow: #F4D58D;
 $orange: #BF0603;
 $red: #8D0801;
 
-$body-bg: darken($blue, 4%);
+// Base colors
+$background: darken($blue, 4%);
 $text: darken($white, 15%);
 $text-inverted: lighten($black, 15%);
-
 $input-title-bg: $blue;
+
+// Component colors
 $offline-banner-bg: $yellow;
 $offline-banner-border: lighten($blue, 5%);
+
 $tag-list-bg: darken($blue, 2%);
 $tag-list-active-bg: lighten($blue, 3%);
 $tag-list-hover: lighten($blue, 70%);
+
 $task-list-bg: lighten($blue, 2%);
+$timeset-label-bg: $background;
+$timeset-label-border: lighten($black, 30%);
+
 $backlog-handle: $red;
+
 $scrollbar-track: $blue;
 $scrollbar-thumb: lighten($blue, 10%);
 $scrollbar-thumb-hover: lighten($blue, 20%);
 
+// Bootstrap-used colors
+$body-bg: $background;
 $body-color: $text;
 $primary: $red;
 $secondary: $yellow;
@@ -91,6 +102,23 @@ $dark: lighten($blue, 3%);
     color: $text;
 }
 
+.timeset-button {
+    position: relative;
+}
+
+.timeset-label {
+    position: absolute !important;
+    bottom: 0% !important;
+    left: 50% !important;
+    transform: translate(-50%);
+
+    font-size: 0.8rem;
+    font-weight: bold;
+    padding: 1px 5px 1px 5px;
+    background-color: rgba($timeset-label-bg, 75%);
+    border: 1px solid $timeset-label-border;
+}
+
 .done-task-list {
     filter: brightness(50%);
 }
@@ -136,6 +164,11 @@ $dark: lighten($blue, 3%);
 
 .float-above {
     z-index: 10;
+}
+
+.size-zero {
+    max-width: 0px;
+    max-height: 0px;
 }
 
 .drag-handle {

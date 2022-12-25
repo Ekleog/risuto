@@ -232,6 +232,20 @@ impl Component for App {
             })
         };
 
+        let on_schedule_for = {
+            let owner = self.db.owner.clone();
+            ctx.link().callback(move |(task, time)| {
+                AppMsg::NewUserEvent(Event::now(owner, task, EventType::ScheduleFor(time)))
+            })
+        };
+
+        let on_blocked_until = {
+            let owner = self.db.owner.clone();
+            ctx.link().callback(move |(task, time)| {
+                AppMsg::NewUserEvent(Event::now(owner, task, EventType::BlockedUntil(time)))
+            })
+        };
+
         let on_order_change = {
             let owner = self.db.owner.clone();
             let tag = self.tag.clone();
@@ -290,6 +304,8 @@ impl Component for App {
                             on_logout={ctx.link().callback(|_| AppMsg::Logout)}
                             {on_title_change}
                             {on_done_change}
+                            {on_schedule_for}
+                            {on_blocked_until}
                             {on_order_change}
                         />
                     </main>

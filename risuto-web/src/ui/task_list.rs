@@ -1,4 +1,4 @@
-use risuto_api::{Task, TaskId};
+use risuto_api::{Task, TaskId, Time};
 use std::{rc::Rc, sync::Arc};
 use yew::prelude::*;
 
@@ -10,26 +10,37 @@ pub struct TaskListProps {
     pub tasks: Rc<Vec<(TaskId, Arc<Task>)>>,
     pub on_title_change: Callback<(TaskId, String)>,
     pub on_done_change: Callback<(TaskId, bool)>,
+    pub on_schedule_for: Callback<(TaskId, Option<Time>)>,
+    pub on_blocked_until: Callback<(TaskId, Option<Time>)>,
 }
 
 #[function_component(TaskList)]
 pub fn task_list(p: &TaskListProps) -> Html {
     // First, build the list items
     let list_items = p.tasks.iter().map(|(id, t)| {
-        let on_title_change = {
-            let id = *id;
-            p.on_title_change.reform(move |new_title| (id, new_title))
-        };
-        let on_done_change = {
-            let id = *id;
-            let is_done = t.is_done;
-            p.on_done_change.reform(move |()| (id, !is_done))
-        };
+        macro_rules! reform_with_id {
+            ( $($evt:ident,)* ) => {
+                $(
+                    let $evt = {
+                        let id = *id;
+                        p.$evt.reform(move |val| (id, val))
+                    };
+                )*
+            }
+        }
+        reform_with_id! {
+            on_title_change,
+            on_done_change,
+            on_schedule_for,
+            on_blocked_until,
+        }
         html! {
             <ui::TaskListItem
                 task={ t.clone() }
                 { on_title_change }
                 { on_done_change }
+                { on_schedule_for }
+                { on_blocked_until }
             />
         }
     });
