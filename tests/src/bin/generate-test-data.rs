@@ -168,7 +168,9 @@ fn main() {
         let mut mk_title = |rng: &mut StdRng| title = format!("'{}'", gen_task_title(rng));
         let mut mk_bool =
             |rng: &mut StdRng| new_val_bool = if rng.gen() { "true" } else { "false" };
-        let mut mk_time = |rng: &mut StdRng| time = format!("'{}'", gen_date(rng));
+        let mut mk_time_maybe = |rng: &mut StdRng| {
+            if rng.gen() { time = format!("'{}'", gen_date(rng)); }
+        };
         let mut mk_tag = |rng: &mut StdRng| tag_id = format!("'{}'", gen_tag(rng));
         let mut mk_comment = |rng: &mut StdRng| comment = format!("'{}'", gen_comment_text(rng));
         let mut mk_parent =
@@ -195,11 +197,11 @@ fn main() {
                 "set_archived"
             }
             3 => {
-                mk_time(&mut rng);
+                mk_time_maybe(&mut rng);
                 "blocked_until"
             }
             4 => {
-                mk_time(&mut rng);
+                mk_time_maybe(&mut rng);
                 "schedule_for"
             }
             5 => {
