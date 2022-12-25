@@ -350,12 +350,13 @@ pub enum Query {
     Not(Box<Query>),
     Archived(bool),
     Tag(TagId),
-    // TODO: Phrase(String), // full-text search of one contiguous word vec
+    Phrase(String), // full-text search of one contiguous word vec
 }
 
 pub enum QueryBind {
     Bool(bool),
     Uuid(Uuid),
+    String(String),
 }
 
 #[derive(Default)]
@@ -443,7 +444,8 @@ impl Query {
         }
     }
 
-    /// Assumes tables vta (v_tasks_archived) and vtt (v_tasks_tags) are available
+    /// Assumes tables vta (v_tasks_archived), vtt (v_tasks_tags)
+    /// and vtx (v_tasks_text) are available
     pub fn to_postgres(&self, first_bind_idx: usize) -> SqlQuery {
         let mut res = Default::default();
         self.add_to_postgres(first_bind_idx, &mut res);
@@ -484,6 +486,12 @@ impl Query {
                 res.where_clause.push_str(&format!("{}", idx));
                 res.where_clause.push_str(")");
             },
+            Query::Phrase(t) => {
+                res.where_clause.push_str("(to_tsvector(vtx.text) @@ phraseto_tsquery($");
+                let idx = res.add_bind(first_bind_idx, QueryBind::String(t.clone()));
+                res.where_clause.push_str(&format!("{}", idx));
+                res.where_clause.push_str(")");
+            }
         }
     }
 }

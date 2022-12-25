@@ -1,0 +1,17 @@
+WHITESPACE   =  _{ " " | "\t" | NEWLINE }
+  
+everything     =  _{ SOI ~ search ~ EOI }
+  search       =   { prefix* ~ primary ~ (infix ~ prefix* ~ primary )* }
+    infix      =  _{ or | and }
+      and      =   { ^"AND"? }
+      or       =   { ^"OR" }
+    prefix     =  _{ not }
+      not      =   { "-" }
+    primary    =  _{ archived | tag | "(" ~ search ~ ")" }
+      archived =  ${ "archived:" ~ bool}
+      tag      =  ${ "tag:" ~ tagname }
+
+bool    = _{ true | false }
+  true  = { ^"true" }
+  false = { ^"false" }
+tagname = { (ASCII_ALPHANUMERIC | ":")+ }

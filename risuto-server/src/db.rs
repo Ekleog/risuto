@@ -413,7 +413,7 @@ pub async fn search_tasks_for_user(
             let query = format!(
                 "
                     INSERT INTO tmp_tasks
-                    SELECT t.id
+                    SELECT DISTINCT t.id
                         FROM tasks t
                     LEFT JOIN v_tasks_users vtu
                         ON vtu.task_id = t.id
@@ -421,6 +421,8 @@ pub async fn search_tasks_for_user(
                         ON vta.task_id = t.id
                     LEFT JOIN v_tasks_tags vtt
                         ON vtt.task_id = t.id
+                    LEFT JOIN v_tasks_comments vtc
+                        ON vtc.task_id = t.id
                     WHERE vtu.user_id = $1
                     AND {where_clause}
                 "
@@ -430,6 +432,7 @@ pub async fn search_tasks_for_user(
                 match b {
                     QueryBind::Bool(b) => q = q.bind(b),
                     QueryBind::Uuid(u) => q = q.bind(u),
+                    QueryBind::String(s) => q = q.bind(s),
                 };
             }
             q.execute(&mut *conn)
