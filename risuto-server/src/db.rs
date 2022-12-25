@@ -336,49 +336,7 @@ where
     res
 }
 
-pub async fn fetch_dump_unarchived(
-    conn: &mut sqlx::PgConnection,
-    owner: UserId,
-) -> anyhow::Result<DbDump> {
-    let users = fetch_users(&mut *conn).await.context("fetching users")?;
-    let tags = fetch_tags_for_user(&mut *conn, owner)
-        .await
-        .with_context(|| format!("fetching tags for user {:?}", owner))?;
-
-    let tasks = with_tmp_tasks_table(&mut *conn, |conn| {
-        Box::pin(async move {
-            sqlx::query(
-                "
-                INSERT INTO tmp_tasks
-                SELECT t.id
-                    FROM tasks t
-                LEFT JOIN v_tasks_archived vta
-                    ON vta.task_id = t.id
-                LEFT JOIN v_tasks_users vtu
-                    ON vtu.task_id = t.id
-                WHERE vtu.user_id = $1
-                AND vta.archived = false
-            ",
-            )
-            .bind(owner.0)
-            .execute(&mut *conn)
-            .await
-            .context("filling temp table with interesting task ids")?;
-
-            fetch_tasks_from_tmp_tasks_table(&mut *conn).await
-        })
-    })
-    .await?;
-
-    Ok(DbDump {
-        owner,
-        users,
-        tags,
-        tasks,
-    })
-}
-
-async fn fetch_users(conn: &mut sqlx::PgConnection) -> anyhow::Result<HashMap<UserId, User>> {
+pub async fn fetch_users(conn: &mut sqlx::PgConnection) -> anyhow::Result<HashMap<UserId, User>> {
     Ok(sqlx::query!("SELECT id, name FROM users")
         .fetch(conn)
         .map_ok(|u| (UserId(u.id), User { name: u.name }))
@@ -387,9 +345,9 @@ async fn fetch_users(conn: &mut sqlx::PgConnection) -> anyhow::Result<HashMap<Us
         .context("querying users table")?)
 }
 
-async fn fetch_tags_for_user(
+pub async fn fetch_tags_for_user(
     conn: &mut sqlx::PgConnection,
-    user: UserId,
+    user: &UserId,
 ) -> anyhow::Result<HashMap<TagId, (Tag, AuthInfo)>> {
     Ok(sqlx::query!(
         r#"
@@ -439,6 +397,36 @@ async fn fetch_tags_for_user(
     .try_collect::<HashMap<TagId, (Tag, AuthInfo)>>()
     .await
     .context("querying tags table")?)
+}
+
+pub async fn fetch_tasks_for_user(
+    conn: &mut sqlx::PgConnection,
+    owner: UserId,
+) -> anyhow::Result<HashMap<TaskId, Arc<Task>>> {
+    with_tmp_tasks_table(&mut *conn, |conn| {
+        Box::pin(async move {
+            sqlx::query(
+                "
+                INSERT INTO tmp_tasks
+                SELECT t.id
+                    FROM tasks t
+                LEFT JOIN v_tasks_archived vta
+                    ON vta.task_id = t.id
+                LEFT JOIN v_tasks_users vtu
+                    ON vtu.task_id = t.id
+                WHERE vtu.user_id = $1
+                AND vta.archived = false
+            ",
+            )
+            .bind(owner.0)
+            .execute(&mut *conn)
+            .await
+            .context("filling temp table with interesting task ids")?;
+
+            fetch_tasks_from_tmp_tasks_table(&mut *conn).await
+        })
+    })
+    .await
 }
 
 async fn fetch_tasks_from_tmp_tasks_table(

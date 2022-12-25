@@ -38,17 +38,29 @@ pub async fn unauth(host: String, token: AuthToken) {
     }
 }
 
-pub async fn fetch_db_dump(login: &LoginInfo) -> DbDump {
+async fn fetch<T>(login: &LoginInfo, fetcher: &str) -> T
+where
+    T: for<'de> serde::Deserialize<'de>,
+{
     // TODO: at least handle unauthorized error
     crate::CLIENT
-        .get(format!("{}/api/fetch-unarchived", login.host))
+        .get(format!("{}/api/{}", login.host, fetcher))
         .bearer_auth(login.token.0)
         .send()
         .await
-        .expect("failed to fetch db dump") // TODO: should eg be a popup
+        .expect("failed to fetch data from server") // TODO: should eg be a popup
         .json()
         .await
-        .expect("failed to fetch db dump") // TODO: should eg be a popup
+        .expect("failed to parse data from server") // TODO: should eg be a popup
+}
+
+async fn fetch_db_dump(login: &LoginInfo) -> DbDump {
+    DbDump {
+        owner: fetch(login, "whoami").await,
+        users: fetch(login, "fetch-users").await,
+        tags: fetch(login, "fetch-tags").await,
+        tasks: fetch(login, "fetch-tasks").await,
+    }
 }
 
 async fn sleep_for(d: chrono::Duration) {

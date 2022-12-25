@@ -10,7 +10,7 @@ use axum::{
     Extension, Json, Router,
 };
 use futures::{channel::mpsc, select, SinkExt, StreamExt};
-use risuto_api::{AuthToken, DbDump, FeedMessage, NewSession, UserId, Uuid};
+use risuto_api::{AuthToken, FeedMessage, NewSession, UserId, Uuid, User, TagId, Tag, AuthInfo, TaskId, Task};
 use std::{collections::HashMap, net::SocketAddr, sync::Arc};
 use tokio::sync::RwLock;
 use tower_http::trace::TraceLayer;
@@ -33,7 +33,10 @@ async fn main() -> anyhow::Result<()> {
     let app = Router::new()
         .route("/api/auth", post(auth))
         .route("/api/unauth", post(unauth))
-        .route("/api/fetch-unarchived", get(fetch_unarchived))
+        .route("/api/whoami", get(whoami))
+        .route("/api/fetch-users", get(fetch_users))
+        .route("/api/fetch-tags", get(fetch_tags))
+        .route("/api/fetch-tasks", get(fetch_tasks))
         .route("/ws/event-feed", get(event_feed))
         .route("/api/submit-event", post(submit_event))
         .layer(Extension(db))
@@ -150,15 +153,43 @@ async fn unauth(user: PreAuth, Extension(db): Extension<sqlx::PgPool>) -> Result
     }
 }
 
-async fn fetch_unarchived(
+async fn whoami(Auth(user): Auth) -> Json<UserId> {
+    Json(user)
+}
+
+async fn fetch_users(
     Auth(user): Auth,
     Extension(db): Extension<sqlx::PgPool>,
-) -> Result<Json<DbDump>, Error> {
+) -> Result<Json<HashMap<UserId, User>>, Error> {
     let mut conn = db.acquire().await.context("acquiring db connection")?;
     Ok(Json(
-        db::fetch_dump_unarchived(&mut conn, user)
+        db::fetch_users(&mut conn)
             .await
-            .with_context(|| format!("fetching db dump for {:?}", user))?,
+            .with_context(|| format!("fetching user list for {:?}", user))?,
+    ))
+}
+
+async fn fetch_tags(
+    Auth(user): Auth,
+    Extension(db): Extension<sqlx::PgPool>,
+) -> Result<Json<HashMap<TagId, (Tag, AuthInfo)>>, Error> {
+    let mut conn = db.acquire().await.context("acquiring db connection")?;
+    Ok(Json(
+        db::fetch_tags_for_user(&mut conn, &user)
+            .await
+            .with_context(|| format!("fetching tag list for {:?}", user))?,
+    ))
+}
+
+async fn fetch_tasks(
+    Auth(user): Auth,
+    Extension(db): Extension<sqlx::PgPool>,
+) -> Result<Json<HashMap<TaskId, Arc<Task>>>, Error> {
+    let mut conn = db.acquire().await.context("acquiring db connection")?;
+    Ok(Json(
+        db::fetch_tasks_for_user(&mut conn, user)
+            .await
+            .with_context(|| format!("fetching task list for {:?}", user))?,
     ))
 }
 
