@@ -3,7 +3,7 @@ use axum::async_trait;
 use chrono::Utc;
 use futures::{Future, Stream, StreamExt, TryStreamExt};
 use risuto_api::{
-    AuthInfo, AuthToken, DbDump, Event, EventData, EventId, NewSession, Tag, TagId, Task, TaskId,
+    AuthInfo, AuthToken, Event, EventData, EventId, NewSession, Tag, TagId, Task, TaskId,
     Time, User, UserId, Uuid,
 };
 use sqlx::Row;
@@ -40,51 +40,44 @@ struct DbEvent {
     id: Uuid,
     owner_id: Uuid,
     date: chrono::NaiveDateTime,
-
-    #[sqlx(rename = "type")]
-    type_: DbType,
     task_id: Uuid,
 
-    title: Option<String>,
-    new_val_bool: Option<bool>,
-    time: Option<chrono::NaiveDateTime>,
-    tag_id: Option<Uuid>,
-    new_val_int: Option<i64>,
-    comment: Option<String>,
-    parent_id: Option<Uuid>,
+    d_type: DbType,
+    d_text: Option<String>,
+    d_bool: Option<bool>,
+    d_int: Option<i64>,
+    d_time: Option<chrono::NaiveDateTime>,
+    d_tag_id: Option<Uuid>,
+    d_parent_id: Option<Uuid>,
 }
 
 impl DbEvent {
-    fn type_(mut self, t: DbType) -> DbEvent {
-        self.type_ = t;
+    fn d_type(mut self, t: DbType) -> DbEvent {
+        self.d_type = t;
         self
     }
-    fn title(mut self, t: String) -> DbEvent {
-        self.title = Some(t);
+    fn d_text(mut self, t: String) -> DbEvent {
+        self.d_text = Some(t);
         self
     }
-    fn new_val_bool(mut self, b: bool) -> DbEvent {
-        self.new_val_bool = Some(b);
+    fn d_bool(mut self, b: bool) -> DbEvent {
+        self.d_bool = Some(b);
         self
     }
-    fn time(mut self, t: Option<Time>) -> DbEvent {
-        self.time = t.map(|t| t.naive_utc());
+    fn d_time(mut self, t: Option<Time>) -> DbEvent {
+        self.d_time = t.map(|t| t.naive_utc());
         self
     }
-    fn tag_id(mut self, t: TagId) -> DbEvent {
-        self.tag_id = Some(t.0);
+    fn d_tag_id(mut self, t: TagId) -> DbEvent {
+        self.d_tag_id = Some(t.0);
         self
     }
-    fn new_val_int(mut self, i: i64) -> DbEvent {
-        self.new_val_int = Some(i);
+    fn d_int(mut self, i: i64) -> DbEvent {
+        self.d_int = Some(i);
         self
     }
-    fn comment(mut self, c: String) -> DbEvent {
-        self.comment = Some(c);
-        self
-    }
-    fn parent_id(mut self, p: Option<EventId>) -> DbEvent {
-        self.parent_id = p.map(|p| p.0);
+    fn d_parent_id(mut self, p: Option<EventId>) -> DbEvent {
+        self.d_parent_id = p.map(|p| p.0);
         self
     }
 }
@@ -96,40 +89,39 @@ impl From<Event> for DbEvent {
             owner_id: e.owner.0,
             date: e.date.naive_utc(),
             task_id: e.task.0,
-            type_: DbType::SetTitle, // will be overwritten below
-            title: None,
-            new_val_bool: None,
-            time: None,
-            tag_id: None,
-            new_val_int: None,
-            comment: None,
-            parent_id: None,
+            d_type: DbType::SetTitle, // will be overwritten below
+            d_text: None,
+            d_bool: None,
+            d_time: None,
+            d_tag_id: None,
+            d_int: None,
+            d_parent_id: None,
         };
         use EventData::*;
         match e.data {
-            SetTitle(t) => res.type_(DbType::SetTitle).title(t),
-            SetDone(b) => res.type_(DbType::SetDone).new_val_bool(b),
-            SetArchived(b) => res.type_(DbType::SetArchived).new_val_bool(b),
-            BlockedUntil(t) => res.type_(DbType::BlockedUntil).time(t),
-            ScheduleFor(t) => res.type_(DbType::ScheduleFor).time(t),
+            SetTitle(t) => res.d_type(DbType::SetTitle).d_text(t),
+            SetDone(b) => res.d_type(DbType::SetDone).d_bool(b),
+            SetArchived(b) => res.d_type(DbType::SetArchived).d_bool(b),
+            BlockedUntil(t) => res.d_type(DbType::BlockedUntil).d_time(t),
+            ScheduleFor(t) => res.d_type(DbType::ScheduleFor).d_time(t),
             AddTag { tag, prio, backlog } => res
-                .type_(DbType::AddTag)
-                .tag_id(tag)
-                .new_val_int(prio)
-                .new_val_bool(backlog),
-            RmTag(t) => res.type_(DbType::RemoveTag).tag_id(t),
+                .d_type(DbType::AddTag)
+                .d_tag_id(tag)
+                .d_int(prio)
+                .d_bool(backlog),
+            RmTag(t) => res.d_type(DbType::RemoveTag).d_tag_id(t),
             AddComment { text, parent_id } => res
-                .type_(DbType::AddComment)
-                .comment(text)
-                .parent_id(parent_id),
+                .d_type(DbType::AddComment)
+                .d_text(text)
+                .d_parent_id(parent_id),
             EditComment { text, comment_id } => res
-                .type_(DbType::EditComment)
-                .comment(text)
-                .parent_id(Some(comment_id)),
+                .d_type(DbType::EditComment)
+                .d_text(text)
+                .d_parent_id(Some(comment_id)),
             SetEventRead { event_id, now_read } => res
-                .type_(DbType::SetEventRead)
-                .new_val_bool(now_read)
-                .parent_id(Some(event_id)),
+                .d_type(DbType::SetEventRead)
+                .d_bool(now_read)
+                .d_parent_id(Some(event_id)),
         }
     }
 }
@@ -212,8 +204,8 @@ impl<'a> risuto_api::Db for PostgresDb<'a> {
         Ok(sqlx::query!(
             "SELECT id FROM events
             WHERE task_id = $1
-                AND type = 'add_comment'
-                AND parent_id IS NULL
+                AND d_type = 'add_comment'
+                AND d_parent_id IS NULL
             ORDER BY date LIMIT 1",
             task.0
         )
@@ -522,47 +514,47 @@ async fn fetch_tasks_from_tmp_tasks_table(
                 owner: UserId(e.owner_id),
                 date: e.date.and_local_timezone(chrono::Utc).unwrap(),
                 task: TaskId(e.task_id),
-                data: match e.type_ {
+                data: match e.d_type {
                     DbType::SetTitle => {
-                        EventData::SetTitle(e.title.expect("set_title event without title"))
+                        EventData::SetTitle(e.d_text.expect("set_title event without title"))
                     }
                     DbType::SetDone => EventData::SetDone(
-                        e.new_val_bool.expect("set_done event without new_val_bool"),
+                        e.d_bool.expect("set_done event without new_val_bool"),
                     ),
                     DbType::SetArchived => EventData::SetArchived(
-                        e.new_val_bool
+                        e.d_bool
                             .expect("set_archived event without new_val_bool"),
                     ),
                     DbType::BlockedUntil => EventData::BlockedUntil(
-                        e.time.map(|t| t.and_local_timezone(chrono::Utc).unwrap()),
+                        e.d_time.map(|t| t.and_local_timezone(chrono::Utc).unwrap()),
                     ),
                     DbType::ScheduleFor => EventData::ScheduleFor(
-                        e.time.map(|t| t.and_local_timezone(chrono::Utc).unwrap()),
+                        e.d_time.map(|t| t.and_local_timezone(chrono::Utc).unwrap()),
                     ),
                     DbType::AddTag => EventData::AddTag {
-                        tag: TagId(e.tag_id.expect("add_tag event without tag_id")),
-                        prio: e.new_val_int.expect("add_tag event without new_val_int"),
-                        backlog: e.new_val_bool.expect("add_tag event without new_val_bool"),
+                        tag: TagId(e.d_tag_id.expect("add_tag event without tag_id")),
+                        prio: e.d_int.expect("add_tag event without new_val_int"),
+                        backlog: e.d_bool.expect("add_tag event without new_val_bool"),
                     },
                     DbType::RemoveTag => {
-                        EventData::RmTag(TagId(e.tag_id.expect("remove_tag event without tag_id")))
+                        EventData::RmTag(TagId(e.d_tag_id.expect("remove_tag event without tag_id")))
                     }
                     DbType::AddComment => EventData::AddComment {
-                        text: e.comment.expect("add_comment event without text"),
-                        parent_id: e.parent_id.map(EventId),
+                        text: e.d_text.expect("add_comment event without text"),
+                        parent_id: e.d_parent_id.map(EventId),
                     },
                     DbType::EditComment => EventData::EditComment {
-                        text: e.comment.expect("edit_comment event without text"),
+                        text: e.d_text.expect("edit_comment event without text"),
                         comment_id: EventId(
-                            e.parent_id.expect("edit_comment event without parent_id"),
+                            e.d_parent_id.expect("edit_comment event without parent_id"),
                         ),
                     },
                     DbType::SetEventRead => EventData::SetEventRead {
                         event_id: EventId(
-                            e.parent_id.expect("set_event_read event without parent_id"),
+                            e.d_parent_id.expect("set_event_read event without parent_id"),
                         ),
                         now_read: e
-                            .new_val_bool
+                            .d_bool
                             .expect("set_event_read event without new_val_bool"),
                     },
                 },
@@ -598,19 +590,18 @@ pub async fn submit_event(conn: &mut sqlx::PgConnection, e: Event) -> Result<(),
 
     let e = DbEvent::from(e);
     let res = sqlx::query!(
-        "INSERT INTO events VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)",
+        "INSERT INTO events VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)",
         e.id,
         e.owner_id,
         e.date,
-        e.type_ as DbType,
         e.task_id,
-        e.title,
-        e.new_val_bool,
-        e.time,
-        e.tag_id,
-        e.new_val_int,
-        e.comment,
-        e.parent_id,
+        e.d_type as DbType,
+        e.d_text,
+        e.d_bool,
+        e.d_int,
+        e.d_time,
+        e.d_tag_id,
+        e.d_parent_id,
     )
     .execute(&mut *db.conn)
     .await
