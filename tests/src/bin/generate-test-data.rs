@@ -164,9 +164,17 @@ fn main() {
         let mut d_time = "NULL".to_string();
         let mut d_tag_id = "NULL".to_string();
         let mut d_parent_id = "NULL".to_string();
-        let mut mk_text = |rng: &mut StdRng, is_title| d_text = format!("'{}'", if is_title { gen_task_title(rng) } else { gen_comment_text(rng) });
-        let mut mk_bool =
-            |rng: &mut StdRng| d_bool = if rng.gen() { "true" } else { "false" };
+        let mut mk_text = |rng: &mut StdRng, is_title| {
+            d_text = format!(
+                "'{}'",
+                if is_title {
+                    gen_task_title(rng)
+                } else {
+                    gen_comment_text(rng)
+                }
+            )
+        };
+        let mut mk_bool = |rng: &mut StdRng| d_bool = if rng.gen() { "true" } else { "false" };
         let mut mk_time_maybe = |rng: &mut StdRng| {
             if rng.gen() {
                 d_time = format!("'{}'", gen_date(rng));

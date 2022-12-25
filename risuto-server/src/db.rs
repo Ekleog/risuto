@@ -3,8 +3,8 @@ use axum::async_trait;
 use chrono::Utc;
 use futures::{Future, Stream, StreamExt, TryStreamExt};
 use risuto_api::{
-    AuthInfo, AuthToken, Event, EventData, EventId, NewSession, Tag, TagId, Task, TaskId,
-    Time, User, UserId, Uuid,
+    AuthInfo, AuthToken, Event, EventData, EventId, NewSession, Tag, TagId, Task, TaskId, Time,
+    User, UserId, Uuid,
 };
 use sqlx::Row;
 use std::{
@@ -506,12 +506,11 @@ async fn fetch_tasks_from_tmp_tasks_table(
                     DbType::SetTitle => {
                         EventData::SetTitle(e.d_text.expect("set_title event without title"))
                     }
-                    DbType::SetDone => EventData::SetDone(
-                        e.d_bool.expect("set_done event without new_val_bool"),
-                    ),
+                    DbType::SetDone => {
+                        EventData::SetDone(e.d_bool.expect("set_done event without new_val_bool"))
+                    }
                     DbType::SetArchived => EventData::SetArchived(
-                        e.d_bool
-                            .expect("set_archived event without new_val_bool"),
+                        e.d_bool.expect("set_archived event without new_val_bool"),
                     ),
                     DbType::BlockedUntil => EventData::BlockedUntil(
                         e.d_time.map(|t| t.and_local_timezone(chrono::Utc).unwrap()),
@@ -524,9 +523,9 @@ async fn fetch_tasks_from_tmp_tasks_table(
                         prio: e.d_int.expect("add_tag event without new_val_int"),
                         backlog: e.d_bool.expect("add_tag event without new_val_bool"),
                     },
-                    DbType::RemoveTag => {
-                        EventData::RmTag(TagId(e.d_tag_id.expect("remove_tag event without tag_id")))
-                    }
+                    DbType::RemoveTag => EventData::RmTag(TagId(
+                        e.d_tag_id.expect("remove_tag event without tag_id"),
+                    )),
                     DbType::AddComment => EventData::AddComment {
                         text: e.d_text.expect("add_comment event without text"),
                         parent_id: e.d_parent_id.map(EventId),
@@ -539,11 +538,10 @@ async fn fetch_tasks_from_tmp_tasks_table(
                     },
                     DbType::SetEventRead => EventData::SetEventRead {
                         event_id: EventId(
-                            e.d_parent_id.expect("set_event_read event without parent_id"),
+                            e.d_parent_id
+                                .expect("set_event_read event without parent_id"),
                         ),
-                        now_read: e
-                            .d_bool
-                            .expect("set_event_read event without new_val_bool"),
+                        now_read: e.d_bool.expect("set_event_read event without new_val_bool"),
                     },
                 },
             })

@@ -10,7 +10,9 @@ use axum::{
     Extension, Json, Router,
 };
 use futures::{channel::mpsc, select, SinkExt, StreamExt};
-use risuto_api::{AuthToken, FeedMessage, NewSession, UserId, Uuid, User, TagId, Tag, AuthInfo, TaskId, Task};
+use risuto_api::{
+    AuthInfo, AuthToken, FeedMessage, NewSession, Tag, TagId, Task, TaskId, User, UserId, Uuid,
+};
 use std::{collections::HashMap, net::SocketAddr, sync::Arc};
 use tokio::sync::RwLock;
 use tower_http::trace::TraceLayer;
@@ -162,11 +164,9 @@ async fn fetch_users(
     Extension(db): Extension<sqlx::PgPool>,
 ) -> Result<Json<HashMap<UserId, User>>, Error> {
     let mut conn = db.acquire().await.context("acquiring db connection")?;
-    Ok(Json(
-        db::fetch_users(&mut conn)
-            .await
-            .with_context(|| format!("fetching user list for {:?}", user))?,
-    ))
+    Ok(Json(db::fetch_users(&mut conn).await.with_context(
+        || format!("fetching user list for {:?}", user),
+    )?))
 }
 
 async fn fetch_tags(
