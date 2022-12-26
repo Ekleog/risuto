@@ -1,8 +1,10 @@
 mod query;
 mod search;
+mod tag;
 mod user;
 
 pub use query::{Query, QueryBind, SqlQuery};
+pub use tag::{TagId, Tag};
 pub use user::{AuthToken, NewSession, User, UserId};
 
 use anyhow::{anyhow, Context};
@@ -18,24 +20,6 @@ pub use uuid::{uuid, Uuid};
 pub type Time = chrono::DateTime<Utc>;
 
 pub const STUB_UUID: Uuid = uuid!("ffffffff-ffff-ffff-ffff-ffffffffffff");
-
-#[derive(
-    Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, serde::Deserialize, serde::Serialize,
-)]
-pub struct TagId(pub Uuid);
-
-impl TagId {
-    pub fn stub() -> TagId {
-        TagId(STUB_UUID)
-    }
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
-pub struct Tag {
-    pub owner: UserId,
-    pub name: String,
-    pub archived: bool,
-}
 
 #[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct TaskInTag {
