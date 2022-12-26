@@ -21,6 +21,8 @@ $tag-list-bg: darken($blue, 2%);
 $tag-list-active-bg: lighten($blue, 3%);
 $tag-list-hover: lighten($blue, 70%);
 
+$search-bar-bg: lighten($blue, 10%);
+
 $task-list-bg: lighten($blue, 2%);
 $task-edit-outline: $text;
 $timeset-label-bg: $background;
@@ -85,6 +87,33 @@ $dark: lighten($blue, 3%);
 .sidebar .nav-item.active {
     background-color: $tag-list-active-bg;
     font-weight: bold;
+}
+
+.search-bar-container {
+    position: absolute;
+    top: 0px;
+    left: 0%;
+}
+
+.search-bar {
+    display: flex;
+    border-radius: 800px; // a rounded rectangle
+    background-color: $search-bar-bg;
+}
+
+.search-bar:focus-within {
+    outline: 1px solid $text;
+}
+
+.search-bar input {
+    border: 0px solid transparent;
+    border-radius: 800px;
+    background-color: $search-bar-bg;
+    color: $text;
+}
+
+.search-bar input:focus {
+    outline: 0px;
 }
 
 .events-pending-spinner {

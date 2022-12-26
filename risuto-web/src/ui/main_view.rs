@@ -164,9 +164,14 @@ pub fn main_view(p: &MainViewProps) -> Html {
 
     // Put everything together
     html! {
-        <div class="h-100 d-flex flex-column overflow-hidden">
+        <div class="h-100 d-flex flex-column overflow-hidden position-relative">
             <div ref={empty_ref}></div>
             <ui::OfflineBanner connection_state={p.connection_state.clone()} />
+
+            // Top-left corner
+            <div class="search-bar-container float-above">
+                <ui::SearchBar />
+            </div>
 
             // Top-right corner
             <div class="position-absolute top-0 end-0 float-above d-flex">
