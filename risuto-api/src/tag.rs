@@ -1,7 +1,6 @@
 use uuid::Uuid;
 
-use crate::{STUB_UUID, UserId};
-
+use crate::{UserId, STUB_UUID};
 
 #[derive(
     Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, serde::Deserialize, serde::Serialize,

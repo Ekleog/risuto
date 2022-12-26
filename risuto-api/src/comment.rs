@@ -5,14 +5,32 @@ use crate::{EventId, Time, UserId};
 #[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct Comment {
     /// EventId of this comment's creation
-    creation_id: EventId,
+    pub creation_id: EventId,
 
     /// List of edits in chronological order
-    edits: BTreeMap<Time, Vec<String>>,
+    pub edits: BTreeMap<Time, Vec<String>>,
 
     /// Set of users who already read this comment
-    read: HashSet<UserId>,
+    // TODO: should this be per-edit?
+    pub read: HashSet<UserId>,
 
     /// Child comments
-    children: BTreeMap<Time, Vec<Comment>>,
+    pub children: BTreeMap<Time, Vec<Comment>>,
+}
+
+impl Comment {
+    pub fn find_in<'a>(
+        comments: &'a mut BTreeMap<Time, Vec<Comment>>,
+        creation_id: &EventId,
+    ) -> Option<&'a mut Comment> {
+        for c in comments.values_mut().flat_map(|v| v.iter_mut()) {
+            if c.creation_id == *creation_id {
+                return Some(c);
+            }
+            if let Some(res) = Comment::find_in(&mut c.children, &creation_id) {
+                return Some(res);
+            }
+        }
+        None
+    }
 }
