@@ -168,13 +168,9 @@ pub fn main_view(p: &MainViewProps) -> Html {
             <div ref={empty_ref}></div>
             <ui::OfflineBanner connection_state={p.connection_state.clone()} />
 
-            // Top-left corner
-            <div class="search-bar-container float-above">
+            // Top float-above bar corner
+            <div class="float-above-container">
                 <ui::SearchBar />
-            </div>
-
-            // Top-right corner
-            <div class="position-absolute top-0 end-0 float-above d-flex">
                 <ui::EventSubmissionSpinner events_pending_submission={p.events_pending_submission.clone()} />
                 <ui::SettingsMenu on_logout={p.on_logout.clone()} />
             </div>

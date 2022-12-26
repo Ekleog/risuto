@@ -22,6 +22,7 @@ $tag-list-active-bg: lighten($blue, 3%);
 $tag-list-hover: lighten($blue, 70%);
 
 $search-bar-bg: lighten($blue, 10%);
+$search-bar-border: darken($text, 20%);
 
 $task-list-bg: lighten($blue, 2%);
 $task-edit-outline: $text;
@@ -89,20 +90,39 @@ $dark: lighten($blue, 3%);
     font-weight: bold;
 }
 
-.search-bar-container {
+.float-above-container {
     position: absolute;
     top: 0px;
-    left: 0%;
+    left: 0px;
+    right: 0px;
+    z-index: 10;
+
+    display: flex;
 }
 
 .search-bar {
     display: flex;
     border-radius: 800px; // a rounded rectangle
+    border: 1px solid transparent;
     background-color: $search-bar-bg;
+    transition: flex .35s ease;
 }
 
-.search-bar:focus-within {
-    outline: 1px solid $text;
+.search-bar.search-bar-shown {
+    flex: 1 1 auto;
+    border: 1px solid $search-bar-border;
+}
+
+.search-bar:not(.search-bar-shown) input {
+    display: none;
+}
+
+.search-bar-filler {
+    transition: flex .35s ease;
+}
+
+.search-bar-filler:not(.search-bar-shown) {
+    flex: 1 1 auto;
 }
 
 .search-bar input {
