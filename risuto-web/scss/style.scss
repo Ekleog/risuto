@@ -27,6 +27,7 @@ $timeset-label-bg: $background;
 $timeset-label-border: lighten($black, 30%);
 
 $backlog-handle: $red;
+$backlog-bg: lighten($background, 1%);
 
 $scrollbar-track: $blue;
 $scrollbar-thumb: lighten($blue, 10%);
@@ -134,6 +135,7 @@ $dark: lighten($blue, 3%);
     position: relative;
     border-top-style: groove;
     border-color: $backlog-handle;
+    background-color: $backlog-bg;
 }
 
 .backlog-drag-handle {
