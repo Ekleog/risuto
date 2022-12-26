@@ -1,8 +1,10 @@
+mod comment;
 mod query;
 mod search;
 mod tag;
 mod user;
 
+pub use comment::Comment;
 pub use query::{Query, QueryBind, SqlQuery};
 pub use tag::{TagId, Tag};
 pub use user::{AuthToken, NewSession, User, UserId};
@@ -35,20 +37,6 @@ pub struct TaskInTag {
 )]
 pub struct TaskId(pub Uuid);
 
-#[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
-pub struct Comment {
-    /// EventId of this comment's creation
-    creation_id: EventId,
-
-    /// List of edits in chronological order
-    edits: BTreeMap<Time, Vec<String>>,
-
-    /// Set of users who already read this comment
-    read: HashSet<UserId>,
-
-    /// Child comments
-    children: BTreeMap<Time, Vec<Comment>>,
-}
 
 #[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct Task {
