@@ -1,7 +1,7 @@
-use std::{str::FromStr, sync::Arc, rc::Rc};
+use std::{rc::Rc, str::FromStr, sync::Arc};
 
 use chrono::{Datelike, Timelike};
-use risuto_api::{EventData, Task, Time, DbDump};
+use risuto_api::{DbDump, EventData, Task, Time};
 use wasm_bindgen::prelude::*;
 use yew::prelude::*;
 
@@ -23,10 +23,17 @@ pub fn task_list(p: &TaskListItemProps) -> Html {
         true => "editing",
         false => "not-editing",
     };
-    let mut tags = p.task.current_tags.keys().filter_map(|t| p.db.tag_name(t)).collect::<Vec<_>>();
+    let mut tags = p
+        .task
+        .current_tags
+        .keys()
+        .filter_map(|t| p.db.tag_name(t))
+        .collect::<Vec<_>>();
     tags.sort_unstable();
-    let tags = tags.into_iter().map(|t| html! {
-        <span class="badge rounded-pill tag-pill me-1">{ t }</span>
+    let tags = tags.into_iter().map(|t| {
+        html! {
+            <span class="badge rounded-pill tag-pill me-1">{ t }</span>
+        }
     });
     html! { // align items vertically but also let them stretch
         <li class="list-group-item p-0">

@@ -1,4 +1,4 @@
-use risuto_api::{EventData, Task, TaskId, DbDump};
+use risuto_api::{DbDump, EventData, Task, TaskId};
 use std::{rc::Rc, sync::Arc};
 use yew::prelude::*;
 

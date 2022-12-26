@@ -1,5 +1,5 @@
 use crate::ui;
-use risuto_api::{Event, EventData, Task, TaskId, DbDump};
+use risuto_api::{DbDump, Event, EventData, Task, TaskId};
 use std::{collections::VecDeque, rc::Rc, sync::Arc};
 use yew::prelude::*;
 
