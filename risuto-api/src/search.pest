@@ -7,9 +7,11 @@ everything     =  _{ SOI ~ search ~ EOI }
       or       =   { ^"OR" }
     prefix     =  _{ not }
       not      =   { "-" }
-    primary    =  _{ archived | tag | "(" ~ search ~ ")" }
+    primary    =  _{ archived | tag | "(" ~ search ~ ")" | phrase | word }
       archived =  ${ "archived:" ~ bool}
       tag      =  ${ "tag:" ~ tagname }
+      phrase   =  ${ "\"" ~ (!"\"" ~ !"\\" ~ ANY | "\\" ~ ANY)* ~ "\"" }
+      word     =  ${ (!WHITESPACE ~ ANY)+ }
 
 bool    = _{ true | false }
   true  = { ^"true" }

@@ -395,6 +395,22 @@ mod search_parser {
         };
     }
 
+    // Unescape a quoted-string
+    fn unescape(s: &str) -> String {
+        let mut res = String::with_capacity(s.len());
+        let mut s = s.chars();
+        assert_eq!(s.next(), Some('"'), "first char is not a double quote");
+        while let Some(c) = s.next() {
+            if c == '\\' {
+                res.push(s.next().expect("got terminal backslash"));
+            }  else {
+                res.push(c);
+            }
+        }
+        assert_eq!(res.pop(), Some('"'), "last char is not a double quote");
+        res
+    }
+
     pub fn parse_search(db: &DbDump, pairs: Pairs<Rule>) -> Option<Query> {
         SEARCH_PARSER
             .map_primary(|p| match p.as_rule() {
@@ -414,6 +430,8 @@ mod search_parser {
                     db.tag_id(tagname).map(Query::Tag)
                 }
                 Rule::search => parse_search(db, p.into_inner()),
+                Rule::phrase => Some(Query::Phrase(unescape(p.as_str()))),
+                Rule::word => Some(Query::Phrase(p.as_str().to_string())),
                 r => unreachable!("Search unexpected primary: {:?}", r),
             })
             .map_infix(|lhs, op, rhs| match op.as_rule() {
@@ -550,20 +568,120 @@ mod tests {
     }
 
     #[test]
-    fn primaries() {
+    fn primary_archived() {
         let db = example_db();
         assert_eq!(
             Query::from_search(&db, "archived:true"),
-            Query::Archived(true)
+            Query::Archived(true),
+        );
+        assert_eq!(
+            Query::from_search(&db, "archived:false"),
+            Query::Archived(false),
+        );
+    }
+
+    #[test]
+    fn primary_tag() {
+        let db = example_db();
+        assert_eq!(
+            Query::from_search(&db, "tag:foo"),
+            Query::Tag(db.tag_id("foo").unwrap()),
+        );
+        assert_eq!(
+            Query::from_search(&db, "tag:bar"),
+            Query::Tag(db.tag_id("bar").unwrap()),
+        );
+        // TODO: also test behavior for unknown tag
+    }
+
+    #[test]
+    fn primary_word() {
+        let db = example_db();
+
+        // Basic words (including tag name)
+        assert_eq!(
+            Query::from_search(&db, "test"),
+            Query::Phrase("test".to_string()),
+        );
+        assert_eq!(
+            Query::from_search(&db, "foo"),
+            Query::Phrase("foo".to_string()),
+        );
+
+        // Words matching special query parameters
+        assert_eq!(
+            Query::from_search(&db, "archived"),
+            Query::Phrase("archived".to_string()),
+        );
+        assert_eq!(
+            Query::from_search(&db, "tag"),
+            Query::Phrase("tag".to_string()),
+        );
+    }
+
+    #[test]
+    fn primary_phrase() {
+        let db = example_db();
+
+        // Basic usage
+        assert_eq!(
+            Query::from_search(&db, r#""test""#),
+            Query::Phrase("test".to_string()),
+        );
+        assert_eq!(
+            Query::from_search(&db, r#""foo bar""#),
+            Query::Phrase("foo bar".to_string()),
+        );
+
+        // Things that look like queries
+        assert_eq!(
+            Query::from_search(&db, r#""(foo bar OR archived:false)""#),
+            Query::Phrase("(foo bar OR archived:false)".to_string()),
+        );
+        assert_eq!(
+            Query::from_search(&db, r#""(test""#),
+            Query::Phrase("(test".to_string()),
+        );
+
+        // Escapes
+        assert_eq!(
+            Query::from_search(&db, r#""foo\" bar""#),
+            Query::Phrase(r#"foo" bar"#.to_string()),
+        );
+        assert_eq!(
+            Query::from_search(&db, r#""foo\\ bar""#),
+            Query::Phrase(r#"foo\ bar"#.to_string()),
+        );
+        assert_eq!(
+            Query::from_search(&db, r#""foo\\\" bar""#),
+            Query::Phrase(r#"foo\" bar"#.to_string()),
         );
     }
 
     #[test]
     fn infixes() {
         let db = example_db();
+
+        // Nothing is and
         assert_eq!(
-            Query::from_search(&db, "archived:true archived:false"),
-            Query::All(vec![Query::Archived(true), Query::Archived(false)])
+            Query::from_search(&db, "foo bar"),
+            Query::All(vec![Query::Phrase("foo".into()), Query::Phrase("bar".into())]),
+        );
+        assert_eq!(
+            Query::from_search(&db, r#""foo bar" "baz""#),
+            Query::All(vec![Query::Phrase("foo bar".into()), Query::Phrase("baz".into())]),
+        );
+
+        // Explicit and
+        assert_eq!(
+            Query::from_search(&db, "foo AND archived:false"),
+            Query::All(vec![Query::Phrase("foo".into()), Query::Archived(false)]),
+        );
+
+        // Explicit or
+        assert_eq!(
+            Query::from_search(&db, "foo or archived:false"),
+            Query::Any(vec![Query::Phrase("foo".into()), Query::Archived(false)]),
         );
     }
 }
