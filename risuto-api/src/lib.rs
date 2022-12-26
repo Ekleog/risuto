@@ -711,6 +711,14 @@ mod tests {
             Query::from_search(&db, "foo bar or baz"),
             Query::All(vec![phrase("foo"), Query::Any(vec![phrase("bar"), phrase("baz")])]),
         );
+        assert_eq!(
+            Query::from_search(&db, "(foo bar) or baz"),
+            Query::Any(vec![Query::All(vec![phrase("foo"), phrase("bar")]), phrase("baz")]),
+        );
+        assert_eq!(
+            Query::from_search(&db, "(archived:true bar) or baz"),
+            Query::Any(vec![Query::All(vec![Query::Archived(true), phrase("bar")]), phrase("baz")]),
+        );
     }
 }
 

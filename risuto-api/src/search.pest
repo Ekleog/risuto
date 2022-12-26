@@ -11,7 +11,7 @@ everything     =  _{ SOI ~ search ~ EOI }
       archived =  ${ "archived:" ~ bool}
       tag      =  ${ "tag:" ~ tagname }
       phrase   =  ${ "\"" ~ (!"\"" ~ !"\\" ~ ANY | "\\" ~ ANY)* ~ "\"" }
-      word     =  ${ (!WHITESPACE ~ ANY)+ }
+      word     =  ${ (!WHITESPACE ~ !"(" ~ !")" ~ ANY)+ }
 
 bool    = _{ true | false }
   true  = { ^"true" }
