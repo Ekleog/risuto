@@ -1,13 +1,16 @@
 use std::{rc::Rc, str::FromStr, sync::Arc};
 
 use chrono::{Datelike, Timelike};
-use risuto_api::{DbDump, EventData, Task, Time};
+use risuto_api::{DbDump, EventData, TagId, Task, Time};
 use wasm_bindgen::prelude::*;
 use yew::prelude::*;
+
+use crate::util;
 
 #[derive(Clone, PartialEq, Properties)]
 pub struct TaskListItemProps {
     pub db: Rc<DbDump>,
+    pub current_tag: Option<TagId>,
     pub task: Arc<Task>,
     pub on_event: Callback<EventData>,
 }
@@ -18,12 +21,14 @@ pub fn task_list(p: &TaskListItemProps) -> Html {
         .task
         .current_tags
         .keys()
-        .filter_map(|t| p.db.tag_name(t))
+        .filter(|t| p.current_tag.as_ref().map(|c| c != *t).unwrap_or(true))
+        .filter_map(|t| p.db.tags.get(t).map(|tag| (t, tag)))
         .collect::<Vec<_>>();
-    tags.sort_unstable();
-    let tags = tags.into_iter().map(|t| {
+    util::sort_tags(&p.db.owner, &mut tags);
+    let no_tags = tags.is_empty();
+    let tags = tags.into_iter().map(|(_, (t, _))| {
         html! {
-            <span class="badge rounded-pill tag-pill me-1">{ t }</span>
+            <span class="badge rounded-pill tag-pill me-1">{ &t.name }</span>
         }
     });
     html! { // align items vertically but also let them stretch
@@ -35,6 +40,7 @@ pub fn task_list(p: &TaskListItemProps) -> Html {
                 <div class="flex-fill d-flex flex-column align-items-stretch">
                     <TitleDiv
                         task={p.task.clone()}
+                        center_vertically={no_tags}
                         on_event={p.on_event.clone()}
                     />
                     <div class="px-3">{ for tags }</div>
@@ -52,6 +58,7 @@ pub fn task_list(p: &TaskListItemProps) -> Html {
 #[derive(Clone, PartialEq, Properties)]
 pub struct TitleDivProps {
     pub task: Arc<Task>,
+    pub center_vertically: bool,
     pub on_event: Callback<EventData>,
 }
 
@@ -75,10 +82,15 @@ fn title_div(p: &TitleDivProps) -> Html {
         })
     };
 
+    let align = match p.center_vertically {
+        true => "align-items-center",
+        false => "align-items-end",
+    };
+
     html! {
         <div
             ref={div_ref}
-            class="flex-fill d-flex align-items-end p-1"
+            class={classes!("flex-fill", "d-flex", align, "p-1")}
             contenteditable="true"
             spellcheck="false"
             onfocusout={ on_validate.reform(|_| ()) }

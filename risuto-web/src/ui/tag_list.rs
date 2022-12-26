@@ -2,6 +2,8 @@ use risuto_api::{AuthInfo, Tag, TagId, UserId};
 use std::collections::HashMap;
 use yew::prelude::*;
 
+use crate::util;
+
 #[derive(Clone, PartialEq, Properties)]
 pub struct TagListProps {
     pub tags: HashMap<TagId, (Tag, AuthInfo)>,
@@ -12,15 +14,8 @@ pub struct TagListProps {
 
 #[function_component(TagList)]
 pub fn tag_list(p: &TagListProps) -> Html {
-    let mut tags = p.tags.iter().collect::<Vec<_>>();
-    tags.sort_unstable_by_key(|(id, t)| {
-        // TODO: extract into a freestanding fn and reuse for sorting the tag list below tasks
-        let is_tag_today = t.0.name == "today";
-        let is_owner_me = t.0.owner == p.current_user;
-        let name = t.0.name.clone();
-        let id = (*id).clone();
-        (!is_tag_today, !is_owner_me, name, id)
-    });
+    let mut tags = p.tags.iter().collect();
+    util::sort_tags(&p.current_user, &mut tags);
     let list_items = tags
         .iter()
         .map(|(id, t)| (Some((*id).clone()), t.0.name.clone()))

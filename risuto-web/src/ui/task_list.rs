@@ -1,4 +1,4 @@
-use risuto_api::{DbDump, EventData, Task, TaskId};
+use risuto_api::{DbDump, EventData, TagId, Task, TaskId};
 use std::{rc::Rc, sync::Arc};
 use yew::prelude::*;
 
@@ -8,6 +8,7 @@ use crate::ui;
 pub struct TaskListProps {
     pub ref_this: NodeRef,
     pub db: Rc<DbDump>,
+    pub current_tag: Option<TagId>,
     pub tasks: Rc<Vec<(TaskId, Arc<Task>)>>,
     pub on_event: Callback<(TaskId, EventData)>,
 }
@@ -24,6 +25,7 @@ pub fn task_list(p: &TaskListProps) -> Html {
             <ui::TaskListItem
                 task={ t.clone() }
                 db={ p.db.clone() }
+                current_tag={ p.current_tag.clone() }
                 { on_event }
             />
         }

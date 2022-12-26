@@ -7,6 +7,7 @@ use yew::prelude::*;
 
 mod api;
 mod ui;
+mod util;
 
 const KEY_LOGIN: &str = "login";
 

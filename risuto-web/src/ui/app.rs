@@ -277,6 +277,7 @@ impl Component for App {
                             connection_state={self.connection_state.clone()}
                             events_pending_submission={self.events_pending_submission.clone()}
                             db={self.db.clone()}
+                            current_tag={self.tag}
                             tasks_open={tasks.open}
                             tasks_done={tasks.done}
                             tasks_backlog={tasks.backlog}

@@ -10,6 +10,7 @@ pub enum Query {
     Not(Box<Query>),
     Archived(bool),
     Tag(TagId),
+    // TODO: be able to search for untagged tasks only
     Phrase(String), // full-text search of one contiguous word vec
 }
 
