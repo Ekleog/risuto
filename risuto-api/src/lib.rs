@@ -1,3 +1,4 @@
+mod auth;
 mod comment;
 mod event;
 mod query;
@@ -6,17 +7,18 @@ mod tag;
 mod task;
 mod user;
 
+pub use auth::{AuthInfo, AuthToken, NewSession};
 pub use comment::Comment;
 pub use event::{Event, EventData, EventId};
 pub use query::{Query, QueryBind, SqlQuery};
 pub use tag::{Tag, TagId};
 pub use task::{Task, TaskId, TaskInTag};
-pub use user::{AuthToken, NewSession, User, UserId};
+pub use user::{User, UserId};
 
 use anyhow::anyhow;
 use async_trait::async_trait;
 use chrono::Utc;
-use std::{collections::HashMap, ops::BitOr, sync::Arc};
+use std::{collections::HashMap, sync::Arc};
 
 pub use uuid::{uuid, Uuid};
 pub type Time = chrono::DateTime<Utc>;
@@ -136,54 +138,6 @@ impl Db for &DbDump {
                     )
                 })?
                 .creation_id)
-    }
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
-pub struct AuthInfo {
-    pub can_read: bool,
-    pub can_edit: bool,
-    pub can_triage: bool,
-    pub can_relabel_to_any: bool, // TODO: rename into can_admin?
-    pub can_comment: bool,
-}
-
-impl AuthInfo {
-    pub fn owner() -> AuthInfo {
-        Self::all_or_nothing(true)
-    }
-
-    pub fn all() -> AuthInfo {
-        Self::all_or_nothing(true)
-    }
-
-    pub fn none() -> AuthInfo {
-        Self::all_or_nothing(false)
-    }
-
-    pub fn all_or_nothing(all: bool) -> AuthInfo {
-        AuthInfo {
-            can_read: all,
-            can_edit: all,
-            can_triage: all,
-            can_relabel_to_any: all,
-            can_comment: all,
-        }
-    }
-}
-
-impl BitOr for AuthInfo {
-    type Output = Self;
-
-    fn bitor(self, rhs: AuthInfo) -> AuthInfo {
-        // TODO: use some bitset crate?
-        AuthInfo {
-            can_read: self.can_read || rhs.can_read,
-            can_edit: self.can_edit || rhs.can_edit,
-            can_triage: self.can_triage || rhs.can_triage,
-            can_relabel_to_any: self.can_relabel_to_any || rhs.can_relabel_to_any,
-            can_comment: self.can_comment || rhs.can_comment,
-        }
     }
 }
 
