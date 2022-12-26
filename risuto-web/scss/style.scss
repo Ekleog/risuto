@@ -103,18 +103,6 @@ $dark: lighten($blue, 3%);
     color: $text;
 }
 
-.task-list li .not-editing {
-    border: 1px solid transparent; // reserve size so editing border does not shift around
-}
-
-.task-list li .editing {
-    border: 1px solid $task-edit-outline;
-}
-
-.task-list [contenteditable] {
-    outline: 0px solid transparent;
-}
-
 .tag-pill {
     padding: 2px 5px 2px 5px;
     color: $text-inverted;

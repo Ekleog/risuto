@@ -14,15 +14,6 @@ pub struct TaskListItemProps {
 
 #[function_component(TaskListItem)]
 pub fn task_list(p: &TaskListItemProps) -> Html {
-    let is_editing = use_state_eq(|| false);
-    let set_editing = {
-        let is_editing = is_editing.clone();
-        Callback::from(move |e| is_editing.set(e))
-    };
-    let is_editing = match *is_editing {
-        true => "editing",
-        false => "not-editing",
-    };
     let mut tags = p
         .task
         .current_tags
@@ -37,7 +28,7 @@ pub fn task_list(p: &TaskListItemProps) -> Html {
     });
     html! { // align items vertically but also let them stretch
         <li class="list-group-item p-0">
-            <div class={classes!(is_editing, "d-flex", "align-items-stretch", "p-1")}>
+            <div class="d-flex align-items-stretch p-1">
                 <div class="drag-handle d-flex align-items-center">
                     <div class="bi-btn bi-grip-vertical p-2"></div>
                 </div>
@@ -45,7 +36,6 @@ pub fn task_list(p: &TaskListItemProps) -> Html {
                     <TitleDiv
                         task={p.task.clone()}
                         on_event={p.on_event.clone()}
-                        {set_editing}
                     />
                     <div class="px-3">{ for tags }</div>
                 </div>
@@ -63,7 +53,6 @@ pub fn task_list(p: &TaskListItemProps) -> Html {
 pub struct TitleDivProps {
     pub task: Arc<Task>,
     pub on_event: Callback<EventData>,
-    pub set_editing: Callback<bool>,
 }
 
 #[function_component(TitleDiv)]
@@ -74,7 +63,6 @@ fn title_div(p: &TitleDivProps) -> Html {
         let div_ref = div_ref.clone();
         let initial_title = p.task.current_title.clone();
         let on_event = p.on_event.clone();
-        let set_editing = p.set_editing.clone();
         Callback::from(move |()| {
             let div = div_ref
                 .cast::<web_sys::HtmlElement>()
@@ -84,7 +72,6 @@ fn title_div(p: &TitleDivProps) -> Html {
                 on_event.emit(EventData::SetTitle(text));
             }
             div.blur().expect("failed blurring div_ref");
-            set_editing.emit(false);
         })
     };
 
@@ -94,7 +81,6 @@ fn title_div(p: &TitleDivProps) -> Html {
             class="flex-fill d-flex align-items-end p-1"
             contenteditable="true"
             spellcheck="false"
-            onfocusin={ p.set_editing.reform(|_| true) }
             onfocusout={ on_validate.reform(|_| ()) }
             onkeydown={ Callback::from(move |e: web_sys::KeyboardEvent| {
                 match &e.key() as &str {
