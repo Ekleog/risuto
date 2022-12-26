@@ -24,6 +24,8 @@ $tag-list-hover: lighten($blue, 70%);
 $search-bar-bg: lighten($blue, 10%);
 $search-bar-border: darken($text, 20%);
 
+$events-pending-spinner-border: $background;
+
 $task-list-bg: lighten($blue, 2%);
 $task-edit-outline: $text;
 $timeset-label-bg: $background;
@@ -133,11 +135,13 @@ $dark: lighten($blue, 3%);
 }
 
 .events-pending-spinner {
-    transition: .1s ease-in-out;
+    border: 1px solid $events-pending-spinner-border;
+    transition: .1s ease-in-out 1s; // start showing 1s after event still pending
 }
 
 .events-pending-spinner.no-events {
     transform: scale(0);
+    transition: .1s ease-in-out 0s; // stop showing immediately after event done
 }
 
 .events-pending-list.no-events {
