@@ -1,5 +1,5 @@
 use crate::ui;
-use risuto_api::{Event, EventData, Task, TaskId};
+use risuto_api::{Event, EventData, Task, TaskId, DbDump};
 use std::{collections::VecDeque, rc::Rc, sync::Arc};
 use yew::prelude::*;
 
@@ -46,6 +46,7 @@ pub struct TaskOrderChangeEvent {
 pub struct MainViewProps {
     pub connection_state: ui::ConnState,
     pub events_pending_submission: VecDeque<Event>,
+    pub db: Rc<DbDump>,
     pub tasks_open: Rc<Vec<(TaskId, Arc<Task>)>>,
     pub tasks_done: Rc<Vec<(TaskId, Arc<Task>)>>,
     pub tasks_backlog: Rc<Vec<(TaskId, Arc<Task>)>>,
@@ -177,6 +178,7 @@ pub fn main_view(p: &MainViewProps) -> Html {
                 <div class="m-lg-5">
                     <ui::TaskList
                         ref_this={ref_open}
+                        db={p.db.clone()}
                         tasks={p.tasks_open.clone()}
                         on_event={p.on_event.clone()}
                     />
@@ -185,6 +187,7 @@ pub fn main_view(p: &MainViewProps) -> Html {
                 <div class="done-task-list m-lg-5">
                     <ui::TaskList
                         ref_this={ref_done}
+                        db={p.db.clone()}
                         tasks={p.tasks_done.clone()}
                         on_event={p.on_event.clone()}
                     />
@@ -211,6 +214,7 @@ pub fn main_view(p: &MainViewProps) -> Html {
                     <div class="m-lg-5">
                         <ui::TaskList
                             ref_this={ref_backlog}
+                            db={p.db.clone()}
                             tasks={p.tasks_backlog.clone()}
                             on_event={p.on_event.clone()}
                         />

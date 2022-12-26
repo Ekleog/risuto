@@ -40,7 +40,7 @@ pub enum ConnState {
 }
 
 pub struct App {
-    db: DbDump,
+    db: Rc<DbDump>,
     connection_state: ConnState,
     tag: Option<TagId>,
     events_pending_submission: VecDeque<Event>, // push_back, pop_front
@@ -56,13 +56,13 @@ struct TaskLists {
 
 impl App {
     fn locally_insert_new_event(&mut self, e: Event) {
-        match self.db.tasks.get_mut(&e.task) {
+        let db = Rc::make_mut(&mut self.db);
+        match db.tasks.get_mut(&e.task) {
             None => tracing::warn!(evt=?e, "got event for task not in db"),
             Some(t) => {
-                let mut task = (**t).clone();
+                let task = Arc::make_mut(t);
                 task.add_event(e);
                 task.refresh_metadata();
-                *t = Arc::new(task);
             }
         }
     }
@@ -130,7 +130,7 @@ impl Component for App {
         }
 
         App {
-            db: DbDump::stub(),
+            db: Rc::new(DbDump::stub()),
             connection_state: ConnState::Disconnected,
             tag: Some(TagId::stub()), // A value that cannot happen when choosing an actual tag
             events_pending_submission,
@@ -152,7 +152,7 @@ impl Component for App {
                 self.connection_state = ConnState::Disconnected;
             }
             AppMsg::ReceivedDb(db) => {
-                self.db = db;
+                self.db = Rc::new(db);
                 for e in self.events_pending_submission.clone() {
                     self.locally_insert_new_event(e.clone());
                 }
@@ -183,7 +183,7 @@ impl Component for App {
                 tracing::debug!("got new user event {e:?}");
                 // Sanity-check that we're allowed to submit the event before adding it to the queue
                 assert!(
-                    block_on(e.is_authorized(&mut self.db)).expect("checking is_authorized on local db dump"),
+                    block_on(e.is_authorized(&mut &*self.db)).expect("checking is_authorized on local db dump"),
                     "Submitted userevent that is not authorized. The button should have been disabled! {e:?}",
                 );
                 tracing::trace!("user event authorized {e:?}");
@@ -276,6 +276,7 @@ impl Component for App {
                         <ui::MainView
                             connection_state={self.connection_state.clone()}
                             events_pending_submission={self.events_pending_submission.clone()}
+                            db={self.db.clone()}
                             tasks_open={tasks.open}
                             tasks_done={tasks.done}
                             tasks_backlog={tasks.backlog}

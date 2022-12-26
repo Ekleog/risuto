@@ -115,6 +115,12 @@ $dark: lighten($blue, 3%);
     outline: 0px solid transparent;
 }
 
+.tag-pill {
+    padding: 2px 5px 2px 5px;
+    color: $text-inverted;
+    background-color: $yellow; // TODO: this should be configurable in the tag (alongside the tag icon)
+}
+
 .timeset-button {
     position: relative;
 }

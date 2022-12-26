@@ -1,12 +1,13 @@
-use std::{str::FromStr, sync::Arc};
+use std::{str::FromStr, sync::Arc, rc::Rc};
 
 use chrono::{Datelike, Timelike};
-use risuto_api::{EventData, Task, Time};
+use risuto_api::{EventData, Task, Time, DbDump};
 use wasm_bindgen::prelude::*;
 use yew::prelude::*;
 
 #[derive(Clone, PartialEq, Properties)]
 pub struct TaskListItemProps {
+    pub db: Rc<DbDump>,
     pub task: Arc<Task>,
     pub on_event: Callback<EventData>,
 }
@@ -22,17 +23,25 @@ pub fn task_list(p: &TaskListItemProps) -> Html {
         true => "editing",
         false => "not-editing",
     };
+    let mut tags = p.task.current_tags.keys().filter_map(|t| p.db.tag_name(t)).collect::<Vec<_>>();
+    tags.sort_unstable();
+    let tags = tags.into_iter().map(|t| html! {
+        <span class="badge rounded-pill tag-pill me-1">{ t }</span>
+    });
     html! { // align items vertically but also let them stretch
         <li class="list-group-item p-0">
             <div class={classes!(is_editing, "d-flex", "align-items-stretch", "p-1")}>
                 <div class="drag-handle d-flex align-items-center">
                     <div class="bi-btn bi-grip-vertical p-2"></div>
                 </div>
-                <TitleDiv
-                    task={p.task.clone()}
-                    on_event={p.on_event.clone()}
-                    {set_editing}
-                />
+                <div class="flex-fill d-flex flex-column align-items-stretch">
+                    <TitleDiv
+                        task={p.task.clone()}
+                        on_event={p.on_event.clone()}
+                        {set_editing}
+                    />
+                    <div class="px-3">{ for tags }</div>
+                </div>
                 <div class="d-flex align-items-center">
                     <ButtonBlockedUntil ..p.clone() />
                     <ButtonScheduleFor ..p.clone() />
@@ -75,7 +84,7 @@ fn title_div(p: &TitleDivProps) -> Html {
     html! {
         <div
             ref={div_ref}
-            class="flex-fill d-flex align-items-center p-1"
+            class="flex-fill d-flex align-items-end p-1"
             contenteditable="true"
             spellcheck="false"
             onfocusin={ p.set_editing.reform(|_| true) }
