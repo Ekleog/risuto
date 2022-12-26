@@ -13,7 +13,7 @@ pub fn search_bar(p: &SearchBarProps) -> Html {
     };
     let is_shown = is_shown.then(|| "search-bar-shown");
     html! {
-        <>
+        <div class="flex-fill">
             <div class={classes!("search-bar", "m-3", is_shown)}>
                 <button
                     type="button"
@@ -22,13 +22,14 @@ pub fn search_bar(p: &SearchBarProps) -> Html {
                     onclick={toggle_shown}
                 >
                 </button>
-                <input
-                    type="text"
-                    class="h-100 w-100 px-3"
-                    placeholder="Type your search here"
-                />
+                <div class="search-bar-input">
+                    <input
+                        type="text"
+                        class="w-100 h-100 px-3"
+                        placeholder="Type your search here"
+                    />
+                </div>
             </div>
-            <div class={classes!("search-bar-filler", is_shown)}></div>
-        </>
+        </div>
     }
 }
