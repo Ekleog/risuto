@@ -1,6 +1,6 @@
 use futures::{channel::oneshot, executor::block_on};
 use gloo_storage::{LocalStorage, Storage};
-use risuto_api::{DbDump, Event, EventData, TagId, Task, TaskId, UserId};
+use risuto_api::{DbDump, Event, EventData, TagId, Task};
 use std::{collections::VecDeque, rc::Rc, sync::Arc};
 use wasm_bindgen_futures::spawn_local;
 use yew::prelude::*;
@@ -8,7 +8,7 @@ use yew::prelude::*;
 use crate::{
     api, ui,
     ui::{ListType, TaskOrderChangeEvent},
-    LoginInfo,
+    util, LoginInfo,
 };
 
 const KEY_EVTS_PENDING_SUBMISSION: &str = "events-pending-submission";
@@ -49,9 +49,9 @@ pub struct App {
 
 #[derive(Clone)]
 struct TaskLists {
-    open: Rc<Vec<(TaskId, Arc<Task>)>>,
-    done: Rc<Vec<(TaskId, Arc<Task>)>>,
-    backlog: Rc<Vec<(TaskId, Arc<Task>)>>,
+    open: Rc<Vec<Arc<Task>>>,
+    done: Rc<Vec<Arc<Task>>>,
+    backlog: Rc<Vec<Arc<Task>>>,
 }
 
 impl App {
@@ -71,33 +71,31 @@ impl App {
         let mut open = Vec::new();
         let mut done = Vec::new();
         let mut backlog = Vec::new();
-        for (&task_id, t) in self.db.tasks.iter() {
+        for t in self.db.tasks.values() {
             if let Some(tag) = self.tag {
                 if let Some(info) = t.current_tags.get(&tag) {
                     if t.is_done {
-                        done.push((info.priority, task_id, t.clone()));
+                        done.push((info.priority, t.clone()));
                     } else if info.backlog {
-                        backlog.push((info.priority, task_id, t.clone()));
+                        backlog.push((info.priority, t.clone()));
                     } else {
-                        open.push((info.priority, task_id, t.clone()));
+                        open.push((info.priority, t.clone()));
                     }
                 }
             } else {
                 if t.current_tags.len() == 0 {
                     if t.is_done {
-                        done.push((0, task_id, t.clone()));
+                        done.push((0, t.clone()));
                     } else {
-                        open.push((0, task_id, t.clone()));
+                        open.push((0, t.clone()));
                     }
                 }
             }
         }
-        open.sort_unstable_by_key(|&(prio, id, _)| (prio, id));
-        done.sort_unstable_by_key(|&(prio, id, _)| (prio, id));
-        backlog.sort_unstable_by_key(|&(prio, id, _)| (prio, id));
-        let cleanup = |v: Vec<(i64, TaskId, Arc<Task>)>| {
-            Rc::new(v.into_iter().map(|(_, id, t)| (id, t)).collect())
-        };
+        open.sort_unstable_by_key(|(prio, t)| (*prio, t.id));
+        done.sort_unstable_by_key(|(prio, t)| (*prio, t.id));
+        backlog.sort_unstable_by_key(|(prio, t)| (*prio, t.id));
+        let cleanup = |v: Vec<(i64, Arc<Task>)>| Rc::new(v.into_iter().map(|(_, t)| t).collect());
         TaskLists {
             open: cleanup(open),
             done: cleanup(done),
@@ -218,21 +216,15 @@ impl Component for App {
     fn view(&self, ctx: &Context<Self>) -> Html {
         let tasks = self.current_task_lists();
 
-        let on_event = {
-            let owner = self.db.owner.clone();
-            ctx.link()
-                .callback(move |(task, evt)| AppMsg::NewUserEvent(Event::now(owner, task, evt)))
-        };
-
         let on_order_change = {
             let owner = self.db.owner.clone();
             let tag = self.tag.clone();
             let tasks = tasks.clone();
             ctx.link().batch_callback(move |e: TaskOrderChangeEvent| {
                 let task_id = match e.before.list {
-                    ListType::Open => tasks.open[e.before.index].0,
-                    ListType::Done => tasks.done[e.before.index].0,
-                    ListType::Backlog => tasks.backlog[e.before.index].0,
+                    ListType::Open => tasks.open[e.before.index].id,
+                    ListType::Done => tasks.done[e.before.index].id,
+                    ListType::Backlog => tasks.backlog[e.before.index].id,
                 };
                 let mut insert_into = match e.after.list {
                     ListType::Open => (*tasks.open).clone(),
@@ -242,7 +234,7 @@ impl Component for App {
                 if e.before.list == e.after.list {
                     insert_into.remove(e.before.index);
                 }
-                let mut evts = compute_reordering_events(
+                let evts = util::compute_reordering_events(
                     owner,
                     tag.expect("attempted to reorder in untagged list"),
                     task_id,
@@ -250,6 +242,10 @@ impl Component for App {
                     e.after.list.is_backlog(),
                     &insert_into,
                 );
+                let mut evts = evts
+                    .into_iter()
+                    .map(|e| AppMsg::NewUserEvent(e))
+                    .collect::<Vec<_>>();
                 if e.before.list.is_done() != e.after.list.is_done() {
                     evts.push(AppMsg::NewUserEvent(Event::now(
                         owner,
@@ -282,7 +278,7 @@ impl Component for App {
                             tasks_done={tasks.done}
                             tasks_backlog={tasks.backlog}
                             on_logout={ctx.link().callback(|_| AppMsg::Logout)}
-                            {on_event}
+                            on_event={ctx.link().callback(AppMsg::NewUserEvent)}
                             {on_order_change}
                         />
                     </main>
@@ -290,94 +286,6 @@ impl Component for App {
             </div>
         }
     }
-}
-
-fn compute_reordering_events(
-    owner: UserId,
-    tag: TagId,
-    task: TaskId,
-    index: usize,
-    into_backlog: bool,
-    into: &Vec<(TaskId, Arc<Task>)>,
-) -> Vec<AppMsg> {
-    macro_rules! evt {
-        ( $task:expr, $prio:expr ) => {
-            AppMsg::NewUserEvent(Event::now(
-                owner,
-                $task,
-                EventData::AddTag {
-                    tag,
-                    prio: $prio,
-                    backlog: into_backlog,
-                },
-            ))
-        };
-    }
-    macro_rules! prio {
-        ($task:expr) => {
-            $task
-                .1
-                .prio(&tag)
-                .expect("computing events reordering with task not in tag")
-        };
-    }
-    // this value was taken after intense finger-based wind-speed-taking
-    // basically we can add 2^(64-40) items at the beginning or end this way, and intersperse 40 items in-between other items, all without a redistribution
-    const SPACING: i64 = 1 << 40;
-
-    if into.len() == 0 {
-        // Easy case: inserting into an empty list
-        return vec![evt!(task, 0)];
-    }
-
-    if index == 0 {
-        // Inserting in the first position
-        let first_prio = prio!(into[0]);
-        let subtract = match first_prio > i64::MIN + SPACING {
-            true => SPACING,
-            false => (first_prio - i64::MIN) / 2,
-        };
-        if subtract > 0 {
-            return vec![evt!(task, first_prio - subtract)];
-        }
-    } else if index == into.len() {
-        // Inserting in the last position
-        let last_prio = prio!(into[index - 1]);
-        let add = match last_prio < i64::MAX - SPACING {
-            true => SPACING,
-            false => (i64::MAX - last_prio) / 2,
-        };
-        if add > 0 {
-            return vec![evt!(task, last_prio + add)];
-        }
-    } else {
-        // Inserting in-between two elements
-        use num::integer::Average;
-        let prio_before = prio!(into[index - 1]);
-        let prio_after = prio!(into[index]);
-        let new_prio = prio_before.average_floor(&prio_after); // no overflow here
-        if new_prio != prio_before {
-            return vec![evt!(task, new_prio)];
-        }
-    }
-
-    // Do a full redistribute
-    // TODO: maybe we could only partially redistribute? not sure whether that'd actually be better...
-    into[..index]
-        .iter()
-        .enumerate()
-        .map(|(i, (t, _))| evt!(*t, (i as i64).checked_mul(SPACING).unwrap()))
-        .chain(std::iter::once(evt!(
-            task,
-            (index as i64).checked_mul(SPACING).unwrap()
-        )))
-        .chain(into[index..].iter().enumerate().map(|(i, (t, _))| {
-            evt!(
-                *t,
-                (index as i64 + 1 + i as i64).checked_mul(SPACING).unwrap()
-            )
-        }))
-        .collect()
 }
 
 fn send_event(ctx: &Context<App>, e: Event) {

@@ -1,7 +1,7 @@
 use std::{rc::Rc, str::FromStr, sync::Arc};
 
 use chrono::{Datelike, Timelike};
-use risuto_api::{DbDump, EventData, TagId, Task, Time};
+use risuto_api::{DbDump, Event, EventData, TagId, Task, Time};
 use wasm_bindgen::prelude::*;
 use yew::prelude::*;
 
@@ -12,7 +12,7 @@ pub struct TaskListItemProps {
     pub db: Rc<DbDump>,
     pub current_tag: Option<TagId>,
     pub task: Arc<Task>,
-    pub on_event: Callback<EventData>,
+    pub on_event: Callback<Event>,
 }
 
 #[function_component(TaskListItem)]
@@ -39,6 +39,7 @@ pub fn task_list(p: &TaskListItemProps) -> Html {
                 </div>
                 <div class="flex-fill d-flex flex-column align-items-stretch">
                     <TitleDiv
+                        db={p.db.clone()}
                         task={p.task.clone()}
                         center_vertically={no_tags}
                         on_event={p.on_event.clone()}
@@ -48,7 +49,7 @@ pub fn task_list(p: &TaskListItemProps) -> Html {
                 <div class="d-flex align-items-center">
                     <ButtonBlockedUntil ..p.clone() />
                     <ButtonScheduleFor ..p.clone() />
-                    { button_done_change(&p.task, &p.on_event) }
+                    <ButtonDoneChange ..p.clone() />
                 </div>
             </div>
         </li>
@@ -57,9 +58,10 @@ pub fn task_list(p: &TaskListItemProps) -> Html {
 
 #[derive(Clone, PartialEq, Properties)]
 pub struct TitleDivProps {
+    pub db: Rc<DbDump>,
     pub task: Arc<Task>,
     pub center_vertically: bool,
-    pub on_event: Callback<EventData>,
+    pub on_event: Callback<Event>,
 }
 
 #[function_component(TitleDiv)]
@@ -68,15 +70,16 @@ fn title_div(p: &TitleDivProps) -> Html {
 
     let on_validate = {
         let div_ref = div_ref.clone();
-        let initial_title = p.task.current_title.clone();
+        let db = p.db.clone();
+        let task = p.task.clone();
         let on_event = p.on_event.clone();
         Callback::from(move |()| {
             let div = div_ref
                 .cast::<web_sys::HtmlElement>()
                 .expect("validated while div_ref is not attached to an html element");
             let text = div.text_content().expect("div_ref has no text_content");
-            if text != initial_title {
-                on_event.emit(EventData::SetTitle(text));
+            for e in parse_new_title(&db, text, &task) {
+                on_event.emit(e);
             }
             div.blur().expect("failed blurring div_ref");
         })
@@ -110,22 +113,65 @@ fn title_div(p: &TitleDivProps) -> Html {
     }
 }
 
-fn button_done_change(t: &Task, on_event: &Callback<EventData>) -> Html {
-    let icon_class = match t.is_done {
+fn parse_new_title(db: &DbDump, mut title: String, task: &Task) -> Vec<Event> {
+    let mut res = Vec::new();
+    loop {
+        if let Some(i) = title.rfind(" -") {
+            let tag_start = i + " -".len();
+            if let Some(t) = title.get(tag_start..).and_then(|t| db.tag_id(t)) {
+                res.push(Event::now(db.owner, task.id, EventData::RmTag(t)));
+                title.truncate(i);
+                continue;
+            }
+        }
+
+        if let Some(i) = title.rfind(" +") {
+            let tag_start = i + " +".len();
+            if let Some(t) = title.get(tag_start..).and_then(|t| db.tag_id(t)) {
+                res.extend(util::compute_reordering_events(
+                    db.owner,
+                    t,
+                    task.id,
+                    0,
+                    false,
+                    &db.tasks_in_tag(&t),
+                ));
+                title.truncate(i);
+                continue;
+            }
+        }
+
+        if title != task.current_title {
+            res.push(Event::now(db.owner, task.id, EventData::SetTitle(title)));
+        }
+
+        return res;
+    }
+}
+
+#[function_component(ButtonDoneChange)]
+fn button_done_change(p: &TaskListItemProps) -> Html {
+    let icon_class = match p.task.is_done {
         true => "bi-arrow-counterclockwise",
         false => "bi-check-lg",
     };
-    let aria_label = match t.is_done {
+    let aria_label = match p.task.is_done {
         true => "Mark undone",
         false => "Mark done",
     };
-    let currently_done = t.is_done;
+    let onclick = {
+        let owner = p.db.owner;
+        let task = p.task.id;
+        let currently_done = p.task.is_done;
+        p.on_event
+            .reform(move |_| Event::now(owner, task, EventData::SetDone(!currently_done)))
+    };
     html! {
         <button
             type="button"
             class={ classes!("btn", "bi-btn", icon_class, "ps-2") }
             title={ aria_label }
-            onclick={ on_event.reform(move |_| EventData::SetDone(!currently_done)) }
+            { onclick }
         >
         </button>
     }
@@ -231,23 +277,29 @@ fn timeset_button(
 #[function_component(ButtonScheduleFor)]
 fn button_schedule_for(p: &TaskListItemProps) -> Html {
     let input_ref = use_node_ref();
+    let owner = p.db.owner;
+    let task = p.task.id;
     timeset_button(
         input_ref,
         &p.task.scheduled_for,
         "Schedule for",
         "bi-alarm",
-        &p.on_event.reform(EventData::ScheduleFor),
+        &p.on_event
+            .reform(move |t| Event::now(owner, task, EventData::ScheduleFor(t))),
     )
 }
 
 #[function_component(ButtonBlockedUntil)]
 fn button_blocked_until(p: &TaskListItemProps) -> Html {
     let input_ref = use_node_ref();
+    let owner = p.db.owner;
+    let task = p.task.id;
     timeset_button(
         input_ref,
         &p.task.blocked_until,
         "Blocked until",
         "bi-hourglass-split",
-        &p.on_event.reform(EventData::BlockedUntil),
+        &p.on_event
+            .reform(move |t| Event::now(owner, task, EventData::BlockedUntil(t))),
     )
 }

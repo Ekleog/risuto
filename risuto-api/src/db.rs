@@ -41,6 +41,17 @@ impl DbDump {
     pub fn tag_name(&self, id: &TagId) -> Option<&str> {
         self.tags.get(id).map(|(t, _)| &t.name as &str)
     }
+
+    /// Returns a list of all the tasks currently in this tag, ordered by increasing priority
+    pub fn tasks_in_tag(&self, tag: &TagId) -> Vec<Arc<Task>> {
+        let mut res = self
+            .tasks
+            .values()
+            .filter_map(|t| t.current_tags.get(tag).map(|p| (p.priority, t.clone())))
+            .collect::<Vec<_>>();
+        res.sort_unstable_by_key(|(prio, t)| (*prio, t.id));
+        res.into_iter().map(|(_, t)| t).collect()
+    }
 }
 
 impl DbDump {

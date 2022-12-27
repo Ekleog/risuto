@@ -1,5 +1,5 @@
 use crate::ui;
-use risuto_api::{DbDump, Event, EventData, TagId, Task, TaskId};
+use risuto_api::{DbDump, Event, TagId, Task};
 use std::{collections::VecDeque, rc::Rc, sync::Arc};
 use yew::prelude::*;
 
@@ -48,11 +48,11 @@ pub struct MainViewProps {
     pub events_pending_submission: VecDeque<Event>,
     pub db: Rc<DbDump>,
     pub current_tag: Option<TagId>,
-    pub tasks_open: Rc<Vec<(TaskId, Arc<Task>)>>,
-    pub tasks_done: Rc<Vec<(TaskId, Arc<Task>)>>,
-    pub tasks_backlog: Rc<Vec<(TaskId, Arc<Task>)>>,
+    pub tasks_open: Rc<Vec<Arc<Task>>>,
+    pub tasks_done: Rc<Vec<Arc<Task>>>,
+    pub tasks_backlog: Rc<Vec<Arc<Task>>>,
     pub on_logout: Callback<()>,
-    pub on_event: Callback<(TaskId, EventData)>,
+    pub on_event: Callback<Event>,
     pub on_order_change: Callback<TaskOrderChangeEvent>,
 }
 

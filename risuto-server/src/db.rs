@@ -463,9 +463,11 @@ async fn fetch_tasks_from_tmp_tasks_table(
         .await
         .context("querying tasks table")?
     {
+        let id = TaskId(t.try_get("id").context("retrieving the id field")?);
         tasks.insert(
-            TaskId(t.try_get("id").context("retrieving the id field")?),
+            id,
             Task {
+                id,
                 owner: UserId(
                     t.try_get("owner_id")
                         .context("retrieving the owner_id field")?,

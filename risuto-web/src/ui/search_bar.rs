@@ -1,8 +1,7 @@
 use yew::prelude::*;
 
 #[derive(Clone, PartialEq, Properties)]
-pub struct SearchBarProps {
-}
+pub struct SearchBarProps {}
 
 #[function_component(SearchBar)]
 pub fn search_bar(p: &SearchBarProps) -> Html {

@@ -1,4 +1,4 @@
-use risuto_api::{DbDump, EventData, TagId, Task, TaskId};
+use risuto_api::{DbDump, Event, TagId, Task};
 use std::{rc::Rc, sync::Arc};
 use yew::prelude::*;
 
@@ -9,24 +9,20 @@ pub struct TaskListProps {
     pub ref_this: NodeRef,
     pub db: Rc<DbDump>,
     pub current_tag: Option<TagId>,
-    pub tasks: Rc<Vec<(TaskId, Arc<Task>)>>,
-    pub on_event: Callback<(TaskId, EventData)>,
+    pub tasks: Rc<Vec<Arc<Task>>>,
+    pub on_event: Callback<Event>,
 }
 
 #[function_component(TaskList)]
 pub fn task_list(p: &TaskListProps) -> Html {
     // First, build the list items
-    let list_items = p.tasks.iter().map(|(id, t)| {
-        let on_event = {
-            let id = *id;
-            p.on_event.reform(move |data| (id, data))
-        };
+    let list_items = p.tasks.iter().map(|t| {
         html! {
             <ui::TaskListItem
                 task={ t.clone() }
                 db={ p.db.clone() }
                 current_tag={ p.current_tag.clone() }
-                { on_event }
+                on_event={ p.on_event.clone() }
             />
         }
     });

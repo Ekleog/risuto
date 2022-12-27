@@ -20,6 +20,7 @@ pub struct TaskId(pub Uuid);
 
 #[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct Task {
+    pub id: TaskId,
     pub owner: UserId,
     pub date: Time,
 
