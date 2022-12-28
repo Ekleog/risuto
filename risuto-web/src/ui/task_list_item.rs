@@ -135,12 +135,12 @@ fn parse_new_title(db: &DbDump, mut title: String, task: &Task) -> Vec<Event> {
 
         if let Some(i) = title.rfind(" +") {
             let tag_start = i + " +".len();
-            if let Some(t) = title.get(tag_start..).and_then(|t| db.tag_id(t)) {
-                let mut tasks = db.tasks_for_query(&Query::tag(t));
-                db.sort_tasks_for_tag(&t, &mut tasks);
+            if let Some(tag) = title.get(tag_start..).and_then(|t| db.tag_id(t)) {
+                let mut tasks = db.tasks_for_query(&Query::Tag { tag, backlog: Some(false) });
+                db.sort_tasks_for_tag(&tag, &mut tasks);
                 res.extend(util::compute_reordering_events(
                     db.owner,
-                    t,
+                    tag,
                     task.id,
                     0,
                     false,
@@ -316,7 +316,7 @@ fn button_blocked_until(p: &TaskListItemProps) -> Html {
     let input_ref = use_node_ref();
     let db = p.db.clone();
     let current_tag = p.current_tag.clone();
-    let task = p.task.clone();
+    let task = p.task.clone(); // TODO: split risuto-api into api+api-helpers so not all changes make a server-rebuild
     let on_event = p.on_event.clone();
     timeset_button(
         input_ref,
