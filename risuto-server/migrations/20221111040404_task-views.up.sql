@@ -14,6 +14,15 @@ FROM events e
 WHERE e.d_type = 'set_done'
 ORDER BY e.task_id, e.date DESC;
 
+CREATE VIEW v_tasks_title AS
+SELECT DISTINCT ON (t.id)
+    t.id AS task_id,
+    COALESCE(e.d_text, t.initial_title) AS title
+FROM tasks t
+LEFT JOIN events e
+    ON t.id = e.task_id AND e.d_type = 'set_title'
+ORDER BY t.id, e.date DESC;
+
 CREATE VIEW v_tasks_comments AS
 SELECT DISTINCT ON (task_id, comment_id)
     e.task_id AS task_id,
@@ -28,10 +37,15 @@ ORDER BY task_id, comment_id, e.date DESC;
 
 CREATE VIEW v_tasks_text AS
 SELECT
-    task_id,
-    string_agg(text, '\n') AS text
-FROM v_tasks_comments
-GROUP BY task_id;
+    vtc.task_id,
+    (
+        setweight(to_tsvector(vtt.title), 'A') ||
+        setweight(to_tsvector(string_agg(vtc.text, '\n')), 'D')
+    ) AS text
+FROM v_tasks_comments vtc
+FULL JOIN v_tasks_title vtt
+    ON vtc.task_id = vtt.task_id
+GROUP BY vtc.task_id, vtt.title;
 
 CREATE VIEW v_tasks_tags AS
 SELECT DISTINCT ON (task_id, tag_id)

@@ -180,7 +180,7 @@ impl Query {
             Query::Phrase(t) => {
                 let idx = res.add_bind(first_bind_idx, QueryBind::String(t.clone()));
                 res.where_clause.push_str(&format!(
-                    "(to_tsvector(vtx.text) @@ phraseto_tsquery(${idx}))"
+                    "(vtx.text @@ phraseto_tsquery(${idx}))"
                 ));
             }
         }
