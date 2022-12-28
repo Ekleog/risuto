@@ -419,6 +419,8 @@ pub async fn search_tasks_for_user(
                         ON vtu.task_id = t.id
                     LEFT JOIN v_tasks_archived vta
                         ON vta.task_id = t.id
+                    LEFT JOIN v_tasks_done vtd
+                        ON vtd.task_id = t.id
                     LEFT JOIN v_tasks_tags vtt
                         ON vtt.task_id = t.id
                     LEFT JOIN v_tasks_comments vtc

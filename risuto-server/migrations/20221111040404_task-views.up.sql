@@ -6,6 +6,14 @@ FROM events e
 WHERE e.d_type = 'set_archived'
 ORDER BY e.task_id, e.date DESC;
 
+CREATE VIEW v_tasks_done AS
+SELECT DISTINCT ON (e.task_id)
+    e.task_id AS task_id,
+    e.d_bool AS done
+FROM events e
+WHERE e.d_type = 'set_done'
+ORDER BY e.task_id, e.date DESC;
+
 CREATE VIEW v_tasks_comments AS
 SELECT DISTINCT ON (task_id, comment_id)
     e.task_id AS task_id,

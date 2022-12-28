@@ -9,6 +9,7 @@ pub enum Query {
     All(Vec<Query>),
     Not(Box<Query>),
     Archived(bool),
+    Done(bool),
     Tag {
         tag: TagId,
         backlog: Option<bool>,
@@ -51,6 +52,7 @@ impl Query {
             Query::All(q) => q.iter().any(|q| q.has_fts()),
             Query::Not(q) => q.has_fts(),
             Query::Archived(_) => false,
+            Query::Done(_) => false,
             Query::Tag { .. } => false,
             Query::Phrase(_) => true,
         }
@@ -62,6 +64,7 @@ impl Query {
             Query::All(q) => q.iter().all(|q| q.matches_impl(task, tokenized)),
             Query::Not(q) => !q.matches_impl(task, tokenized),
             Query::Archived(a) => task.is_archived == *a,
+            Query::Done(d) => task.is_done == *d,
             Query::Tag { tag, backlog } => {
                 match task.current_tags.get(tag) {
                     None => false,
@@ -129,7 +132,7 @@ impl Query {
 }
 
 impl Query {
-    /// Assumes tables vta (v_tasks_archived), vtt (v_tasks_tags)
+    /// Assumes tables vta (v_tasks_archived), vtd(v_tasks_done), vtt (v_tasks_tags)
     /// and vtx (v_tasks_text) are available
     pub fn to_postgres(&self, first_bind_idx: usize) -> SqlQuery {
         let mut res = Default::default();
@@ -162,6 +165,10 @@ impl Query {
             Query::Archived(b) => {
                 let idx = res.add_bind(first_bind_idx, QueryBind::Bool(*b));
                 res.where_clause.push_str(&format!("(vta.archived = ${idx})"));
+            }
+            Query::Done(b) => {
+                let idx = res.add_bind(first_bind_idx, QueryBind::Bool(*b));
+                res.where_clause.push_str(&format!("(vtd.done = ${idx})"));
             }
             Query::Tag { tag, backlog } => {
                 let idx = res.add_bind(first_bind_idx, QueryBind::Uuid(tag.0));
