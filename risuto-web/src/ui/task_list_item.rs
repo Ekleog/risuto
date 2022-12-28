@@ -326,13 +326,13 @@ fn button_blocked_until(p: &TaskListItemProps) -> Html {
         &Callback::from(move |t| {
             on_event.emit(Event::now(db.owner, task.id, EventData::BlockedUntil(t)));
             // Move task to this task's backlog if it was not already
-            if let Some(current_tag) = current_tag {
-                if !task.current_tags.get(&current_tag).unwrap().backlog {
-                    let mut tasks = db.tasks_for_query(&Query::tag(current_tag));
-                    db.sort_tasks_for_tag(&current_tag, &mut tasks);
+            if let Some(tag) = current_tag {
+                if !task.current_tags.get(&tag).unwrap().backlog {
+                    let mut tasks = db.tasks_for_query(&Query::Tag { tag, backlog: Some(true) });
+                    db.sort_tasks_for_tag(&tag, &mut tasks);
                     let evts = util::compute_reordering_events(
                         db.owner,
-                        current_tag,
+                        tag,
                         task.id,
                         0,
                         true,
