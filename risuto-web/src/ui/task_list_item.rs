@@ -285,15 +285,23 @@ fn timeset_button(
 #[function_component(ButtonScheduleFor)]
 fn button_schedule_for(p: &TaskListItemProps) -> Html {
     let input_ref = use_node_ref();
-    let owner = p.db.owner;
-    let task = p.task.id;
+    let db = p.db.clone();
+    let task = p.task.clone();
+    let on_event = p.on_event.clone();
     timeset_button(
         input_ref,
         &p.task.scheduled_for,
         "Schedule for",
         "bi-alarm",
-        &p.on_event
-            .reform(move |t| Event::now(owner, task, EventData::ScheduleFor(t))),
+        &Callback::from(move |t| {
+            // First reschedule, then remove tag
+            // Otherwise, if the tag was the one giving us the perms to edit the event, it'll crash
+            on_event.emit(Event::now(db.owner, task.id, EventData::ScheduleFor(t)));
+            let today_id = db.tag_id(TODAY_TAG).expect("no today tag");
+            if task.current_tags.contains_key(&today_id) {
+                on_event.emit(Event::now(db.owner, task.id, EventData::RmTag(today_id)));
+            }
+        }),
     )
 }
 
