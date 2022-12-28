@@ -1,7 +1,7 @@
 use std::{rc::Rc, str::FromStr, sync::Arc};
 
 use chrono::{Datelike, Timelike};
-use risuto_api::{DbDump, Event, EventData, TagId, Task, Time, Query};
+use risuto_api::{DbDump, Event, EventData, Query, TagId, Task, Time};
 use wasm_bindgen::prelude::*;
 use yew::prelude::*;
 
@@ -136,15 +136,13 @@ fn parse_new_title(db: &DbDump, mut title: String, task: &Task) -> Vec<Event> {
         if let Some(i) = title.rfind(" +") {
             let tag_start = i + " +".len();
             if let Some(tag) = title.get(tag_start..).and_then(|t| db.tag_id(t)) {
-                let mut tasks = db.tasks_for_query(&Query::Tag { tag, backlog: Some(false) });
+                let mut tasks = db.tasks_for_query(&Query::Tag {
+                    tag,
+                    backlog: Some(false),
+                });
                 db.sort_tasks_for_tag(&tag, &mut tasks);
                 res.extend(util::compute_reordering_events(
-                    db.owner,
-                    tag,
-                    task.id,
-                    0,
-                    false,
-                    &tasks,
+                    db.owner, tag, task.id, 0, false, &tasks,
                 ));
                 title.truncate(i);
                 continue;
@@ -328,16 +326,13 @@ fn button_blocked_until(p: &TaskListItemProps) -> Html {
             // Move task to this task's backlog if it was not already
             if let Some(tag) = current_tag {
                 if !task.current_tags.get(&tag).unwrap().backlog {
-                    let mut tasks = db.tasks_for_query(&Query::Tag { tag, backlog: Some(true) });
-                    db.sort_tasks_for_tag(&tag, &mut tasks);
-                    let evts = util::compute_reordering_events(
-                        db.owner,
+                    let mut tasks = db.tasks_for_query(&Query::Tag {
                         tag,
-                        task.id,
-                        0,
-                        true,
-                        &tasks,
-                    );
+                        backlog: Some(true),
+                    });
+                    db.sort_tasks_for_tag(&tag, &mut tasks);
+                    let evts =
+                        util::compute_reordering_events(db.owner, tag, task.id, 0, true, &tasks);
                     for e in evts {
                         on_event.emit(e);
                     }
