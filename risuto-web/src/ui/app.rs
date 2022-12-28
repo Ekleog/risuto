@@ -8,7 +8,7 @@ use yew::prelude::*;
 use crate::{
     api, ui,
     ui::{ListType, TaskOrderChangeEvent},
-    util, LoginInfo,
+    util, LoginInfo, TODAY_TAG,
 };
 
 const KEY_EVTS_PENDING_SUBMISSION: &str = "events-pending-submission";
@@ -166,7 +166,7 @@ impl Component for App {
                         self.db
                             .tags
                             .iter()
-                            .find(|(_, t)| t.0.name == "today")
+                            .find(|(_, t)| t.0.name == TODAY_TAG)
                             .expect("found no tag named 'today'")
                             .0
                             .clone(),

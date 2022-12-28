@@ -5,7 +5,7 @@ use risuto_api::{DbDump, Event, EventData, TagId, Task, Time};
 use wasm_bindgen::prelude::*;
 use yew::prelude::*;
 
-use crate::util;
+use crate::{util, TODAY_TAG};
 
 #[derive(Clone, PartialEq, Properties)]
 pub struct TaskListItemProps {

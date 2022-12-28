@@ -9,6 +9,8 @@ mod api;
 mod ui;
 mod util;
 
+const TODAY_TAG: &str = "today";
+
 const KEY_LOGIN: &str = "login";
 
 lazy_static::lazy_static! {
