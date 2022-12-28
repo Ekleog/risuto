@@ -9,12 +9,19 @@ pub enum Query {
     All(Vec<Query>),
     Not(Box<Query>),
     Archived(bool),
-    Tag(TagId),
+    Tag {
+        tag: TagId,
+        backlog: Option<bool>,
+    },
     // TODO: be able to search for untagged tasks only
     Phrase(String), // full-text search of one contiguous word vec
 }
 
 impl Query {
+    pub fn tag(tag: TagId) -> Query {
+        Query::Tag { tag, backlog: None }
+    }
+
     pub fn from_search(db: &DbDump, search: &str) -> Query {
         match search::Parser::parse(search::Rule::everything, search) {
             Ok(mut pairs) => {
@@ -44,7 +51,7 @@ impl Query {
             Query::All(q) => q.iter().any(|q| q.has_fts()),
             Query::Not(q) => q.has_fts(),
             Query::Archived(_) => false,
-            Query::Tag(_) => false,
+            Query::Tag { .. } => false,
             Query::Phrase(_) => true,
         }
     }
@@ -55,7 +62,15 @@ impl Query {
             Query::All(q) => q.iter().all(|q| q.matches_impl(task, tokenized)),
             Query::Not(q) => !q.matches_impl(task, tokenized),
             Query::Archived(a) => task.is_archived == *a,
-            Query::Tag(t) => task.current_tags.contains_key(t),
+            Query::Tag { tag, backlog } => {
+                match task.current_tags.get(tag) {
+                    None => false,
+                    Some(info) => match backlog {
+                        None => true,
+                        Some(b) => *b == info.backlog,
+                    }
+                }
+            }
             Query::Phrase(p) => {
                 let q = Query::tokenize(p);
                 let tokenized = tokenized.as_ref().expect(
@@ -145,24 +160,23 @@ impl Query {
                 q.add_to_postgres(first_bind_idx, &mut *res);
             }
             Query::Archived(b) => {
-                res.where_clause.push_str("(vta.archived = $");
                 let idx = res.add_bind(first_bind_idx, QueryBind::Bool(*b));
-                res.where_clause.push_str(&format!("{}", idx));
-                res.where_clause.push_str(")");
+                res.where_clause.push_str(&format!("(vta.archived = ${idx})"));
             }
-            Query::Tag(t) => {
-                res.where_clause
-                    .push_str("(vtt.is_in = true AND vtt.tag_id = $");
-                let idx = res.add_bind(first_bind_idx, QueryBind::Uuid(t.0));
-                res.where_clause.push_str(&format!("{}", idx));
+            Query::Tag { tag, backlog } => {
+                let idx = res.add_bind(first_bind_idx, QueryBind::Uuid(tag.0));
+                res.where_clause.push_str(&format!("(vtt.is_in = true AND vtt.tag_id = ${idx}"));
+                if let Some(backlog) = backlog {
+                    let idx = res.add_bind(first_bind_idx, QueryBind::Bool(*backlog));
+                    res.where_clause.push_str(&format!(" AND vtt.backlog = ${idx}"));
+
+                }
                 res.where_clause.push_str(")");
             }
             Query::Phrase(t) => {
-                res.where_clause
-                    .push_str("(to_tsvector(vtx.text) @@ phraseto_tsquery($");
                 let idx = res.add_bind(first_bind_idx, QueryBind::String(t.clone()));
-                res.where_clause.push_str(&format!("{}", idx));
-                res.where_clause.push_str("))");
+                res.where_clause
+                    .push_str(&format!("(to_tsvector(vtx.text) @@ phraseto_tsquery(${idx}))"));
             }
         }
     }

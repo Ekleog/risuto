@@ -50,7 +50,8 @@ pub fn parse_search(db: &DbDump, pairs: Pairs<Rule>) -> Option<Query> {
                     Some(Rule::tagname) => tagname.unwrap().as_str(),
                     r => unreachable!("Rule::tag unexpected atom: {:?}", r),
                 };
-                db.tag_id(tagname).map(Query::Tag)
+                // TODO: is there a need for querying only tasks in/out of backlog from text search?
+                db.tag_id(tagname).map(|tag| Query::Tag { tag, backlog: None })
             }
             Rule::search => parse_search(db, p.into_inner()),
             Rule::phrase => Some(Query::Phrase(unescape(p.as_str()))),

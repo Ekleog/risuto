@@ -29,7 +29,8 @@ CREATE VIEW v_tasks_tags AS
 SELECT DISTINCT ON (task_id, tag_id)
     e.task_id AS task_id,
     e.d_tag_id AS tag_id,
-    (e.d_type = 'add_tag') AS is_in
+    (e.d_type = 'add_tag') AS is_in,
+    e.d_bool AS backlog
 FROM events e
 WHERE (e.d_type = 'add_tag' OR e.d_type = 'remove_tag')
 ORDER BY task_id, tag_id, e.date DESC;

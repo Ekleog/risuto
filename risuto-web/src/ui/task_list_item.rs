@@ -136,7 +136,7 @@ fn parse_new_title(db: &DbDump, mut title: String, task: &Task) -> Vec<Event> {
         if let Some(i) = title.rfind(" +") {
             let tag_start = i + " +".len();
             if let Some(t) = title.get(tag_start..).and_then(|t| db.tag_id(t)) {
-                let mut tasks = db.tasks_for_query(&Query::Tag(t));
+                let mut tasks = db.tasks_for_query(&Query::tag(t));
                 db.sort_tasks_for_tag(&t, &mut tasks);
                 res.extend(util::compute_reordering_events(
                     db.owner,
@@ -328,7 +328,7 @@ fn button_blocked_until(p: &TaskListItemProps) -> Html {
             // Move task to this task's backlog if it was not already
             if let Some(current_tag) = current_tag {
                 if !task.current_tags.get(&current_tag).unwrap().backlog {
-                    let mut tasks = db.tasks_for_query(&Query::Tag(current_tag));
+                    let mut tasks = db.tasks_for_query(&Query::tag(current_tag));
                     db.sort_tasks_for_tag(&current_tag, &mut tasks);
                     let evts = util::compute_reordering_events(
                         db.owner,
