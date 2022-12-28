@@ -32,7 +32,7 @@ pub fn task_list(p: &TaskListItemProps) -> Html {
         }
     });
     html! { // align items vertically but also let them stretch
-        <li class="list-group-item p-0">
+        <li class={classes!(p.task.is_done.then(|| "task-item-done"), "list-group-item", "p-0")}>
             <div class="d-flex align-items-stretch p-1">
                 <div class="drag-handle d-flex align-items-center">
                     <div class="bi-btn bi-grip-vertical p-2"></div>

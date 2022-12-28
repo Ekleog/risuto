@@ -74,10 +74,10 @@ impl App {
         for t in self.db.tasks.values() {
             if let Some(tag) = self.tag {
                 if let Some(info) = t.current_tags.get(&tag) {
-                    if t.is_done {
-                        done.push((info.priority, t.clone()));
-                    } else if info.backlog {
+                    if info.backlog {
                         backlog.push((info.priority, t.clone()));
+                    } else if t.is_done {
+                        done.push((info.priority, t.clone()));
                     } else {
                         open.push((info.priority, t.clone()));
                     }
