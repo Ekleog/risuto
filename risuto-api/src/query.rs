@@ -1,4 +1,4 @@
-use crate::{search, DbDump, TagId};
+use crate::{search, Comment, DbDump, TagId, Task};
 
 use pest::Parser;
 use uuid::Uuid;
@@ -30,7 +30,90 @@ impl Query {
             e => todo!("should have proper error handling here: {:?}", e),
         }
     }
+}
 
+impl Query {
+    pub fn matches(&self, task: &Task) -> bool {
+        let tokenized = self.has_fts().then(|| Query::tokenize_task(task));
+        self.matches_impl(task, &tokenized)
+    }
+
+    fn has_fts(&self) -> bool {
+        match self {
+            Query::Any(q) => q.iter().any(|q| q.has_fts()),
+            Query::All(q) => q.iter().any(|q| q.has_fts()),
+            Query::Not(q) => q.has_fts(),
+            Query::Archived(_) => false,
+            Query::Tag(_) => false,
+            Query::Phrase(_) => true,
+        }
+    }
+
+    fn matches_impl(&self, task: &Task, tokenized: &Option<Vec<Vec<String>>>) -> bool {
+        match self {
+            Query::Any(q) => q.iter().any(|q| q.matches_impl(task, tokenized)),
+            Query::All(q) => q.iter().all(|q| q.matches_impl(task, tokenized)),
+            Query::Not(q) => !q.matches_impl(task, tokenized),
+            Query::Archived(a) => task.is_archived == *a,
+            Query::Tag(t) => task.current_tags.contains_key(t),
+            Query::Phrase(p) => {
+                let q = Query::tokenize(p);
+                let tokenized = tokenized.as_ref().expect(
+                    "called matched_impl on query that has fts without providing tokenized text",
+                );
+                for text in tokenized {
+                    if text.windows(q.len()).any(|w| w == q) {
+                        return true;
+                    }
+                }
+                false
+            }
+        }
+    }
+
+    /// Returns a Vec<String> for the title and one per comment, where each String is a token
+    // TODO: this should be cached in-memory at the time of db dump receiving maybe?
+    fn tokenize_task(task: &Task) -> Vec<Vec<String>> {
+        let mut res = Vec::with_capacity(1 + task.current_comments.len());
+        res.push(Query::tokenize(&task.current_title));
+        fn also_tokenize_comment(c: &Comment, res: &mut Vec<Vec<String>>) {
+            res.push(Query::tokenize(
+                &c.edits
+                    .last_key_value()
+                    .expect("comment with no edits")
+                    .1
+                    .last()
+                    .expect("comment-edit btreemap entry with no edit"),
+            ));
+            for child in c.children.values().flat_map(|c| c.iter()) {
+                also_tokenize_comment(&child, &mut *res);
+            }
+        }
+        for c in task.current_comments.values().flat_map(|c| c.iter()) {
+            also_tokenize_comment(&c, &mut res);
+        }
+        res
+    }
+
+    fn tokenize(s: &str) -> Vec<String> {
+        use tantivy::tokenizer::*;
+        let tokenizer = TextAnalyzer::from(SimpleTokenizer)
+            .filter(RemoveLongFilter::limit(40))
+            .filter(LowerCaser)
+            .filter(AsciiFoldingFilter)
+            .filter(Stemmer::new(Language::English)) // TODO: make this configurable
+            .filter(StopWordFilter::new(Language::English).unwrap());
+        let mut stream = tokenizer.token_stream(s);
+        let mut res = Vec::new();
+        while stream.advance() {
+            let token = stream.token_mut();
+            res.push(std::mem::replace(&mut token.text, String::new()));
+        }
+        res
+    }
+}
+
+impl Query {
     /// Assumes tables vta (v_tasks_archived), vtt (v_tasks_tags)
     /// and vtx (v_tasks_text) are available
     pub fn to_postgres(&self, first_bind_idx: usize) -> SqlQuery {

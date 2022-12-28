@@ -11,5 +11,6 @@ lazy_static = "1.4"
 pest = "2.5"
 pest_derive = "2.5"
 serde = { version = "1.0", features = ["derive", "rc"] }
+tantivy = { version = "0.19.0", default-features = false, features = ["stopwords"] }
 tracing = "0.1.36"
 uuid = { version = "1.2", features = ["serde", "v4"] }

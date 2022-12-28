@@ -3,7 +3,7 @@ use std::{collections::HashMap, sync::Arc};
 use anyhow::anyhow;
 use async_trait::async_trait;
 
-use crate::{AuthInfo, EventId, Tag, TagId, Task, TaskId, Time, User, UserId};
+use crate::{AuthInfo, EventId, Query, Tag, TagId, Task, TaskId, Time, User, UserId};
 
 #[async_trait]
 pub trait Db {
@@ -42,15 +42,24 @@ impl DbDump {
         self.tags.get(id).map(|(t, _)| &t.name as &str)
     }
 
+    /// Panics if any task is not actually in this tag
+    pub fn sort_tasks_for_tag(&self, tag: &TagId, tasks: &mut [Arc<Task>]) {
+        tasks.sort_unstable_by_key(|t| {
+            let tag_data = t
+                .current_tags
+                .get(tag)
+                .expect("task passed to sort_tasks_for_tag is actually not in the tag");
+            (tag_data.priority, t.id)
+        });
+    }
+
     /// Returns a list of all the tasks currently in this tag, ordered by increasing priority
-    pub fn tasks_in_tag(&self, tag: &TagId) -> Vec<Arc<Task>> {
-        let mut res = self
-            .tasks
+    pub fn tasks_for_query(&self, query: &Query) -> Vec<Arc<Task>> {
+        self.tasks
             .values()
-            .filter_map(|t| t.current_tags.get(tag).map(|p| (p.priority, t.clone())))
-            .collect::<Vec<_>>();
-        res.sort_unstable_by_key(|(prio, t)| (*prio, t.id));
-        res.into_iter().map(|(_, t)| t).collect()
+            .filter(|t| query.matches(t))
+            .cloned()
+            .collect::<Vec<_>>()
     }
 }
 
