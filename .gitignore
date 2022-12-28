@@ -1,4 +1,5 @@
 target
+target-*
 db.sqlite*
 risuto-app/www
 risuto-web/dist

@@ -78,10 +78,16 @@ fn title_div(p: &TitleDivProps) -> Html {
                 .cast::<web_sys::HtmlElement>()
                 .expect("validated while div_ref is not attached to an html element");
             let text = div.text_content().expect("div_ref has no text_content");
-            for e in parse_new_title(&db, text, &task) {
+            let evts = parse_new_title(&db, text, &task);
+            let changed_title = evts.iter().any(|e| matches!(e, Event { task: t, data: EventData::SetTitle(_), .. } if t == &task.id));
+            for e in evts {
                 on_event.emit(e);
             }
             div.blur().expect("failed blurring div_ref");
+            if !changed_title {
+                // TODO: find a way to force yew to resync html dom with its vdom even if the vdom doesn't change
+                div.set_text_content(Some(&task.current_title));
+            }
         })
     };
 
@@ -116,6 +122,8 @@ fn title_div(p: &TitleDivProps) -> Html {
 fn parse_new_title(db: &DbDump, mut title: String, task: &Task) -> Vec<Event> {
     let mut res = Vec::new();
     loop {
+        title.truncate(title.trim_end().len());
+
         if let Some(i) = title.rfind(" -") {
             let tag_start = i + " -".len();
             if let Some(t) = title.get(tag_start..).and_then(|t| db.tag_id(t)) {
