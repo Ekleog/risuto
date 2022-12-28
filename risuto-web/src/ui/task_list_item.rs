@@ -288,6 +288,10 @@ fn button_schedule_for(p: &TaskListItemProps) -> Html {
     let db = p.db.clone();
     let task = p.task.clone();
     let on_event = p.on_event.clone();
+    // TODO: re-add today tag when hitting the time
+    // This will require keeping one scheduled-date per owner actually!
+    // as each user has their own today tag and it wouldn't make sense to
+    // add stuff to other people's today tag
     timeset_button(
         input_ref,
         &p.task.scheduled_for,
@@ -308,14 +312,33 @@ fn button_schedule_for(p: &TaskListItemProps) -> Html {
 #[function_component(ButtonBlockedUntil)]
 fn button_blocked_until(p: &TaskListItemProps) -> Html {
     let input_ref = use_node_ref();
-    let owner = p.db.owner;
-    let task = p.task.id;
+    let db = p.db.clone();
+    let current_tag = p.current_tag.clone();
+    let task = p.task.clone();
+    let on_event = p.on_event.clone();
     timeset_button(
         input_ref,
         &p.task.blocked_until,
         "Blocked until",
         "bi-hourglass-split",
-        &p.on_event
-            .reform(move |t| Event::now(owner, task, EventData::BlockedUntil(t))),
+        &Callback::from(move |t| {
+            on_event.emit(Event::now(db.owner, task.id, EventData::BlockedUntil(t)));
+            // Move task to this task's backlog if it was not already
+            if let Some(current_tag) = current_tag {
+                if !task.current_tags.get(&current_tag).unwrap().backlog {
+                    let evts = util::compute_reordering_events(
+                        db.owner,
+                        current_tag,
+                        task.id,
+                        0,
+                        true,
+                        &db.tasks_in_tag(&current_tag),
+                    );
+                    for e in evts {
+                        on_event.emit(e);
+                    }
+                }
+            }
+        }),
     )
 }
