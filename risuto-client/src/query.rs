@@ -188,14 +188,8 @@ mod tests {
     #[test]
     fn primary_done() {
         let db = example_db();
-        assert_eq!(
-            Query::from_search(&db, "done:true"),
-            Query::Done(true),
-        );
-        assert_eq!(
-            Query::from_search(&db, "done:false"),
-            Query::Done(false),
-        );
+        assert_eq!(Query::from_search(&db, "done:true"), Query::Done(true),);
+        assert_eq!(Query::from_search(&db, "done:false"), Query::Done(false),);
     }
 
     #[test]

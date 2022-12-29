@@ -37,20 +37,16 @@ fn unescape(s: &str) -> String {
 pub fn parse_search(db: &DbDump, pairs: Pairs<Rule>) -> Query {
     SEARCH_PARSER
         .map_primary(|p| match p.as_rule() {
-            Rule::archived => Query::Archived(
-                match p.into_inner().next().map(|p| p.as_rule()) {
-                    Some(Rule::r#true) => true,
-                    Some(Rule::r#false) => false,
-                    r => unreachable!("Rule::archived unexpected atom: {:?}", r),
-                },
-            ),
-            Rule::done => Query::Done(
-                match p.into_inner().next().map(|p| p.as_rule()) {
-                    Some(Rule::r#true) => true,
-                    Some(Rule::r#false) => false,
-                    r => unreachable!("Rule::done unexpected atom: {:?}", r),
-                },
-            ),
+            Rule::archived => Query::Archived(match p.into_inner().next().map(|p| p.as_rule()) {
+                Some(Rule::r#true) => true,
+                Some(Rule::r#false) => false,
+                r => unreachable!("Rule::archived unexpected atom: {:?}", r),
+            }),
+            Rule::done => Query::Done(match p.into_inner().next().map(|p| p.as_rule()) {
+                Some(Rule::r#true) => true,
+                Some(Rule::r#false) => false,
+                r => unreachable!("Rule::done unexpected atom: {:?}", r),
+            }),
             Rule::tag => {
                 let tagname = p.into_inner().next();
                 let tagname = match tagname.as_ref().map(|p| p.as_rule()) {

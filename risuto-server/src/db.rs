@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Context};
+use anyhow::Context;
 use axum::async_trait;
 use chrono::Utc;
 use futures::{Future, Stream, StreamExt, TryStreamExt};
@@ -15,7 +15,7 @@ pub struct PostgresDb<'a> {
     pub user: UserId,
 }
 
-#[derive(sqlx::Type)]
+#[derive(Eq, PartialEq, sqlx::Type)]
 #[sqlx(type_name = "event_type", rename_all = "snake_case")]
 enum DbType {
     SetTitle,
@@ -61,7 +61,7 @@ impl From<DbTask> for Task {
     }
 }
 
-#[derive(sqlx::FromRow)]
+#[derive(Eq, PartialEq, sqlx::FromRow)]
 struct DbEvent {
     id: Uuid,
     owner_id: Uuid,
@@ -581,30 +581,36 @@ pub async fn submit_event(conn: &mut sqlx::PgConnection, e: Event) -> Result<(),
     let e = DbEvent::from(e);
     let res = sqlx::query!(
         "INSERT INTO events VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)",
-        e.id,
-        e.owner_id,
-        e.date,
-        e.task_id,
-        e.d_type as DbType,
-        e.d_text,
-        e.d_bool,
-        e.d_int,
-        e.d_time,
-        e.d_tag_id,
-        e.d_parent_id,
+        &e.id,
+        &e.owner_id,
+        &e.date,
+        &e.task_id,
+        &e.d_type as &DbType,
+        e.d_text.as_ref(),
+        e.d_bool.as_ref(),
+        e.d_int.as_ref(),
+        e.d_time.as_ref(),
+        e.d_tag_id.as_ref(),
+        e.d_parent_id.as_ref(),
     )
     .execute(&mut *db.conn)
     .await
     .with_context(|| format!("inserting event {:?}", event_id))?;
 
-    if res.rows_affected() != 1 {
-        Err(anyhow!(
-            "insertion of event {:?} affected {} rows",
-            event_id,
-            res.rows_affected(),
-        ))?;
+    match res.rows_affected() {
+        1 => Ok(()),
+        0 => {
+            let already_present = sqlx::query_as::<_, DbEvent>("SELECT * FROM events WHERE id=$1")
+                .bind(e.id)
+                .fetch_one(&mut *db.conn)
+                .await
+                .context("sanity-checking the already-present event")?;
+            if already_present == e {
+                Ok(()) // the submission was a duplicate, return a successful result
+            } else {
+                Err(Error::UuidAlreadyUsed(e.id))
+            }
+        }
+        rows => panic!("insertion of single event {event_id:?} affected multiple ({rows}) rows"),
     }
-    // TODO: give a specific error if the event id is already taken
-
-    Ok(())
 }

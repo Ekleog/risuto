@@ -13,6 +13,7 @@ use futures::{channel::mpsc, select, SinkExt, StreamExt};
 use risuto_api::{
     AuthInfo, AuthToken, Event, FeedMessage, NewSession, Tag, Task, User, UserId, Uuid,
 };
+use serde_json::json;
 use std::{collections::HashMap, net::SocketAddr, sync::Arc};
 use tokio::sync::RwLock;
 use tower_http::trace::TraceLayer;
@@ -107,6 +108,7 @@ impl<B: Send + Sync> FromRequest<B> for Auth {
 pub enum Error {
     Anyhow(anyhow::Error),
     PermissionDenied,
+    UuidAlreadyUsed(Uuid),
 }
 
 impl From<anyhow::Error> for Error {
@@ -130,6 +132,11 @@ impl axum::response::IntoResponse for Error {
                 tracing::info!("returning permission denied to client");
                 (StatusCode::FORBIDDEN, "Permission denied").into_response()
             }
+            Error::UuidAlreadyUsed(id) => (
+                StatusCode::CONFLICT,
+                Json(json!({ "error": "uuid already used", "uuid": id })),
+            )
+                .into_response(),
         }
     }
 }

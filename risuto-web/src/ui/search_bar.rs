@@ -1,6 +1,6 @@
-use std::{sync::Arc, rc::Rc};
+use std::{rc::Rc, sync::Arc};
 
-use risuto_client::{api::Query, QueryExt, Task, DbDump};
+use risuto_client::{api::Query, DbDump, QueryExt, Task};
 use yew::prelude::*;
 
 #[derive(Clone, PartialEq, Properties)]
