@@ -1,11 +1,10 @@
-use std::{rc::Rc, str::FromStr, sync::Arc};
+use std::{rc::Rc, sync::Arc};
 
 use chrono::{Datelike, Timelike};
 use risuto_client::{
     api::{Event, EventData, Query, TagId, Time},
     DbDump, Task,
 };
-use wasm_bindgen::prelude::*;
 use yew::prelude::*;
 
 use crate::{util, TODAY_TAG};
@@ -188,23 +187,6 @@ fn button_done_change(p: &TaskListItemProps) -> Html {
     }
 }
 
-#[wasm_bindgen(inline_js = "
-    export function show_picker(elt) {
-        elt.showPicker();
-    }
-    export function get_timezone() {
-        return Intl.DateTimeFormat().resolvedOptions().timeZone;
-    }
-")]
-extern "C" {
-    fn show_picker(elt: &web_sys::HtmlInputElement);
-    fn get_timezone() -> String;
-}
-
-fn local_timezone() -> chrono_tz::Tz {
-    chrono_tz::Tz::from_str(&get_timezone()).expect("host js timezone is not in chrono-tz database")
-}
-
 fn timeset_button(
     input_ref: NodeRef,
     current_date: &Option<Time>,
@@ -218,14 +200,14 @@ fn timeset_button(
             let input = input_ref
                 .cast::<web_sys::HtmlInputElement>()
                 .expect("input is not an html element");
-            show_picker(&input);
+            util::show_picker(&input);
         })
     };
     let on_input = callback.reform(|e: web_sys::InputEvent| {
         let input: web_sys::HtmlInputElement = e.target_unchecked_into();
         let date = chrono::NaiveDateTime::parse_from_str(&input.value(), "%Y-%m-%dT%H:%M")
             .expect("datepicker value not in expected format");
-        let timezone = local_timezone();
+        let timezone = util::local_tz();
         while date.and_local_timezone(timezone) == chrono::LocalResult::None {
             date.checked_sub_signed(chrono::Duration::minutes(1))
                 .expect("overflow while looking for a date that exists in local timezone");
@@ -234,7 +216,7 @@ fn timeset_button(
         let date = date.with_timezone(&chrono::Utc);
         Some(date)
     });
-    let current_date = current_date.map(|t| t.with_timezone(&local_timezone()));
+    let current_date = current_date.map(|t| t.with_timezone(&util::local_tz()));
     let timeset_label = current_date
         .map(|d| {
             let remaining = d.signed_duration_since(chrono::Utc::now());
@@ -316,7 +298,6 @@ fn button_schedule_for(p: &TaskListItemProps) -> Html {
 fn button_blocked_until(p: &TaskListItemProps) -> Html {
     let input_ref = use_node_ref();
     let db = p.db.clone();
-    let current_tag = p.current_tag.clone();
     let task = p.task.clone();
     let on_event = p.on_event.clone();
     timeset_button(
@@ -326,21 +307,6 @@ fn button_blocked_until(p: &TaskListItemProps) -> Html {
         "bi-hourglass-split",
         &Callback::from(move |t| {
             on_event.emit(Event::now(db.owner, task.id, EventData::BlockedUntil(t)));
-            // Move task to this task's backlog if it was not already
-            if let Some(tag) = current_tag {
-                if !task.current_tags.get(&tag).unwrap().backlog {
-                    let mut tasks = db.tasks_for_query(&Query::Tag {
-                        tag,
-                        backlog: Some(true),
-                    });
-                    db.sort_tasks_for_tag(&tag, &mut tasks);
-                    let evts =
-                        util::compute_reordering_events(db.owner, tag, task.id, 0, true, &tasks);
-                    for e in evts {
-                        on_event.emit(e);
-                    }
-                }
-            }
         }),
     )
 }

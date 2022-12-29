@@ -1,3 +1,4 @@
+use chrono::Timelike;
 use futures::{channel::oneshot, executor::block_on};
 use gloo_storage::{LocalStorage, Storage};
 use risuto_client::{
@@ -74,7 +75,12 @@ impl App {
         let mut open = Vec::new();
         let mut done = Vec::new();
         let mut backlog = Vec::new();
+        let now = chrono::Utc::now().with_timezone(&util::local_tz());
+        let end_of_today = now + chrono::Duration::seconds(86400 - now.num_seconds_from_midnight() as i64);
         for t in self.db.tasks.values() {
+            if t.blocked_until.map(|t| t > end_of_today).unwrap_or(false) {
+                continue;
+            }
             if let Some(tag) = self.tag {
                 if let Some(info) = t.current_tags.get(&tag) {
                     if info.backlog {

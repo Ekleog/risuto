@@ -1,11 +1,37 @@
-use std::sync::Arc;
+use std::{str::FromStr, sync::Arc};
 
 use risuto_client::{
     api::{AuthInfo, Event, EventData, Tag, TagId, TaskId, UserId},
     Task,
 };
+use wasm_bindgen::prelude::*;
 
 use crate::TODAY_TAG;
+
+#[wasm_bindgen(inline_js = "
+    export function show_picker(elt) {
+        elt.showPicker();
+    }
+    export function get_timezone() {
+        return Intl.DateTimeFormat().resolvedOptions().timeZone;
+    }
+")]
+extern "C" {
+    // TODO: remove once https://github.com/rustwasm/wasm-bindgen/pull/3215 gets released
+    pub fn show_picker(elt: &web_sys::HtmlInputElement);
+    fn get_timezone() -> String;
+}
+
+lazy_static::lazy_static! {
+    static ref LOCAL_TZ: chrono_tz::Tz = {
+        chrono_tz::Tz::from_str(&get_timezone())
+            .expect("host js timezone is not in chrono-tz database")
+    };
+}
+
+pub fn local_tz() -> chrono_tz::Tz {
+    LOCAL_TZ.clone()
+}
 
 pub fn sort_tags(current_user: &UserId, tags: &mut Vec<(&TagId, &(Tag, AuthInfo))>) {
     tags.sort_unstable_by_key(|(id, t)| {
