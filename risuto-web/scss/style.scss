@@ -97,12 +97,13 @@ $dark: lighten($blue, 3%);
     top: 0px;
     left: 0px;
     right: 0px;
-    z-index: 10;
 
     display: flex;
 }
 
 .search-bar {
+    z-index: 10;
+
     display: inline-flex;
     border-radius: 800px; // a rounded rectangle
     border: 1px solid transparent;

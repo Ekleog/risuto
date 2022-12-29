@@ -10,7 +10,7 @@ pub struct EventSubmissionSpinnerProps {
 #[function_component(EventSubmissionSpinner)]
 pub fn event_submission_spinner(p: &EventSubmissionSpinnerProps) -> Html {
     html! {
-        <div class="dropdown">
+        <div class="float-above dropdown">
             <button
                 class={ classes!(
                     "events-pending-spinner",

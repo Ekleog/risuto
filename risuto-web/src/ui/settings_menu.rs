@@ -8,7 +8,7 @@ pub struct SettingsMenuProps {
 #[function_component(SettingsMenu)]
 pub fn settings_menu(p: &SettingsMenuProps) -> Html {
     html! {
-        <div class="dropdown">
+        <div class="float-above dropdown">
             <button
                 type="button"
                 class="btn btn-light btn-circle m-3 bi-btn bi-gear-fill fs-6"
