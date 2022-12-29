@@ -457,7 +457,7 @@ pub async fn fetch_tags_for_user(
         (
             Tag {
                 id: TagId(t.id),
-                owner: UserId(t.owner_id),
+                owner_id: UserId(t.owner_id),
                 name: if t.owner_id == user.0 {
                     t.name
                 } else {

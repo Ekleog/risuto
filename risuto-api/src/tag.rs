@@ -16,7 +16,7 @@ impl TagId {
 #[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct Tag {
     pub id: TagId,
-    pub owner: UserId,
+    pub owner_id: UserId,
     pub name: String,
     pub archived: bool,
 }

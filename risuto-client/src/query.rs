@@ -16,10 +16,7 @@ impl QueryExt for Query {
                 let search_res = pairs
                     .next()
                     .expect("Rule::everything result without search result");
-                match search::parse_search(db, search_res.into_inner()) {
-                    Some(res) => res,
-                    None => todo!("failed to pratt-parse search"),
-                }
+                search::parse_search(db, search_res.into_inner())
             }
             e => todo!("should have proper error handling here: {:?}", e),
         }
@@ -59,6 +56,9 @@ fn matches_impl(q: &Query, task: &Task, tokenized: &Option<Vec<Vec<String>>>) ->
         },
         Query::Phrase(p) => {
             let q = tokenize(p);
+            if q.is_empty() {
+                return true; // query consisting of nothing but stop-words
+            }
             let tokenized = tokenized.as_ref().expect(
                 "called matched_impl on query that has fts without providing tokenized text",
             );
@@ -116,7 +116,7 @@ fn tokenize(s: &str) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{AuthInfo, Tag, UserId};
+    use crate::api::*;
     use std::collections::HashMap;
 
     fn example_db() -> DbDump {
@@ -125,7 +125,8 @@ mod tests {
             TagId(Uuid::new_v4()),
             (
                 Tag {
-                    owner: UserId::stub(),
+                    id: TagId::stub(),
+                    owner_id: UserId::stub(),
                     name: String::from("foo"),
                     archived: false,
                 },
@@ -136,7 +137,8 @@ mod tests {
             TagId(Uuid::new_v4()),
             (
                 Tag {
-                    owner: UserId::stub(),
+                    id: TagId::stub(),
+                    owner_id: UserId::stub(),
                     name: String::from("bar"),
                     archived: false,
                 },
@@ -147,7 +149,8 @@ mod tests {
             TagId(Uuid::new_v4()),
             (
                 Tag {
-                    owner: UserId::stub(),
+                    id: TagId::stub(),
+                    owner_id: UserId::stub(),
                     name: String::from("baz"),
                     archived: false,
                 },
@@ -180,15 +183,28 @@ mod tests {
     }
 
     #[test]
+    fn primary_done() {
+        let db = example_db();
+        assert_eq!(
+            Query::from_search(&db, "done:true"),
+            Query::Done(true),
+        );
+        assert_eq!(
+            Query::from_search(&db, "done:false"),
+            Query::Done(false),
+        );
+    }
+
+    #[test]
     fn primary_tag() {
         let db = example_db();
         assert_eq!(
             Query::from_search(&db, "tag:foo"),
-            Query::Tag(db.tag_id("foo").unwrap()),
+            Query::tag(db.tag_id("foo").unwrap()),
         );
         assert_eq!(
             Query::from_search(&db, "tag:bar"),
-            Query::Tag(db.tag_id("bar").unwrap()),
+            Query::tag(db.tag_id("bar").unwrap()),
         );
         // TODO: also test behavior for unknown tag
     }

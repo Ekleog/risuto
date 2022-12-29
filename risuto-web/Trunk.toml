@@ -2,7 +2,7 @@
 # warnings
 
 [watch]
-watch = [".", "../risuto-api"]
+watch = [".", "../risuto-api", "../risuto-client"]
 
 [[proxy]]
 backend = "ws://localhost:3000/ws/event-feed"

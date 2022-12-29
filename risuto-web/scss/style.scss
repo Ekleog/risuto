@@ -23,6 +23,8 @@ $tag-list-hover: lighten($blue, 70%);
 
 $search-bar-bg: lighten($blue, 10%);
 $search-bar-border: darken($text, 20%);
+$search-results-bg: lighten($blue, 15%);
+$search-results-border: darken($text, 20%);
 
 $events-pending-spinner-border: $background;
 
@@ -102,6 +104,7 @@ $dark: lighten($blue, 3%);
 }
 
 .search-bar {
+    position: relative;
     z-index: 10;
 
     display: inline-flex;
@@ -113,7 +116,7 @@ $dark: lighten($blue, 3%);
     min-width: 0px;
 }
 
-.search-bar.search-bar-shown {
+.search-bar.shown {
     border: 1px solid $search-bar-border;
     min-width: 100%;
 }
@@ -133,6 +136,27 @@ $dark: lighten($blue, 3%);
 
 .search-bar-input input:focus {
     outline: 0px;
+}
+
+.search-results {
+    position: absolute;
+    left: 0%;
+    right: 0%;
+    bottom: -50%;
+    transform: translateY(100%);
+
+    border: 1px solid $search-results-border;
+    border-radius: 5px;
+}
+
+.search-results:not(.shown) {
+    display: none;
+    border: 0px solid transparent;
+}
+
+.search-results .list-group-item {
+    background-color: $search-results-bg;;
+    color: $text;
 }
 
 .events-pending-spinner {

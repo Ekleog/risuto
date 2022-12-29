@@ -173,7 +173,7 @@ pub fn main_view(p: &MainViewProps) -> Html {
 
             // Top float-above bar corner
             <div class="float-above-container">
-                <ui::SearchBar />
+                <ui::SearchBar db={p.db.clone()} />
                 <ui::EventSubmissionSpinner events_pending_submission={p.events_pending_submission.clone()} />
                 <ui::SettingsMenu on_logout={p.on_logout.clone()} />
             </div>
