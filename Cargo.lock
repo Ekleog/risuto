@@ -2017,13 +2017,22 @@ dependencies = [
  "anyhow",
  "async-trait",
  "chrono",
+ "serde",
+ "uuid",
+]
+
+[[package]]
+name = "risuto-client"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
  "lazy_static",
  "pest",
  "pest_derive",
- "serde",
+ "risuto-api",
  "tantivy",
  "tracing",
- "uuid",
 ]
 
 [[package]]
@@ -2062,7 +2071,7 @@ dependencies = [
  "reqwest",
  "reqwest-middleware",
  "reqwest-retry",
- "risuto-api",
+ "risuto-client",
  "serde",
  "serde_json",
  "sortable-js",

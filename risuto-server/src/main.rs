@@ -11,13 +11,14 @@ use axum::{
 };
 use futures::{channel::mpsc, select, SinkExt, StreamExt};
 use risuto_api::{
-    AuthInfo, AuthToken, FeedMessage, NewSession, Tag, TagId, Task, TaskId, User, UserId, Uuid,
+    AuthInfo, AuthToken, Event, FeedMessage, NewSession, Tag, Task, User, UserId, Uuid,
 };
 use std::{collections::HashMap, net::SocketAddr, sync::Arc};
 use tokio::sync::RwLock;
 use tower_http::trace::TraceLayer;
 
 mod db;
+mod query;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -162,7 +163,7 @@ async fn whoami(Auth(user): Auth) -> Json<UserId> {
 async fn fetch_users(
     Auth(user): Auth,
     Extension(db): Extension<sqlx::PgPool>,
-) -> Result<Json<HashMap<UserId, User>>, Error> {
+) -> Result<Json<Vec<User>>, Error> {
     let mut conn = db.acquire().await.context("acquiring db connection")?;
     Ok(Json(db::fetch_users(&mut conn).await.with_context(
         || format!("fetching user list for {:?}", user),
@@ -172,7 +173,7 @@ async fn fetch_users(
 async fn fetch_tags(
     Auth(user): Auth,
     Extension(db): Extension<sqlx::PgPool>,
-) -> Result<Json<HashMap<TagId, (Tag, AuthInfo)>>, Error> {
+) -> Result<Json<Vec<(Tag, AuthInfo)>>, Error> {
     let mut conn = db.acquire().await.context("acquiring db connection")?;
     Ok(Json(
         db::fetch_tags_for_user(&mut conn, &user)
@@ -185,7 +186,7 @@ async fn search_tasks(
     Json(q): Json<risuto_api::Query>,
     Auth(user): Auth,
     Extension(db): Extension<sqlx::PgPool>,
-) -> Result<Json<HashMap<TaskId, Arc<Task>>>, Error> {
+) -> Result<Json<(Vec<Task>, Vec<Event>)>, Error> {
     let mut conn = db.acquire().await.context("acquiring db connection")?;
     Ok(Json(
         db::search_tasks_for_user(&mut conn, user, &q)
@@ -200,7 +201,7 @@ async fn submit_event(
     Extension(db): Extension<sqlx::PgPool>,
     Extension(feeds): Extension<UserFeeds>,
 ) -> Result<(), Error> {
-    if user != e.owner {
+    if user != e.owner_id {
         return Err(Error::PermissionDenied);
     }
     let mut conn = db.acquire().await.context("acquiring db connection")?;
@@ -320,7 +321,7 @@ impl UserFeeds {
 
     async fn relay_event(&self, mut db: db::PostgresDb<'_>, e: risuto_api::Event) {
         // TODO: magic numbers below should be at least explained
-        db::users_interested_by(&mut db.conn, &[e.task.0])
+        db::users_interested_by(&mut db.conn, &[e.task_id.0])
             .for_each_concurrent(Some(16), |u| {
                 let e = e.clone();
                 async move {

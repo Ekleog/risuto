@@ -1,8 +1,8 @@
 use std::collections::{BTreeMap, HashSet};
 
-use crate::{EventId, Time, UserId};
+use crate::api::{EventId, Time, UserId};
 
-#[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Comment {
     /// EventId of this comment's creation
     pub creation_id: EventId,

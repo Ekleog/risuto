@@ -1,5 +1,8 @@
 use crate::ui;
-use risuto_api::{DbDump, Event, TagId, Task};
+use risuto_client::{
+    api::{Event, TagId},
+    DbDump, Task,
+};
 use std::{collections::VecDeque, rc::Rc, sync::Arc};
 use yew::prelude::*;
 

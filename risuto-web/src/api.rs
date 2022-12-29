@@ -1,6 +1,11 @@
+use std::collections::HashMap;
+
 use chrono::Utc;
 use futures::{channel::oneshot, pin_mut, select, FutureExt, SinkExt, StreamExt};
-use risuto_api::*;
+use risuto_client::{
+    api::{self, Time, Uuid},
+    DbDump,
+};
 use ws_stream_wasm::{WsMessage, WsMeta};
 
 use crate::{ui, LoginInfo};
@@ -13,7 +18,7 @@ const DISCONNECT_INTERVAL_SECS: i64 = 20;
 // Space each reconnect attempt by ATTEMPT_SPACING
 const ATTEMPT_SPACING_SECS: i64 = 1;
 
-pub async fn auth(host: String, session: NewSession) -> anyhow::Result<AuthToken> {
+pub async fn auth(host: String, session: api::NewSession) -> anyhow::Result<api::AuthToken> {
     Ok(crate::CLIENT
         .post(format!("{}/api/auth", host))
         .json(&session)
@@ -23,7 +28,7 @@ pub async fn auth(host: String, session: NewSession) -> anyhow::Result<AuthToken
         .await?)
 }
 
-pub async fn unauth(host: String, token: AuthToken) {
+pub async fn unauth(host: String, token: api::AuthToken) {
     let resp = crate::CLIENT
         .post(format!("{}/api/unauth", host))
         .bearer_auth(token.0)
@@ -38,7 +43,7 @@ pub async fn unauth(host: String, token: AuthToken) {
     }
 }
 
-async fn fetch<R>(login: &LoginInfo, fetcher: &str, body: Option<&Query>) -> R
+async fn fetch<R>(login: &LoginInfo, fetcher: &str, body: Option<&api::Query>) -> R
 where
     R: for<'de> serde::Deserialize<'de>,
 {
@@ -59,12 +64,21 @@ where
 }
 
 async fn fetch_db_dump(login: &LoginInfo) -> DbDump {
-    DbDump {
+    let mut db = DbDump {
         owner: fetch(login, "whoami", None).await,
-        users: fetch(login, "fetch-users", None).await,
-        tags: fetch(login, "fetch-tags", None).await,
-        tasks: fetch(login, "search-tasks", Some(&Query::Archived(false))).await,
-    }
+        users: HashMap::new(),
+        tags: HashMap::new(),
+        tasks: HashMap::new(),
+    };
+
+    db.add_users(fetch(login, "fetch-users", None).await);
+    db.add_tags(fetch(login, "fetch-tags", None).await);
+    let (tasks, events): (Vec<api::Task>, Vec<api::Event>) =
+        fetch(login, "search-tasks", Some(&api::Query::Archived(false))).await;
+    db.add_tasks(tasks);
+    db.add_events_and_refresh_all(events);
+
+    db
 }
 
 async fn sleep_for(d: chrono::Duration) {
@@ -147,14 +161,14 @@ pub async fn start_event_feed(
                     next_ping += chrono::Duration::seconds(PING_INTERVAL_SECS);
                 }
                 msg = sock.next() => {
-                    let msg: FeedMessage = match msg {
+                    let msg: api::FeedMessage = match msg {
                         None => continue 'reconnect,
                         Some(WsMessage::Text(t)) => serde_json::from_str(&t),
                         Some(WsMessage::Binary(b)) => serde_json::from_slice(&b),
                     }.expect("TODO");
                     match msg {
-                        FeedMessage::Pong => last_pong = Utc::now(),
-                        FeedMessage::NewEvent(e) => feed_sender.send_message(ui::AppMsg::NewNetworkEvent(e)),
+                        api::FeedMessage::Pong => last_pong = Utc::now(),
+                        api::FeedMessage::NewEvent(e) => feed_sender.send_message(ui::AppMsg::NewNetworkEvent(e)),
                     }
                 }
             }
@@ -162,7 +176,7 @@ pub async fn start_event_feed(
     }
 }
 
-pub async fn send_event(login: &LoginInfo, event: Event) {
+pub async fn send_event(login: &LoginInfo, event: api::Event) {
     let res = crate::CLIENT
         .post(format!("{}/api/submit-event", login.host))
         .bearer_auth(login.token.0)

@@ -1,5 +1,5 @@
 use futures::FutureExt;
-use risuto_api::{AuthToken, NewSession};
+use risuto_client::api::{AuthToken, NewSession};
 use yew::prelude::*;
 
 use crate::{api, LoginInfo};

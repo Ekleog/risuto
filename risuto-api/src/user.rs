@@ -13,5 +13,6 @@ impl UserId {
 
 #[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct User {
+    pub id: UserId,
     pub name: String,
 }

@@ -1,6 +1,9 @@
 use futures::{channel::oneshot, executor::block_on};
 use gloo_storage::{LocalStorage, Storage};
-use risuto_api::{DbDump, Event, EventData, TagId, Task};
+use risuto_client::{
+    api::{Event, EventData, TagId},
+    DbDump, Task,
+};
 use std::{collections::VecDeque, rc::Rc, sync::Arc};
 use wasm_bindgen_futures::spawn_local;
 use yew::prelude::*;
@@ -57,7 +60,7 @@ struct TaskLists {
 impl App {
     fn locally_insert_new_event(&mut self, e: Event) {
         let db = Rc::make_mut(&mut self.db);
-        match db.tasks.get_mut(&e.task) {
+        match db.tasks.get_mut(&e.task_id) {
             None => tracing::warn!(evt=?e, "got event for task not in db"),
             Some(t) => {
                 let task = Arc::make_mut(t);

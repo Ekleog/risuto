@@ -10,9 +10,9 @@ pub struct EventId(pub Uuid);
 #[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct Event {
     pub id: EventId,
-    pub owner: UserId,
+    pub owner_id: UserId,
     pub date: Time,
-    pub task: TaskId,
+    pub task_id: TaskId,
 
     pub data: EventData,
 }
@@ -45,17 +45,17 @@ pub enum EventData {
 }
 
 impl Event {
-    pub fn now(owner: UserId, task: TaskId, data: EventData) -> Event {
+    pub fn now(owner_id: UserId, task_id: TaskId, data: EventData) -> Event {
         Event {
             id: EventId(Uuid::new_v4()),
-            owner,
+            owner_id,
             date: Utc::now(),
-            task,
+            task_id,
             data,
         }
     }
 
-    /// Takes AuthInfo as the authorization status for the user for self.task
+    /// Takes AuthInfo as the authorization status for the user for self.task_id
     pub async fn is_authorized<D: Db>(&self, db: &mut D) -> anyhow::Result<bool> {
         macro_rules! auth {
             ($t:expr) => {{
@@ -79,31 +79,31 @@ impl Event {
             }};
         }
         Ok(match self.data {
-            EventData::SetTitle { .. } => auth!(self.task).can_edit,
+            EventData::SetTitle { .. } => auth!(self.task_id).can_edit,
             EventData::SetDone { .. }
             | EventData::SetArchived { .. }
             | EventData::BlockedUntil { .. }
-            | EventData::ScheduleFor { .. } => auth!(self.task).can_triage,
+            | EventData::ScheduleFor { .. } => auth!(self.task_id).can_triage,
             EventData::AddTag { tag, .. } => {
-                let auth = auth!(self.task);
+                let auth = auth!(self.task_id);
                 auth.can_relabel_to_any
                     || (auth.can_triage
                         && db
-                            .list_tags_for(self.task)
+                            .list_tags_for(self.task_id)
                             .await
-                            .with_context(|| format!("listing tags for task {:?}", self.task))?
+                            .with_context(|| format!("listing tags for task {:?}", self.task_id))?
                             .contains(&tag))
             }
-            EventData::RmTag { .. } => auth!(self.task).can_relabel_to_any,
+            EventData::RmTag { .. } => auth!(self.task_id).can_relabel_to_any,
             EventData::AddComment { parent_id, .. } => {
                 if let Some(parent_id) = parent_id {
                     check_parent_event!(parent_id);
                 }
-                auth!(self.task).can_comment
+                auth!(self.task_id).can_comment
             }
             EventData::EditComment { comment_id, .. } => {
                 let (comm_owner, _, comm_task) = check_parent_event!(comment_id);
-                let is_comment_owner = self.owner == comm_owner;
+                let is_comment_owner = self.owner_id == comm_owner;
                 let is_first_comment = db
                     .is_first_comment(comm_task, comment_id)
                     .await

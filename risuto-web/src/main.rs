@@ -1,7 +1,7 @@
 #![feature(panic_info_message)]
 
 use gloo_storage::{LocalStorage, Storage};
-use risuto_api::*;
+use risuto_client::api::AuthToken;
 use wasm_bindgen_futures::spawn_local;
 use yew::prelude::*;
 

@@ -1,4 +1,4 @@
-use crate::{DbDump, Query};
+use crate::{api::Query, DbDump};
 
 use pest::iterators::Pairs;
 use pest::pratt_parser::PrattParser;

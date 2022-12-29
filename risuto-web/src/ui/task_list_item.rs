@@ -1,7 +1,10 @@
 use std::{rc::Rc, str::FromStr, sync::Arc};
 
 use chrono::{Datelike, Timelike};
-use risuto_api::{DbDump, Event, EventData, Query, TagId, Task, Time};
+use risuto_client::{
+    api::{Event, EventData, Query, TagId, Time},
+    DbDump, Task,
+};
 use wasm_bindgen::prelude::*;
 use yew::prelude::*;
 
@@ -79,7 +82,7 @@ fn title_div(p: &TitleDivProps) -> Html {
                 .expect("validated while div_ref is not attached to an html element");
             let text = div.text_content().expect("div_ref has no text_content");
             let evts = parse_new_title(&db, text, &task);
-            let changed_title = evts.iter().any(|e| matches!(e, Event { task: t, data: EventData::SetTitle(_), .. } if t == &task.id));
+            let changed_title = evts.iter().any(|e| matches!(e, Event { task_id, data: EventData::SetTitle(_), .. } if task_id == &task.id));
             for e in evts {
                 on_event.emit(e);
             }
@@ -314,7 +317,7 @@ fn button_blocked_until(p: &TaskListItemProps) -> Html {
     let input_ref = use_node_ref();
     let db = p.db.clone();
     let current_tag = p.current_tag.clone();
-    let task = p.task.clone(); // TODO: split risuto-api into api+api-helpers so not all changes make a server-rebuild
+    let task = p.task.clone();
     let on_event = p.on_event.clone();
     timeset_button(
         input_ref,

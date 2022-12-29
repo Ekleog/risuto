@@ -3,17 +3,12 @@ use axum::async_trait;
 use chrono::Utc;
 use futures::{Future, Stream, StreamExt, TryStreamExt};
 use risuto_api::{
-    AuthInfo, AuthToken, Event, EventData, EventId, NewSession, Query, QueryBind, SqlQuery, Tag,
-    TagId, Task, TaskId, Time, User, UserId, Uuid,
+    AuthInfo, AuthToken, Event, EventData, EventId, NewSession, Query, Tag, TagId, Task, TaskId,
+    Time, User, UserId, Uuid,
 };
-use sqlx::Row;
-use std::{
-    collections::{BTreeMap, HashMap, HashSet},
-    pin::Pin,
-    sync::Arc,
-};
+use std::pin::Pin;
 
-use crate::Error;
+use crate::{query, Error};
 
 pub struct PostgresDb<'a> {
     pub conn: &'a mut sqlx::PgConnection,
@@ -33,6 +28,37 @@ enum DbType {
     AddComment,
     EditComment,
     SetEventRead,
+}
+
+#[derive(sqlx::FromRow)]
+struct DbTask {
+    id: Uuid,
+    owner_id: Uuid,
+    date: chrono::NaiveDateTime,
+
+    initial_title: String,
+}
+
+impl From<Task> for DbTask {
+    fn from(t: Task) -> DbTask {
+        DbTask {
+            id: t.id.0,
+            owner_id: t.owner_id.0,
+            date: t.date.naive_utc(),
+            initial_title: t.initial_title,
+        }
+    }
+}
+
+impl From<DbTask> for Task {
+    fn from(t: DbTask) -> Task {
+        Task {
+            id: TaskId(t.id),
+            owner_id: UserId(t.owner_id),
+            date: t.date.and_local_timezone(chrono::Utc).unwrap(),
+            initial_title: t.initial_title,
+        }
+    }
 }
 
 #[derive(sqlx::FromRow)]
@@ -86,9 +112,9 @@ impl From<Event> for DbEvent {
     fn from(e: Event) -> DbEvent {
         let res = DbEvent {
             id: e.id.0,
-            owner_id: e.owner.0,
+            owner_id: e.owner_id.0,
             date: e.date.naive_utc(),
-            task_id: e.task.0,
+            task_id: e.task_id.0,
             d_type: DbType::SetTitle, // will be overwritten below
             d_text: None,
             d_bool: None,
@@ -122,6 +148,59 @@ impl From<Event> for DbEvent {
                 .d_type(DbType::SetEventRead)
                 .d_bool(now_read)
                 .d_parent_id(Some(event_id)),
+        }
+    }
+}
+
+impl From<DbEvent> for Event {
+    fn from(e: DbEvent) -> Event {
+        Event {
+            id: EventId(e.id),
+            owner_id: UserId(e.owner_id),
+            date: e.date.and_local_timezone(chrono::Utc).unwrap(),
+            task_id: TaskId(e.task_id),
+            data: match e.d_type {
+                DbType::SetTitle => {
+                    EventData::SetTitle(e.d_text.expect("set_title event without title"))
+                }
+                DbType::SetDone => {
+                    EventData::SetDone(e.d_bool.expect("set_done event without new_val_bool"))
+                }
+                DbType::SetArchived => EventData::SetArchived(
+                    e.d_bool.expect("set_archived event without new_val_bool"),
+                ),
+                DbType::BlockedUntil => EventData::BlockedUntil(
+                    e.d_time.map(|t| t.and_local_timezone(chrono::Utc).unwrap()),
+                ),
+                DbType::ScheduleFor => EventData::ScheduleFor(
+                    e.d_time.map(|t| t.and_local_timezone(chrono::Utc).unwrap()),
+                ),
+                DbType::AddTag => EventData::AddTag {
+                    tag: TagId(e.d_tag_id.expect("add_tag event without tag_id")),
+                    prio: e.d_int.expect("add_tag event without new_val_int"),
+                    backlog: e.d_bool.expect("add_tag event without new_val_bool"),
+                },
+                DbType::RemoveTag => {
+                    EventData::RmTag(TagId(e.d_tag_id.expect("remove_tag event without tag_id")))
+                }
+                DbType::AddComment => EventData::AddComment {
+                    text: e.d_text.expect("add_comment event without text"),
+                    parent_id: e.d_parent_id.map(EventId),
+                },
+                DbType::EditComment => EventData::EditComment {
+                    text: e.d_text.expect("edit_comment event without text"),
+                    comment_id: EventId(
+                        e.d_parent_id.expect("edit_comment event without parent_id"),
+                    ),
+                },
+                DbType::SetEventRead => EventData::SetEventRead {
+                    event_id: EventId(
+                        e.d_parent_id
+                            .expect("set_event_read event without parent_id"),
+                    ),
+                    now_read: e.d_bool.expect("set_event_read event without new_val_bool"),
+                },
+            },
         }
     }
 }
@@ -336,11 +415,14 @@ where
     res
 }
 
-pub async fn fetch_users(conn: &mut sqlx::PgConnection) -> anyhow::Result<HashMap<UserId, User>> {
+pub async fn fetch_users(conn: &mut sqlx::PgConnection) -> anyhow::Result<Vec<User>> {
     Ok(sqlx::query!("SELECT id, name FROM users")
         .fetch(conn)
-        .map_ok(|u| (UserId(u.id), User { name: u.name }))
-        .try_collect::<HashMap<UserId, User>>()
+        .map_ok(|u| User {
+            id: UserId(u.id),
+            name: u.name,
+        })
+        .try_collect()
         .await
         .context("querying users table")?)
 }
@@ -348,7 +430,7 @@ pub async fn fetch_users(conn: &mut sqlx::PgConnection) -> anyhow::Result<HashMa
 pub async fn fetch_tags_for_user(
     conn: &mut sqlx::PgConnection,
     user: &UserId,
-) -> anyhow::Result<HashMap<TagId, (Tag, AuthInfo)>> {
+) -> anyhow::Result<Vec<(Tag, AuthInfo)>> {
     Ok(sqlx::query!(
         r#"
             SELECT
@@ -373,28 +455,26 @@ pub async fn fetch_tags_for_user(
     .fetch(conn)
     .map_ok(|t| {
         (
-            TagId(t.id),
-            (
-                Tag {
-                    owner: UserId(t.owner_id),
-                    name: if t.owner_id == user.0 {
-                        t.name
-                    } else {
-                        format!("{}:{}", t.owner_name, t.name)
-                    },
-                    archived: t.archived,
+            Tag {
+                id: TagId(t.id),
+                owner: UserId(t.owner_id),
+                name: if t.owner_id == user.0 {
+                    t.name
+                } else {
+                    format!("{}:{}", t.owner_name, t.name)
                 },
-                AuthInfo {
-                    can_read: true,
-                    can_edit: t.can_edit,
-                    can_triage: t.can_triage,
-                    can_relabel_to_any: t.can_relabel_to_any,
-                    can_comment: t.can_comment,
-                },
-            ),
+                archived: t.archived,
+            },
+            AuthInfo {
+                can_read: true,
+                can_edit: t.can_edit,
+                can_triage: t.can_triage,
+                can_relabel_to_any: t.can_relabel_to_any,
+                can_comment: t.can_comment,
+            },
         )
     })
-    .try_collect::<HashMap<TagId, (Tag, AuthInfo)>>()
+    .try_collect()
     .await
     .context("querying tags table")?)
 }
@@ -403,11 +483,11 @@ pub async fn search_tasks_for_user(
     conn: &mut sqlx::PgConnection,
     owner: UserId,
     query: &Query,
-) -> anyhow::Result<HashMap<TaskId, Arc<Task>>> {
-    let SqlQuery {
+) -> anyhow::Result<(Vec<Task>, Vec<Event>)> {
+    let query::Sql {
         where_clause,
         binds,
-    } = query.to_postgres(2);
+    } = query::to_postgres(&query, 2);
     with_tmp_tasks_table(&mut *conn, |conn| {
         Box::pin(async move {
             let query = format!(
@@ -432,9 +512,9 @@ pub async fn search_tasks_for_user(
             let mut q = sqlx::query(&query).bind(owner.0);
             for b in binds {
                 match b {
-                    QueryBind::Bool(b) => q = q.bind(b),
-                    QueryBind::Uuid(u) => q = q.bind(u),
-                    QueryBind::String(s) => q = q.bind(s),
+                    query::Bind::Bool(b) => q = q.bind(b),
+                    query::Bind::Uuid(u) => q = q.bind(u),
+                    query::Bind::String(s) => q = q.bind(s),
                 };
             }
             q.execute(&mut *conn)
@@ -449,9 +529,8 @@ pub async fn search_tasks_for_user(
 
 async fn fetch_tasks_from_tmp_tasks_table(
     conn: &mut sqlx::PgConnection,
-) -> anyhow::Result<HashMap<TaskId, Arc<Task>>> {
-    let mut tasks = HashMap::new();
-    let mut tasks_query = sqlx::query(
+) -> anyhow::Result<(Vec<Task>, Vec<Event>)> {
+    let tasks = sqlx::query_as::<_, DbTask>(
         "
             SELECT t.id, t.owner_id, t.date, t.initial_title
                 FROM tmp_tasks interesting_tasks
@@ -459,50 +538,13 @@ async fn fetch_tasks_from_tmp_tasks_table(
                 ON t.id = interesting_tasks.id
         ",
     )
-    .fetch(&mut *conn);
-    while let Some(t) = tasks_query
-        .try_next()
-        .await
-        .context("querying tasks table")?
-    {
-        let id = TaskId(t.try_get("id").context("retrieving the id field")?);
-        tasks.insert(
-            id,
-            Task {
-                id,
-                owner: UserId(
-                    t.try_get("owner_id")
-                        .context("retrieving the owner_id field")?,
-                ),
-                date: t
-                    .try_get::<chrono::NaiveDateTime, _>("date")
-                    .context("retrieving the date field")?
-                    .and_local_timezone(Utc)
-                    .unwrap(),
+    .fetch(&mut *conn)
+    .map_ok(Task::from)
+    .try_collect()
+    .await
+    .context("fetching relevant tasks")?;
 
-                initial_title: t
-                    .try_get("initial_title")
-                    .context("retrieving the initial_title field")?,
-                current_title: String::new(),
-
-                is_done: false,
-                is_archived: false,
-                blocked_until: None,
-                scheduled_for: None,
-                current_tags: HashMap::new(),
-
-                deps_before_self: HashSet::new(),
-                deps_after_self: HashSet::new(),
-
-                current_comments: BTreeMap::new(),
-
-                events: BTreeMap::new(),
-            },
-        );
-    }
-    std::mem::drop(tasks_query); // free conn borrow
-
-    let mut events_query = sqlx::query_as::<_, DbEvent>(
+    let events = sqlx::query_as::<_, DbEvent>(
         "
             SELECT e.*
             FROM tmp_tasks t
@@ -510,71 +552,13 @@ async fn fetch_tasks_from_tmp_tasks_table(
             ON t.id = e.task_id
         ",
     )
-    .fetch(&mut *conn);
-    while let Some(e) = events_query
-        .try_next()
-        .await
-        .context("querying events table")?
-    {
-        if let Some(t) = tasks.get_mut(&TaskId(e.task_id)) {
-            t.add_event(Event {
-                id: EventId(e.id),
-                owner: UserId(e.owner_id),
-                date: e.date.and_local_timezone(chrono::Utc).unwrap(),
-                task: TaskId(e.task_id),
-                data: match e.d_type {
-                    DbType::SetTitle => {
-                        EventData::SetTitle(e.d_text.expect("set_title event without title"))
-                    }
-                    DbType::SetDone => {
-                        EventData::SetDone(e.d_bool.expect("set_done event without new_val_bool"))
-                    }
-                    DbType::SetArchived => EventData::SetArchived(
-                        e.d_bool.expect("set_archived event without new_val_bool"),
-                    ),
-                    DbType::BlockedUntil => EventData::BlockedUntil(
-                        e.d_time.map(|t| t.and_local_timezone(chrono::Utc).unwrap()),
-                    ),
-                    DbType::ScheduleFor => EventData::ScheduleFor(
-                        e.d_time.map(|t| t.and_local_timezone(chrono::Utc).unwrap()),
-                    ),
-                    DbType::AddTag => EventData::AddTag {
-                        tag: TagId(e.d_tag_id.expect("add_tag event without tag_id")),
-                        prio: e.d_int.expect("add_tag event without new_val_int"),
-                        backlog: e.d_bool.expect("add_tag event without new_val_bool"),
-                    },
-                    DbType::RemoveTag => EventData::RmTag(TagId(
-                        e.d_tag_id.expect("remove_tag event without tag_id"),
-                    )),
-                    DbType::AddComment => EventData::AddComment {
-                        text: e.d_text.expect("add_comment event without text"),
-                        parent_id: e.d_parent_id.map(EventId),
-                    },
-                    DbType::EditComment => EventData::EditComment {
-                        text: e.d_text.expect("edit_comment event without text"),
-                        comment_id: EventId(
-                            e.d_parent_id.expect("edit_comment event without parent_id"),
-                        ),
-                    },
-                    DbType::SetEventRead => EventData::SetEventRead {
-                        event_id: EventId(
-                            e.d_parent_id
-                                .expect("set_event_read event without parent_id"),
-                        ),
-                        now_read: e.d_bool.expect("set_event_read event without new_val_bool"),
-                    },
-                },
-            })
-        }
-    }
+    .fetch(&mut *conn)
+    .map_ok(Event::from)
+    .try_collect()
+    .await
+    .context("fetching relevant events")?;
 
-    Ok(tasks
-        .into_iter()
-        .map(|(id, mut t)| {
-            t.refresh_metadata();
-            (id, Arc::new(t))
-        })
-        .collect())
+    Ok((tasks, events))
 }
 
 pub async fn submit_event(conn: &mut sqlx::PgConnection, e: Event) -> Result<(), Error> {
@@ -583,7 +567,7 @@ pub async fn submit_event(conn: &mut sqlx::PgConnection, e: Event) -> Result<(),
     // Check authorization
     let mut db = PostgresDb {
         conn,
-        user: e.owner,
+        user: e.owner_id,
     };
     let auth = e
         .is_authorized(&mut db)

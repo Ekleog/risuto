@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "risuto-api",
+    "risuto-client",
     "risuto-server",
     "risuto-web",
     "tests",

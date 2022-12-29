@@ -1,4 +1,4 @@
-use risuto_api::{AuthInfo, Tag, TagId, UserId};
+use risuto_client::api::{AuthInfo, Tag, TagId, UserId};
 use std::collections::HashMap;
 use yew::prelude::*;
 

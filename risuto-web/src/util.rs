@@ -1,6 +1,9 @@
 use std::sync::Arc;
 
-use risuto_api::{AuthInfo, Event, EventData, Tag, TagId, Task, TaskId, UserId};
+use risuto_client::{
+    api::{AuthInfo, Event, EventData, Tag, TagId, TaskId, UserId},
+    Task,
+};
 
 use crate::TODAY_TAG;
 

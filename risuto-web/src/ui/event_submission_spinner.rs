@@ -1,4 +1,4 @@
-use risuto_api::Event;
+use risuto_client::api::Event;
 use std::collections::VecDeque;
 use yew::prelude::*;
 
