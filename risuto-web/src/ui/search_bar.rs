@@ -11,7 +11,7 @@ pub struct SearchBarProps {
 #[function_component(SearchBar)]
 pub fn search_bar(p: &SearchBarProps) -> Html {
     // whether the search bar is shown at all
-    let bar_shown = use_state(|| true); // TODO: fix to false
+    let bar_shown = use_state(|| false);
     let toggle_shown = {
         let bar_shown = bar_shown.clone();
         Callback::from(move |_| bar_shown.set(!*bar_shown))
