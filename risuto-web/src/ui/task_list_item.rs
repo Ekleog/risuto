@@ -218,13 +218,13 @@ fn timeset_button(
     });
     let current_date = current_date.map(|t| t.with_timezone(&util::local_tz()));
     let timeset_label = current_date
-        .map(|d| {
+        .and_then(|d| {
             let remaining = d.signed_duration_since(chrono::Utc::now());
             match remaining {
-                r if r > chrono::Duration::days(365) => format!("{}", d.year()),
-                r if r > chrono::Duration::days(1) => format!("{}/{}", d.month(), d.day()),
-                r if r > chrono::Duration::seconds(0) => format!("{}h{}", d.hour(), d.minute()),
-                _ => "past".to_string(),
+                r if r > chrono::Duration::days(365) => Some(format!("{}", d.year())),
+                r if r > chrono::Duration::days(1) => Some(format!("{}/{}", d.month(), d.day())),
+                r if r > chrono::Duration::seconds(0) => Some(format!("{}h{}", d.hour(), d.minute())),
+                _ => None, // task blocked or scheduled for the past is just not blocked/scheduled
             }
         })
         .map(|l| {
