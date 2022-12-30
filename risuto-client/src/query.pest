@@ -21,5 +21,5 @@ bool    = _{ true | false }
   true  = { ^"true" }
   false = { ^"false" }
 tagname = { (ASCII_ALPHANUMERIC | ":")+ }
-timecmp = { ":" | ">" | "<" }
+timecmp = { ":" | ">" | "<" | ">=" | "<=" }
 date    = { ASCII_DIGIT{4} ~ "-" ~ ASCII_DIGIT{2} ~ "-" ~ ASCII_DIGIT{2} }

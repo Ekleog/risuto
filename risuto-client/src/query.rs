@@ -251,8 +251,10 @@ fn parse_date_cmp(
     };
     match cmp.as_str() {
         // TODO: for safety, see (currently open) https://github.com/chronotope/chrono/pull/927
-        ">" => date_after(early_day(&date)),
-        "<" => date_before(early_day(&next_date)),
+        ">" => date_after(early_day(&next_date)),
+        "<" => date_before(early_day(&date)),
+        ">=" => date_after(early_day(&date)),
+        "<=" => date_before(early_day(&next_date)),
         ":" => Query::All(vec![
             date_after(early_day(&date)),
             date_before(early_day(&next_date)),
