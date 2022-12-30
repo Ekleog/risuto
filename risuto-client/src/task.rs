@@ -90,7 +90,11 @@ impl Task {
                     EventData::SetDone(now_done) => self.is_done = *now_done,
                     EventData::SetArchived(now_archived) => self.is_archived = *now_archived,
                     EventData::BlockedUntil(time) => self.blocked_until = *time,
-                    EventData::ScheduleFor(time) => self.scheduled_for = *time,
+                    EventData::ScheduleFor(time) => {
+                        if e.owner_id == *for_user {
+                            self.scheduled_for = *time;
+                        }
+                    }
                     EventData::SetOrder { order, prio } => {
                         if e.owner_id == *for_user {
                             self.orders.insert(order.clone(), *prio);

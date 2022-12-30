@@ -101,9 +101,10 @@ impl Event {
             EventData::SetTitle { .. } => auth!(self.task_id).can_edit,
             EventData::SetDone { .. }
             | EventData::SetArchived { .. }
-            | EventData::BlockedUntil { .. }
-            | EventData::ScheduleFor { .. } => auth!(self.task_id).can_triage,
-            EventData::SetOrder { .. } => auth!(self.task_id).can_read,
+            | EventData::BlockedUntil { .. } => auth!(self.task_id).can_triage,
+            EventData::ScheduleFor { .. } | EventData::SetOrder { .. } => {
+                auth!(self.task_id).can_read
+            }
             EventData::AddTag { tag, .. } => {
                 let auth = auth!(self.task_id);
                 auth.can_relabel_to_any

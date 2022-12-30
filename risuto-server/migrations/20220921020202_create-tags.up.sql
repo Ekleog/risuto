@@ -16,16 +16,11 @@ CREATE TABLE perms (
     tag_id UUID NOT NULL,
     user_id UUID NOT NULL,
 
-    -- can always read tasks whenever a row exists here
+    -- see risuto-api/src/event.rs for documentation of what these fields exactly enable
     can_edit BOOLEAN NOT NULL,
-        -- SetTitle, EditComment for first comment
     can_triage BOOLEAN NOT NULL,
-        -- SetDone, SetArchived, BlockedUntil/ScheduleFor
-        -- AddTag for tags that are already on the task (setting prio/backlog)
     can_relabel_to_any BOOLEAN NOT NULL,
-        -- Add/Rm-Tag for all tags (beware privilege escalation)
     can_comment BOOLEAN NOT NULL,
-        -- AddComment to a date after the first comment
 
     PRIMARY KEY (tag_id, user_id),
     FOREIGN KEY (tag_id) REFERENCES tags (id)

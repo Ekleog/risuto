@@ -319,10 +319,6 @@ fn button_schedule_for(p: &TaskListItemProps) -> Html {
             // First reschedule, then remove tag
             // Otherwise, if the tag was the one giving us the perms to edit the event, it'll crash
             on_event.emit(Event::now(db.owner, task.id, EventData::ScheduleFor(t)));
-            let today_id = db.tag_id(TODAY_TAG).expect("no today tag");
-            if task.current_tags.contains_key(&today_id) {
-                on_event.emit(Event::now(db.owner, task.id, EventData::RmTag(today_id)));
-            }
         }),
     )
 }
