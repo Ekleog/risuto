@@ -1,7 +1,7 @@
 CREATE VIEW v_tasks_archived AS
 SELECT DISTINCT ON (e.task_id)
     e.task_id AS task_id,
-    e.d_bool AS archived
+    e.d_bool AS archived -- true on archived, false or non-existent on !archived
 FROM events e
 WHERE e.d_type = 'set_archived'
 ORDER BY e.task_id, e.date DESC;
@@ -9,7 +9,7 @@ ORDER BY e.task_id, e.date DESC;
 CREATE VIEW v_tasks_done AS
 SELECT DISTINCT ON (e.task_id)
     e.task_id AS task_id,
-    e.d_bool AS done
+    e.d_bool AS done -- true on done, false or non-existent on !done
 FROM events e
 WHERE e.d_type = 'set_done'
 ORDER BY e.task_id, e.date DESC;
@@ -56,6 +56,13 @@ SELECT DISTINCT ON (task_id, tag_id)
 FROM events e
 WHERE (e.d_type = 'add_tag' OR e.d_type = 'remove_tag')
 ORDER BY task_id, tag_id, e.date DESC;
+
+CREATE VIEW v_tasks_is_tagged AS
+SELECT
+    task_id,
+    BOOL_OR(COALESCE(is_in, false)) AS has_tag -- true on has_tag, false or non-existent on !has_tag
+FROM v_tasks_tags vtt
+GROUP BY task_id;
 
 CREATE VIEW v_tags_users AS
 SELECT

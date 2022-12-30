@@ -503,6 +503,8 @@ pub async fn search_tasks_for_user(
                         ON vtd.task_id = t.id
                     LEFT JOIN v_tasks_tags vtt
                         ON vtt.task_id = t.id
+                    LEFT JOIN v_tasks_is_tagged vtit
+                        ON vtit.task_id = t.id
                     LEFT JOIN v_tasks_comments vtc
                         ON vtc.task_id = t.id
                     WHERE vtu.user_id = $1

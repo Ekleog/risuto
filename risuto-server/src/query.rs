@@ -22,8 +22,8 @@ impl Sql {
     }
 }
 
-/// Assumes tables vta (v_tasks_archived), vtd(v_tasks_done), vtt (v_tasks_tags)
-/// and vtx (v_tasks_text) are available
+/// Assumes tables vta (v_tasks_archived), vtd(v_tasks_done), vtt (v_tasks_tags),
+/// vtit (v_tasks_is_tagged) and vtx (v_tasks_text) are available
 pub fn to_postgres(q: &Query, first_bind_idx: usize) -> Sql {
     let mut res = Default::default();
     add_to_postgres(q, first_bind_idx, &mut res);
@@ -52,14 +52,19 @@ fn add_to_postgres(q: &Query, first_bind_idx: usize, res: &mut Sql) {
             res.where_clause.push_str("NOT ");
             add_to_postgres(q, first_bind_idx, &mut *res);
         }
-        Query::Archived(b) => {
-            let idx = res.add_bind(first_bind_idx, Bind::Bool(*b));
-            res.where_clause
-                .push_str(&format!("(vta.archived = ${idx})"));
+        Query::Archived(true) => {
+            res.where_clause.push_str("vta.archived = true");
         }
-        Query::Done(b) => {
-            let idx = res.add_bind(first_bind_idx, Bind::Bool(*b));
-            res.where_clause.push_str(&format!("(vtd.done = ${idx})"));
+        Query::Archived(false) => {
+            res.where_clause
+                .push_str("(vta.archived = false OR vta.archived IS NULL)");
+        }
+        Query::Done(true) => {
+            res.where_clause.push_str("(vtd.done = true)");
+        }
+        Query::Done(false) => {
+            res.where_clause
+                .push_str("(vtd.done = false OR vtd.done IS NULL)");
         }
         Query::Tag { tag, backlog } => {
             let idx = res.add_bind(first_bind_idx, Bind::Uuid(tag.0));
@@ -71,6 +76,13 @@ fn add_to_postgres(q: &Query, first_bind_idx: usize, res: &mut Sql) {
                     .push_str(&format!(" AND vtt.backlog = ${idx}"));
             }
             res.where_clause.push_str(")");
+        }
+        Query::Untagged(true) => {
+            res.where_clause.push_str("(vtit.has_tag = true)");
+        }
+        Query::Untagged(false) => {
+            res.where_clause
+                .push_str("(vtit.has_tag = false OR vtit.has_tag IS NULL)");
         }
         Query::Phrase(t) => {
             let idx = res.add_bind(first_bind_idx, Bind::String(t.clone()));

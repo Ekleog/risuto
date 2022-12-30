@@ -47,6 +47,11 @@ pub fn parse_search(db: &DbDump, pairs: Pairs<Rule>) -> Query {
                 Some(Rule::r#false) => false,
                 r => unreachable!("Rule::done unexpected atom: {:?}", r),
             }),
+            Rule::untagged => Query::Untagged(match p.into_inner().next().map(|p| p.as_rule()) {
+                Some(Rule::r#true) => true,
+                Some(Rule::r#false) => false,
+                r => unreachable!("Rule::untagged unexpected atom: {:?}", r),
+            }),
             Rule::tag => {
                 let tagname = p.into_inner().next();
                 let tagname = match tagname.as_ref().map(|p| p.as_rule()) {

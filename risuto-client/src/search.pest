@@ -11,6 +11,7 @@ everything     =  _{ SOI ~ search ~ EOI }
       archived =  ${ "archived:" ~ bool }
       done     =  ${ "done:" ~ bool }
       tag      =  ${ "tag:" ~ tagname }
+      untagged =  ${ "untagged:" ~ bool }
       phrase   =  ${ "\"" ~ (!"\"" ~ !"\\" ~ ANY | "\\" ~ ANY)* ~ "\"" }
       word     =  ${ (!WHITESPACE ~ !"(" ~ !")" ~ ANY)+ }
 

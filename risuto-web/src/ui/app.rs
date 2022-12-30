@@ -76,7 +76,8 @@ impl App {
         let mut done = Vec::new();
         let mut backlog = Vec::new();
         let now = chrono::Utc::now().with_timezone(&util::local_tz());
-        let end_of_today = now + chrono::Duration::seconds(86400 - now.num_seconds_from_midnight() as i64);
+        let end_of_today =
+            now + chrono::Duration::seconds(86400 - now.num_seconds_from_midnight() as i64);
         for t in self.db.tasks.values() {
             if t.blocked_until.map(|t| t > end_of_today).unwrap_or(false) {
                 continue;

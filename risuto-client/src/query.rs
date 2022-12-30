@@ -39,6 +39,7 @@ fn has_fts(q: &Query) -> bool {
         Query::Archived(_) => false,
         Query::Done(_) => false,
         Query::Tag { .. } => false,
+        Query::Untagged(_) => false,
         Query::Phrase(_) => true,
     }
 }
@@ -57,6 +58,7 @@ fn matches_impl(q: &Query, task: &Task, tokenized: &Option<Vec<Vec<String>>>) ->
                 Some(b) => *b == info.backlog,
             },
         },
+        Query::Untagged(u) => task.current_tags.is_empty() == *u,
         Query::Phrase(p) => {
             let q = tokenize(p);
             if q.is_empty() {
@@ -204,6 +206,19 @@ mod tests {
             Query::tag(db.tag_id("bar").unwrap()),
         );
         // TODO: also test behavior for unknown tag
+    }
+
+    #[test]
+    fn primary_untagged() {
+        let db = example_db();
+        assert_eq!(
+            Query::from_search(&db, "untagged:true"),
+            Query::Untagged(true),
+        );
+        assert_eq!(
+            Query::from_search(&db, "untagged:false"),
+            Query::Untagged(false),
+        );
     }
 
     #[test]

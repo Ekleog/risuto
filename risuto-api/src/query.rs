@@ -8,7 +8,7 @@ pub enum Query {
     Archived(bool),
     Done(bool),
     Tag { tag: TagId, backlog: Option<bool> },
-    // TODO: be able to search for untagged tasks only
+    Untagged(bool),
     Phrase(String), // full-text search of one contiguous word vec
 }
 
