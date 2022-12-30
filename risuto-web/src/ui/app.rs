@@ -66,7 +66,7 @@ impl App {
             Some(t) => {
                 let task = Arc::make_mut(t);
                 task.add_event(e);
-                task.refresh_metadata();
+                task.refresh_metadata(&db.owner);
             }
         }
     }

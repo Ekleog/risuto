@@ -49,7 +49,7 @@ impl DbDump {
         }
         for t in self.tasks.values_mut() {
             let t = Arc::make_mut(t);
-            t.refresh_metadata();
+            t.refresh_metadata(&self.owner);
         }
     }
 

@@ -3,8 +3,8 @@ use axum::async_trait;
 use chrono::Utc;
 use futures::{Future, Stream, StreamExt, TryStreamExt};
 use risuto_api::{
-    AuthInfo, AuthToken, Event, EventData, EventId, NewSession, Query, Tag, TagId, Task, TaskId,
-    Time, User, UserId, Uuid,
+    AuthInfo, AuthToken, Event, EventData, EventId, NewSession, OrderId, Query, Tag, TagId, Task,
+    TaskId, Time, User, UserId, Uuid,
 };
 use std::pin::Pin;
 
@@ -23,6 +23,7 @@ enum DbType {
     SetArchived,
     BlockedUntil,
     ScheduleFor,
+    SetOrder,
     AddTag,
     RemoveTag,
     AddComment,
@@ -75,6 +76,7 @@ struct DbEvent {
     d_time: Option<chrono::NaiveDateTime>,
     d_tag_id: Option<Uuid>,
     d_parent_id: Option<Uuid>,
+    d_order_id: Option<Uuid>,
 }
 
 impl DbEvent {
@@ -106,6 +108,10 @@ impl DbEvent {
         self.d_parent_id = p.map(|p| p.0);
         self
     }
+    fn d_order_id(mut self, o: OrderId) -> DbEvent {
+        self.d_order_id = Some(o.0);
+        self
+    }
 }
 
 impl From<Event> for DbEvent {
@@ -122,6 +128,7 @@ impl From<Event> for DbEvent {
             d_tag_id: None,
             d_int: None,
             d_parent_id: None,
+            d_order_id: None,
         };
         use EventData::*;
         match e.data {
@@ -130,6 +137,7 @@ impl From<Event> for DbEvent {
             SetArchived(b) => res.d_type(DbType::SetArchived).d_bool(b),
             BlockedUntil(t) => res.d_type(DbType::BlockedUntil).d_time(t),
             ScheduleFor(t) => res.d_type(DbType::ScheduleFor).d_time(t),
+            SetOrder { order, prio } => res.d_order_id(order).d_int(prio),
             AddTag { tag, prio, backlog } => res
                 .d_type(DbType::AddTag)
                 .d_tag_id(tag)
@@ -175,6 +183,10 @@ impl From<DbEvent> for Event {
                 DbType::ScheduleFor => EventData::ScheduleFor(
                     e.d_time.map(|t| t.and_local_timezone(chrono::Utc).unwrap()),
                 ),
+                DbType::SetOrder => EventData::SetOrder {
+                    order: OrderId(e.d_order_id.expect("set_order event without order_id")),
+                    prio: e.d_int.expect("set_order event without prio"),
+                },
                 DbType::AddTag => EventData::AddTag {
                     tag: TagId(e.d_tag_id.expect("add_tag event without tag_id")),
                     prio: e.d_int.expect("add_tag event without new_val_int"),

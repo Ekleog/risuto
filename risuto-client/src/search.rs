@@ -1,7 +1,7 @@
 use std::{cmp::Reverse, sync::Arc};
 
 use crate::{
-    api::{Query, TagId},
+    api::{OrderId, Query, TagId},
     Task,
 };
 
@@ -10,10 +10,8 @@ pub struct Search {
     pub order: Order,
 }
 
-// TODO: pub struct OrderId(Uuid);
-
 pub enum Order {
-    // TODO: Custom(OrderId),
+    Custom(OrderId),
     Tag(TagId),
     CreationDate(OrderType),
     LastEventDate(OrderType),
@@ -30,6 +28,9 @@ impl Order {
     /// Panics if any task is not actually in this tag
     pub fn sort(&self, tasks: &mut [Arc<Task>]) {
         match self {
+            Order::Custom(o) => {
+                tasks.sort_unstable_by_key(|t| t.orders.get(o).copied().unwrap_or(0))
+            }
             Order::Tag(tag) => tasks.sort_unstable_by_key(|t| {
                 let tag_data = t
                     .current_tags

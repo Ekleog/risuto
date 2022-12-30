@@ -172,6 +172,7 @@ fn main() {
         let mut d_time = "NULL".to_string();
         let mut d_tag_id = "NULL".to_string();
         let mut d_parent_id = "NULL".to_string();
+        let mut d_order_id = "NULL".to_string();
         let mut mk_text = |rng: &mut StdRng, is_title| {
             d_text = format!(
                 "'{}'",
@@ -183,6 +184,7 @@ fn main() {
             )
         };
         let mut mk_bool = |rng: &mut StdRng| d_bool = if rng.gen() { "true" } else { "false" };
+        let mut mk_int = |rng: &mut StdRng| d_int = format!("{}", rng.gen::<i64>());
         let mut mk_time_maybe = |rng: &mut StdRng| {
             if rng.gen() {
                 d_time = format!("'{}'", gen_date(rng));
@@ -199,7 +201,8 @@ fn main() {
                 let failover = date.borrow().checked_add_signed(millis).unwrap();
                 *date.borrow_mut() = par_date.checked_add_signed(offset).unwrap_or(failover);
             };
-        let d_type = match rng.gen_range(0..10) {
+        let mut mk_order = |rng: &mut StdRng| d_order_id = format!("'{}'", gen_uuid(rng));
+        let d_type = match rng.gen_range(0..11) {
             0 => {
                 mk_text(&mut rng, true);
                 "set_title"
@@ -221,16 +224,21 @@ fn main() {
                 "schedule_for"
             }
             5 => {
-                mk_tag(&mut rng);
-                mk_bool(&mut rng);
-                d_int = format!("{}", rng.gen::<i64>());
-                "add_tag"
+                mk_int(&mut rng);
+                mk_order(&mut rng);
+                "set_order"
             }
             6 => {
                 mk_tag(&mut rng);
-                "remove_tag"
+                mk_bool(&mut rng);
+                mk_int(&mut rng);
+                "add_tag"
             }
             7 => {
+                mk_tag(&mut rng);
+                "remove_tag"
+            }
+            8 => {
                 mk_text(&mut rng, false);
                 if !comments.is_empty() && rng.gen() {
                     mk_parent(&mut rng, &comments);
@@ -238,7 +246,7 @@ fn main() {
                 comments.push((id.clone(), task_id.borrow().clone(), *date.borrow()));
                 "add_comment"
             }
-            8 => {
+            9 => {
                 if comments.is_empty() {
                     continue;
                 }
@@ -246,7 +254,7 @@ fn main() {
                 mk_parent(&mut rng, &comments);
                 "edit_comment"
             }
-            9 => {
+            10 => {
                 if comments.is_empty() {
                     continue;
                 }
@@ -258,7 +266,7 @@ fn main() {
         };
         let date = *date.borrow();
         let task_id = task_id.borrow().clone();
-        print!("    ('{id}', '{owner_id}', '{date}', '{task_id}', '{d_type}', {d_text}, {d_bool}, {d_int}, {d_time}, {d_tag_id}, {d_parent_id})");
+        print!("    ('{id}', '{owner_id}', '{date}', '{task_id}', '{d_type}', {d_text}, {d_bool}, {d_int}, {d_time}, {d_tag_id}, {d_parent_id}, {d_order_id})");
         generated += 1;
         if generated < NUM_EVENTS {
             println!(",");

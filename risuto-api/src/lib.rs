@@ -8,7 +8,7 @@ mod user;
 
 pub use auth::{AuthInfo, AuthToken, NewSession};
 pub use db::Db;
-pub use event::{Event, EventData, EventId};
+pub use event::{Event, EventData, EventId, OrderId};
 pub use query::Query;
 pub use tag::{Tag, TagId};
 pub use task::{Task, TaskId};

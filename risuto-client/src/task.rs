@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 
 use crate::{
-    api::{self, Event, EventData, TagId, TaskId, Time, UserId},
+    api::{self, Event, EventData, OrderId, TagId, TaskId, Time, UserId},
     Comment,
 };
 
@@ -28,6 +28,7 @@ pub struct Task {
     pub blocked_until: Option<Time>,
     pub scheduled_for: Option<Time>,
     pub current_tags: HashMap<TagId, TaskInTag>,
+    pub orders: HashMap<OrderId, i64>,
 
     /// List of comments in chronological order
     pub current_comments: BTreeMap<Time, Vec<Comment>>,
@@ -48,6 +49,7 @@ impl From<api::Task> for Task {
             blocked_until: None,
             scheduled_for: None,
             current_tags: HashMap::new(),
+            orders: HashMap::new(),
             current_comments: BTreeMap::new(),
             events: BTreeMap::new(),
         }
@@ -66,7 +68,7 @@ impl Task {
         }
     }
 
-    pub fn refresh_metadata(&mut self) {
+    pub fn refresh_metadata(&mut self, for_user: &UserId) {
         self.current_title = self.initial_title.clone();
         for evts in self.events.values() {
             if evts.len() > 1 {
@@ -82,6 +84,11 @@ impl Task {
                     EventData::SetArchived(now_archived) => self.is_archived = *now_archived,
                     EventData::BlockedUntil(time) => self.blocked_until = *time,
                     EventData::ScheduleFor(time) => self.scheduled_for = *time,
+                    EventData::SetOrder { order, prio } => {
+                        if e.owner_id == *for_user {
+                            self.orders.insert(order.clone(), *prio);
+                        }
+                    }
                     EventData::AddTag { tag, prio, backlog } => {
                         self.current_tags.insert(
                             *tag,

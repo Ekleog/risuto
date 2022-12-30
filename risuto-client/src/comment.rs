@@ -11,7 +11,8 @@ pub struct Comment {
     pub edits: BTreeMap<Time, Vec<String>>,
 
     /// Set of users who already read this comment
-    // TODO: should this be per-edit?
+    // TODO: this should be per-edit
+    // TODO: this should just be a bool flag, and handled in refresh_metadata's for_user
     pub read: HashSet<UserId>,
 
     /// Child comments

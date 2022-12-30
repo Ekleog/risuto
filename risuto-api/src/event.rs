@@ -1,8 +1,23 @@
 use anyhow::Context;
 use chrono::Utc;
-use uuid::Uuid;
+use uuid::{uuid, Uuid};
 
 use crate::{Db, TagId, TaskId, Time, UserId};
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq, serde::Deserialize, serde::Serialize)]
+pub struct OrderId(pub Uuid);
+
+impl OrderId {
+    pub fn today() -> OrderId {
+        // picked with a totally fair dice roll
+        OrderId(uuid!("70DA1aaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"))
+    }
+
+    pub fn untagged() -> OrderId {
+        // picked with a totally fair dice roll
+        OrderId(uuid!("07A66EDa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"))
+    }
+}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct EventId(pub Uuid);
@@ -24,6 +39,10 @@ pub enum EventData {
     SetArchived(bool),
     BlockedUntil(Option<Time>),
     ScheduleFor(Option<Time>),
+    SetOrder {
+        order: OrderId,
+        prio: i64,
+    },
     AddTag {
         tag: TagId,
         prio: i64,
@@ -84,6 +103,7 @@ impl Event {
             | EventData::SetArchived { .. }
             | EventData::BlockedUntil { .. }
             | EventData::ScheduleFor { .. } => auth!(self.task_id).can_triage,
+            EventData::SetOrder { .. } => auth!(self.task_id).can_read,
             EventData::AddTag { tag, .. } => {
                 let auth = auth!(self.task_id);
                 auth.can_relabel_to_any
