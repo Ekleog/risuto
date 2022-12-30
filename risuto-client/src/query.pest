@@ -12,6 +12,7 @@ everything      =  _{ SOI ~ search ~ EOI }
       done      =  ${ "done:" ~ bool }
       tag       =  ${ "tag:" ~ tagname }
       untagged  =  ${ "untagged:" ~ bool }
+      today     =  ${ "today:" ~ bool }
       scheduled =  ${ "scheduled" ~ timecmp ~ date }
       blocked   =  ${ "blocked" ~ timecmp ~ date }
       phrase    =  ${ "\"" ~ (!"\"" ~ !"\\" ~ ANY | "\\" ~ ANY)* ~ "\"" }

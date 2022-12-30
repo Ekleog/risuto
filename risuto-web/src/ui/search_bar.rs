@@ -32,7 +32,7 @@ pub fn search_bar(p: &SearchBarProps) -> Html {
             results.set(match search.len() {
                 0 => None,
                 _ => {
-                    let filter = Query::from_search(&db, util::local_tz(), search.trim());
+                    let filter = Query::from_search(&db, &util::local_tz(), search.trim());
                     tracing::debug!("searching with query {:?}", filter);
                     tracing::debug!("(parsed from {:?})", search.trim());
                     let search = Search {

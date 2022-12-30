@@ -6,12 +6,12 @@ use crate::{
 use pest::{iterators::Pairs, pratt_parser::PrattParser, Parser as PestParser};
 
 pub trait QueryExt {
-    fn from_search(db: &DbDump, tz: impl chrono::TimeZone, search: &str) -> Query;
+    fn from_search(db: &DbDump, tz: &impl chrono::TimeZone, search: &str) -> Query;
     fn matches(&self, task: &Task) -> bool;
 }
 
 impl QueryExt for Query {
-    fn from_search(db: &DbDump, tz: impl chrono::TimeZone, search: &str) -> Query {
+    fn from_search(db: &DbDump, tz: &impl chrono::TimeZone, search: &str) -> Query {
         tracing::trace!(?search, "parsing query");
         let res = match Parser::parse(Rule::everything, search) {
             Ok(mut pairs) => {
@@ -159,7 +159,7 @@ fn unescape(s: &str) -> String {
     res
 }
 
-fn parse_search(db: &DbDump, tz: impl chrono::TimeZone, pairs: Pairs<Rule>) -> Query {
+fn parse_search(db: &DbDump, tz: &impl chrono::TimeZone, pairs: Pairs<Rule>) -> Query {
     SEARCH_PARSER
         .map_primary(|p| match p.as_rule() {
             Rule::archived => Query::Archived(match p.into_inner().next().map(|p| p.as_rule()) {
@@ -190,17 +190,17 @@ fn parse_search(db: &DbDump, tz: impl chrono::TimeZone, pairs: Pairs<Rule>) -> Q
             }
             Rule::scheduled => parse_date_cmp(
                 p.into_inner(),
-                tz.clone(),
+                tz,
                 Query::ScheduledForAfter,
                 Query::ScheduledForBefore,
             ),
             Rule::blocked => parse_date_cmp(
                 p.into_inner(),
-                tz.clone(),
+                tz,
                 Query::BlockedUntilAtLeast,
                 Query::BlockedUntilAtMost,
             ),
-            Rule::search => parse_search(db, tz.clone(), p.into_inner()),
+            Rule::search => parse_search(db, tz, p.into_inner()),
             Rule::phrase => Query::Phrase(unescape(p.as_str())),
             Rule::word => Query::Phrase(p.as_str().to_string()),
             r => unreachable!("Search unexpected primary: {:?}", r),
@@ -231,13 +231,26 @@ fn parse_search(db: &DbDump, tz: impl chrono::TimeZone, pairs: Pairs<Rule>) -> Q
 
 fn parse_date_cmp(
     mut reader: Pairs<Rule>,
-    tz: impl chrono::TimeZone,
+    tz: &impl chrono::TimeZone,
     date_after: impl Fn(Time) -> Query,
     date_before: impl Fn(Time) -> Query,
 ) -> Query {
     let cmp = reader.next().expect("parsing date cmp without an operator");
     let date = reader.next().expect("parsing date cmp without a date");
-    let date = chrono::NaiveDate::parse_from_str(date.as_str(), "%Y-%m-%d")
+    let (day_begin, day_end) = begin_and_end_of_day(tz, date.as_str());
+    match cmp.as_str() {
+        ">" => date_after(day_end),
+        "<" => date_before(day_begin),
+        ">=" => date_after(day_begin),
+        "<=" => date_before(day_end),
+        ":" => Query::All(vec![date_after(day_begin), date_before(day_end)]),
+        _ => panic!("parsing date cmp with ill-formed cmp op"),
+    }
+}
+
+fn begin_and_end_of_day(tz: &impl chrono::TimeZone, date: &str) -> (Time, Time) {
+    // TODO: for safety, see (currently open) https://github.com/chronotope/chrono/pull/927
+    let date = chrono::NaiveDate::parse_from_str(date, "%Y-%m-%d")
         .expect("parsing date cmp with ill-formed date");
     let next_date = date
         .succ_opt()
@@ -249,18 +262,7 @@ fn parse_date_cmp(
             .unwrap()
             .with_timezone(&chrono::Utc)
     };
-    match cmp.as_str() {
-        // TODO: for safety, see (currently open) https://github.com/chronotope/chrono/pull/927
-        ">" => date_after(early_day(&next_date)),
-        "<" => date_before(early_day(&date)),
-        ">=" => date_after(early_day(&date)),
-        "<=" => date_before(early_day(&next_date)),
-        ":" => Query::All(vec![
-            date_after(early_day(&date)),
-            date_before(early_day(&next_date)),
-        ]),
-        _ => panic!("parsing date cmp with ill-formed cmp op"),
-    }
+    (early_day(&date), early_day(&next_date))
 }
 
 #[cfg(test)]
