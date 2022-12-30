@@ -190,7 +190,7 @@ pub fn main_view(p: &MainViewProps) -> Html {
                     />
                 </div>
 
-                <div class="done-task-list m-lg-5">
+                <div class="m-lg-5">
                     <ui::TaskList
                         ref_this={ref_done}
                         db={p.db.clone()}
