@@ -3,7 +3,7 @@ use std::{rc::Rc, sync::Arc};
 use chrono::{Datelike, Timelike};
 use risuto_client::{
     api::{Event, EventData, Query, TagId, Time},
-    DbDump, Task,
+    DbDump, Order, Search, Task,
 };
 use yew::prelude::*;
 
@@ -138,11 +138,14 @@ fn parse_new_title(db: &DbDump, mut title: String, task: &Task) -> Vec<Event> {
         if let Some(i) = title.rfind(" +") {
             let tag_start = i + " +".len();
             if let Some(tag) = title.get(tag_start..).and_then(|t| db.tag_id(t)) {
-                let mut tasks = db.tasks_for_query(&Query::Tag {
-                    tag,
-                    backlog: Some(false),
-                });
-                db.sort_tasks_for_tag(&tag, &mut tasks);
+                let search = Search {
+                    filter: Query::Tag {
+                        tag,
+                        backlog: Some(false),
+                    },
+                    order: Order::Tag(tag),
+                };
+                let tasks = db.search(&search);
                 res.extend(util::compute_reordering_events(
                     db.owner, tag, task.id, 0, false, &tasks,
                 ));

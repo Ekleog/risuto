@@ -1,6 +1,6 @@
 use std::{rc::Rc, sync::Arc};
 
-use risuto_client::{api::Query, DbDump, QueryExt, Task};
+use risuto_client::{api::Query, DbDump, Order, OrderType, QueryExt, Search, Task};
 use yew::prelude::*;
 
 #[derive(Clone, PartialEq, Properties)]
@@ -30,10 +30,14 @@ pub fn search_bar(p: &SearchBarProps) -> Html {
             results.set(match search.len() {
                 0 => None,
                 _ => {
-                    let query = Query::from_search(&db, search.trim());
-                    tracing::debug!("searching with query {:?}", query);
+                    let filter = Query::from_search(&db, search.trim());
+                    tracing::debug!("searching with query {:?}", filter);
                     tracing::debug!("(parsed from {:?})", search.trim());
-                    Some(SearchResults::Local(db.tasks_for_query(&query)))
+                    let search = Search {
+                        filter,
+                        order: Order::LastEventDate(OrderType::Desc),
+                    };
+                    Some(SearchResults::Local(db.search(&search)))
                 }
             });
         })

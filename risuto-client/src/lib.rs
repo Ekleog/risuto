@@ -8,6 +8,7 @@ mod query;
 pub use query::QueryExt;
 
 mod search;
+pub use search::{Order, OrderType, Search};
 
 mod task;
 pub use task::{Task, TaskInTag};

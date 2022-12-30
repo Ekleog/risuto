@@ -4,8 +4,8 @@ use anyhow::anyhow;
 use async_trait::async_trait;
 
 use crate::{
-    api::{self, AuthInfo, Db, EventId, Query, Tag, TagId, TaskId, Time, User, UserId},
-    QueryExt, Task,
+    api::{self, AuthInfo, Db, EventId, Tag, TagId, TaskId, Time, User, UserId},
+    QueryExt, Search, Task,
 };
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -64,24 +64,16 @@ impl DbDump {
         self.tags.get(id).map(|(t, _)| &t.name as &str)
     }
 
-    /// Panics if any task is not actually in this tag
-    pub fn sort_tasks_for_tag(&self, tag: &TagId, tasks: &mut [Arc<Task>]) {
-        tasks.sort_unstable_by_key(|t| {
-            let tag_data = t
-                .current_tags
-                .get(tag)
-                .expect("task passed to sort_tasks_for_tag is actually not in the tag");
-            (tag_data.priority, t.id)
-        });
-    }
-
     /// Returns a list of all the tasks currently in this tag, ordered by increasing priority
-    pub fn tasks_for_query(&self, query: &Query) -> Vec<Arc<Task>> {
-        self.tasks
+    pub fn search(&self, s: &Search) -> Vec<Arc<Task>> {
+        let mut res = self
+            .tasks
             .values()
-            .filter(|t| query.matches(t))
+            .filter(|t| s.filter.matches(t))
             .cloned()
-            .collect::<Vec<_>>()
+            .collect::<Vec<_>>();
+        s.order.sort(&mut res);
+        res
     }
 }
 
