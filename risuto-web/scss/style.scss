@@ -30,7 +30,9 @@ $events-pending-spinner-border: $background;
 
 $task-list-bg: lighten($blue, 2%);
 $task-edit-outline: $text;
-$timeset-label-bg: $background;
+$timeset-container-bg: lighten($task-list-bg, 10%);
+$timeset-container-border: $text;
+$timeset-label-bg: rgba($background, 75%);
 $timeset-label-border: lighten($black, 30%);
 
 $backlog-handle: $red;
@@ -184,6 +186,21 @@ $dark: lighten($blue, 3%);
     background-color: $yellow; // TODO: this should be configurable in the tag (alongside the tag icon)
 }
 
+.timeset-container {
+    border: 2px ridge transparent;
+    border-radius: 5px;
+    background-color: $task-list-bg;
+    transition: .1s background-color ease;
+}
+
+.timeset-container.shown {
+    background-color: $timeset-container-bg;
+}
+
+.timeset-container:focus-within {
+    border-color: $timeset-container-border;
+}
+
 .timeset-button {
     position: relative;
 }
@@ -197,8 +214,36 @@ $dark: lighten($blue, 3%);
     font-size: 0.8rem;
     font-weight: bold;
     padding: 1px 5px 1px 5px;
-    background-color: rgba($timeset-label-bg, 75%);
+    background-color: $timeset-label-bg;
     border: 1px solid $timeset-label-border;
+}
+
+.timeset-input {
+    position: relative;
+    right: 0px;
+
+    overflow: hidden;
+    max-width: 0px;
+    transition: .35s max-width ease;
+    direction: rtl; // transition to the right
+}
+
+.timeset-input > * {
+    direction: ltr;
+}
+
+.timeset-input.shown {
+    max-width: 500px; // basically width: auto
+}
+
+.timeset-input input {
+    color-scheme: dark;
+    background-color: inherit;
+    border: 0px solid transparent;
+}
+
+.timeset-input input:focus {
+    outline: 0px;
 }
 
 .done-task-list {
@@ -251,11 +296,6 @@ $dark: lighten($blue, 3%);
 
 .float-above {
     z-index: 10;
-}
-
-.size-zero {
-    max-width: 0px;
-    max-height: 0px;
 }
 
 .drag-handle {

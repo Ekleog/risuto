@@ -189,39 +189,58 @@ fn button_done_change(p: &TaskListItemProps) -> Html {
 
 fn timeset_button(
     input_ref: NodeRef,
+    is_shown: UseStateHandle<bool>,
     current_date: &Option<Time>,
     label: &'static str,
     icon: &'static str,
     callback: &Callback<Option<Time>>,
 ) -> Html {
-    let on_button_click = {
+    let close_input = {
         let input_ref = input_ref.clone();
+        let is_shown = is_shown.clone();
+        let callback = callback.clone();
         Callback::from(move |_| {
+            is_shown.set(false);
             let input = input_ref
                 .cast::<web_sys::HtmlInputElement>()
-                .expect("input is not an html element");
-            util::show_picker(&input);
+                .expect("input is not an html element")
+                .value();
+            let date = match input.is_empty() {
+                true => None,
+                false => Some({
+                    let date = chrono::NaiveDateTime::parse_from_str(&input, "%Y-%m-%dT%H:%M")
+                        .expect("datepicker value not in expected format");
+                    let timezone = util::local_tz();
+                    while date.and_local_timezone(timezone) == chrono::LocalResult::None {
+                        date.checked_sub_signed(chrono::Duration::minutes(1))
+                            .expect(
+                                "overflow while looking for a date that exists in local timezone",
+                            );
+                    }
+                    let date = date.and_local_timezone(timezone).earliest().unwrap();
+                    date.with_timezone(&chrono::Utc)
+                }),
+            };
+            callback.emit(date);
         })
     };
-    let on_input = callback.reform(|e: web_sys::InputEvent| {
-        let input: web_sys::HtmlInputElement = e.target_unchecked_into();
-        let input = input.value();
-        let date = match input.is_empty() {
-            true => None,
-            false => Some({
-                let date = chrono::NaiveDateTime::parse_from_str(&input, "%Y-%m-%dT%H:%M")
-                    .expect("datepicker value not in expected format");
-                let timezone = util::local_tz();
-                while date.and_local_timezone(timezone) == chrono::LocalResult::None {
-                    date.checked_sub_signed(chrono::Duration::minutes(1))
-                        .expect("overflow while looking for a date that exists in local timezone");
-                }
-                let date = date.and_local_timezone(timezone).earliest().unwrap();
-                date.with_timezone(&chrono::Utc)
-            })
-        };
-        date
-    });
+    let on_button_click = {
+        let input_ref = input_ref.clone();
+        let is_shown = is_shown.clone();
+        let close_input = close_input.clone();
+        Callback::from(move |_| {
+            if *is_shown {
+                close_input.emit(());
+            } else {
+                is_shown.set(true);
+                let input = input_ref
+                    .cast::<web_sys::HtmlInputElement>()
+                    .expect("input is not an html element");
+                input.focus().expect("failed focusing date picker");
+                util::show_picker(&input);
+            }
+        })
+    };
     let current_date = current_date.map(|t| t.with_timezone(&util::local_tz()));
     let timeset_label = current_date
         .and_then(|d| {
@@ -229,7 +248,9 @@ fn timeset_button(
             match remaining {
                 r if r > chrono::Duration::days(365) => Some(format!("{}", d.year())),
                 r if r > chrono::Duration::days(1) => Some(format!("{}/{}", d.month(), d.day())),
-                r if r > chrono::Duration::seconds(0) => Some(format!("{}h{}", d.hour(), d.minute())),
+                r if r > chrono::Duration::seconds(0) => {
+                    Some(format!("{}h{}", d.hour(), d.minute()))
+                }
                 _ => None, // task blocked or scheduled for the past is just not blocked/scheduled
             }
         })
@@ -251,30 +272,32 @@ fn timeset_button(
         )
     });
     html! {
-        <>
-            <div class="size-zero overflow-hidden">
-                <input
-                    ref={ input_ref }
-                    type="datetime-local"
-                    value={ start_value }
-                    aria-label={ label }
-                    oninput={ on_input } // TODO: change value only on date picker closed
-                />
-            </div>
+        <div class={ classes!("timeset-container", "d-flex", "align-items-center", is_shown.then(|| "shown")) }>
             <button
                 type="button"
-                class={classes!("timeset-button", "btn", "bi-btn", icon, "px-2")}
+                class={ classes!("timeset-button", "btn", "bi-btn", icon, "px-2") }
                 title={ label }
                 onclick={ on_button_click }
             >
                 { for timeset_label }
             </button>
-        </>
+            <div class={ classes!("timeset-input", is_shown.then(|| "shown")) }>
+                <input
+                    ref={ input_ref }
+                    class="mx-2"
+                    type="datetime-local"
+                    value={ start_value }
+                    onfocusout={ close_input.reform(|_| ()) }
+                    aria-label={ label }
+                />
+            </div>
+        </div>
     }
 }
 
 #[function_component(ButtonScheduleFor)]
 fn button_schedule_for(p: &TaskListItemProps) -> Html {
+    let is_shown = use_state(|| false);
     let input_ref = use_node_ref();
     let db = p.db.clone();
     let task = p.task.clone();
@@ -285,6 +308,7 @@ fn button_schedule_for(p: &TaskListItemProps) -> Html {
     // add stuff to other people's today tag
     timeset_button(
         input_ref,
+        is_shown,
         &p.task.scheduled_for,
         "Schedule for",
         "bi-alarm",
@@ -302,12 +326,14 @@ fn button_schedule_for(p: &TaskListItemProps) -> Html {
 
 #[function_component(ButtonBlockedUntil)]
 fn button_blocked_until(p: &TaskListItemProps) -> Html {
+    let is_shown = use_state(|| false);
     let input_ref = use_node_ref();
     let db = p.db.clone();
     let task = p.task.clone();
     let on_event = p.on_event.clone();
     timeset_button(
         input_ref,
+        is_shown,
         &p.task.blocked_until,
         "Blocked until",
         "bi-hourglass-split",
