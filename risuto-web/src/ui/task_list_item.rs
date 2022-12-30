@@ -205,16 +205,22 @@ fn timeset_button(
     };
     let on_input = callback.reform(|e: web_sys::InputEvent| {
         let input: web_sys::HtmlInputElement = e.target_unchecked_into();
-        let date = chrono::NaiveDateTime::parse_from_str(&input.value(), "%Y-%m-%dT%H:%M")
-            .expect("datepicker value not in expected format");
-        let timezone = util::local_tz();
-        while date.and_local_timezone(timezone) == chrono::LocalResult::None {
-            date.checked_sub_signed(chrono::Duration::minutes(1))
-                .expect("overflow while looking for a date that exists in local timezone");
-        }
-        let date = date.and_local_timezone(timezone).earliest().unwrap();
-        let date = date.with_timezone(&chrono::Utc);
-        Some(date)
+        let input = input.value();
+        let date = match input.is_empty() {
+            true => None,
+            false => Some({
+                let date = chrono::NaiveDateTime::parse_from_str(&input, "%Y-%m-%dT%H:%M")
+                    .expect("datepicker value not in expected format");
+                let timezone = util::local_tz();
+                while date.and_local_timezone(timezone) == chrono::LocalResult::None {
+                    date.checked_sub_signed(chrono::Duration::minutes(1))
+                        .expect("overflow while looking for a date that exists in local timezone");
+                }
+                let date = date.and_local_timezone(timezone).earliest().unwrap();
+                date.with_timezone(&chrono::Utc)
+            })
+        };
+        date
     });
     let current_date = current_date.map(|t| t.with_timezone(&util::local_tz()));
     let timeset_label = current_date
