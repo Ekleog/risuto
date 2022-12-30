@@ -54,11 +54,11 @@ fn gen_tag(rng: &mut StdRng) -> String {
     escape(res)
 }
 
-fn gen_date(rng: &mut StdRng) -> chrono::DateTime<chrono::Utc> {
-    let start = chrono::DateTime::parse_from_rfc3339("2020-01-01T01:01:01Z")
+fn gen_date_range(rng: &mut StdRng, start: &str, end: &str) -> chrono::DateTime<chrono::Utc> {
+    let start = chrono::DateTime::parse_from_rfc3339(start)
         .unwrap()
         .with_timezone(&chrono::Utc);
-    let end = chrono::DateTime::parse_from_rfc3339("2030-01-01T01:01:01Z")
+    let end = chrono::DateTime::parse_from_rfc3339(end)
         .unwrap()
         .with_timezone(&chrono::Utc);
     let max_nanos = end
@@ -79,6 +79,14 @@ fn gen_date(rng: &mut StdRng) -> chrono::DateTime<chrono::Utc> {
             .unwrap(),
         )
         .unwrap()
+}
+
+fn gen_date(rng: &mut StdRng) -> chrono::DateTime<chrono::Utc> {
+    gen_date_range(rng, "2020-01-01T01:01:01Z", "2030-01-01T01:01:01Z")
+}
+
+fn gen_past_date(rng: &mut StdRng) -> chrono::DateTime<chrono::Utc> {
+    gen_date_range(rng, "2010-01-01T01:01:01Z", "2020-01-01T01:01:01Z")
 }
 
 fn gen_task_title(rng: &mut StdRng) -> String {
@@ -143,7 +151,7 @@ fn main() {
             "('{}', '{}', '{}', '{}')",
             uuid,
             gen_user(&mut rng),
-            gen_date(&mut rng),
+            gen_past_date(&mut rng),
             gen_task_title(&mut rng),
         )
     });
@@ -156,7 +164,7 @@ fn main() {
     while generated < NUM_EVENTS {
         let id = gen_uuid(&mut rng);
         let owner_id = gen_user(&mut rng);
-        let date = RefCell::new(gen_date(&mut rng));
+        let date = RefCell::new(gen_past_date(&mut rng));
         let task_id = RefCell::new(gen_task(&mut rng));
         let mut d_text = "NULL".to_string();
         let mut d_bool = "NULL";
