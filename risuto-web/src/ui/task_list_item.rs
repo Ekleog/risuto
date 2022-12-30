@@ -7,7 +7,7 @@ use risuto_client::{
 };
 use yew::prelude::*;
 
-use crate::{util, TODAY_TAG};
+use crate::util;
 
 #[derive(Clone, PartialEq, Properties)]
 pub struct TaskListItemProps {

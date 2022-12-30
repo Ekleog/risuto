@@ -1,4 +1,4 @@
-use crate::TagId;
+use crate::{TagId, Time};
 
 #[derive(Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 pub enum Query {
@@ -9,6 +9,10 @@ pub enum Query {
     Done(bool),
     Tag { tag: TagId, backlog: Option<bool> },
     Untagged(bool),
+    ScheduledForBefore(Time),
+    ScheduledForAfter(Time),
+    BlockedUntilAtMost(Time),
+    BlockedUntilAtLeast(Time),
     Phrase(String), // full-text search of one contiguous word vec
 }
 

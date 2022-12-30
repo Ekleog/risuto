@@ -3,6 +3,8 @@ use std::{rc::Rc, sync::Arc};
 use risuto_client::{api::Query, DbDump, Order, OrderType, QueryExt, Search, Task};
 use yew::prelude::*;
 
+use crate::util;
+
 #[derive(Clone, PartialEq, Properties)]
 pub struct SearchBarProps {
     pub db: Rc<DbDump>,
@@ -30,7 +32,7 @@ pub fn search_bar(p: &SearchBarProps) -> Html {
             results.set(match search.len() {
                 0 => None,
                 _ => {
-                    let filter = Query::from_search(&db, search.trim());
+                    let filter = Query::from_search(&db, util::local_tz(), search.trim());
                     tracing::debug!("searching with query {:?}", filter);
                     tracing::debug!("(parsed from {:?})", search.trim());
                     let search = Search {

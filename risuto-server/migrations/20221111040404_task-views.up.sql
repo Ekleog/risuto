@@ -14,6 +14,23 @@ FROM events e
 WHERE e.d_type = 'set_done'
 ORDER BY e.task_id, e.date DESC;
 
+CREATE VIEW v_tasks_scheduled AS
+SELECT DISTINCT ON (task_id, owner_id)
+    task_id,
+    owner_id,
+    d_time AS time
+FROM events
+WHERE d_type = 'schedule_for'
+ORDER BY task_id, owner_id, date DESC;
+
+CREATE VIEW v_tasks_blocked AS
+SELECT DISTINCT ON (task_id)
+    task_id,
+    d_time AS time
+FROM events
+WHERE d_type = 'blocked_until'
+ORDER BY task_id, date DESC;
+
 CREATE VIEW v_tasks_title AS
 SELECT DISTINCT ON (t.id)
     t.id AS task_id,

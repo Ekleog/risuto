@@ -1,9 +1,10 @@
-use risuto_api::{Query, Uuid};
+use risuto_api::{Query, Time, Uuid};
 
 pub enum Bind {
     Bool(bool),
     Uuid(Uuid),
     String(String),
+    Time(Time),
 }
 
 #[derive(Default)]
@@ -23,7 +24,8 @@ impl Sql {
 }
 
 /// Assumes tables vta (v_tasks_archived), vtd(v_tasks_done), vtt (v_tasks_tags),
-/// vtit (v_tasks_is_tagged) and vtx (v_tasks_text) are available
+/// vtit (v_tasks_is_tagged), vts (v_tasks_scheduled), vtb (v_tasks_blocked)
+/// and vtx (v_tasks_text) are available
 pub fn to_postgres(q: &Query, first_bind_idx: usize) -> Sql {
     let mut res = Default::default();
     add_to_postgres(q, first_bind_idx, &mut res);
@@ -83,6 +85,22 @@ fn add_to_postgres(q: &Query, first_bind_idx: usize, res: &mut Sql) {
         Query::Untagged(false) => {
             res.where_clause
                 .push_str("(vtit.has_tag = false OR vtit.has_tag IS NULL)");
+        }
+        Query::ScheduledForBefore(date) => {
+            let idx = res.add_bind(first_bind_idx, Bind::Time(*date));
+            res.where_clause.push_str(&format!("(vts.time <= ${idx})"));
+        }
+        Query::ScheduledForAfter(date) => {
+            let idx = res.add_bind(first_bind_idx, Bind::Time(*date));
+            res.where_clause.push_str(&format!("(vts.time >= ${idx})"));
+        }
+        Query::BlockedUntilAtMost(date) => {
+            let idx = res.add_bind(first_bind_idx, Bind::Time(*date));
+            res.where_clause.push_str(&format!("(vtb.time <= ${idx})"));
+        }
+        Query::BlockedUntilAtLeast(date) => {
+            let idx = res.add_bind(first_bind_idx, Bind::Time(*date));
+            res.where_clause.push_str(&format!("(vtb.time >= ${idx})"));
         }
         Query::Phrase(t) => {
             let idx = res.add_bind(first_bind_idx, Bind::String(t.clone()));

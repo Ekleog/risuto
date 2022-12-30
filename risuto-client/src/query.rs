@@ -1,14 +1,17 @@
-use crate::{api::Query, Comment, DbDump, Task};
+use crate::{
+    api::{Query, Time},
+    Comment, DbDump, Task,
+};
 
 use pest::{iterators::Pairs, pratt_parser::PrattParser, Parser as PestParser};
 
 pub trait QueryExt {
-    fn from_search(db: &DbDump, search: &str) -> Query;
+    fn from_search(db: &DbDump, tz: impl chrono::TimeZone, search: &str) -> Query;
     fn matches(&self, task: &Task) -> bool;
 }
 
 impl QueryExt for Query {
-    fn from_search(db: &DbDump, search: &str) -> Query {
+    fn from_search(db: &DbDump, tz: impl chrono::TimeZone, search: &str) -> Query {
         tracing::trace!(?search, "parsing query");
         let res = match Parser::parse(Rule::everything, search) {
             Ok(mut pairs) => {
@@ -16,7 +19,7 @@ impl QueryExt for Query {
                 let search_res = pairs
                     .next()
                     .expect("Rule::everything result without search result");
-                parse_search(db, search_res.into_inner())
+                parse_search(db, tz, search_res.into_inner())
             }
             e => todo!("should have proper error handling here: {:?}", e),
         };
@@ -39,6 +42,10 @@ fn has_fts(q: &Query) -> bool {
         Query::Done(_) => false,
         Query::Tag { .. } => false,
         Query::Untagged(_) => false,
+        Query::ScheduledForAfter(_) => false,
+        Query::ScheduledForBefore(_) => false,
+        Query::BlockedUntilAtLeast(_) => false,
+        Query::BlockedUntilAtMost(_) => false,
         Query::Phrase(_) => true,
     }
 }
@@ -58,6 +65,10 @@ fn matches_impl(q: &Query, task: &Task, tokenized: &Option<Vec<Vec<String>>>) ->
             },
         },
         Query::Untagged(u) => task.current_tags.is_empty() == *u,
+        Query::ScheduledForAfter(d) => task.scheduled_for.map(|s| s >= *d).unwrap_or(false),
+        Query::ScheduledForBefore(d) => task.scheduled_for.map(|s| s <= *d).unwrap_or(false),
+        Query::BlockedUntilAtLeast(d) => task.blocked_until.map(|b| b >= *d).unwrap_or(false),
+        Query::BlockedUntilAtMost(d) => task.blocked_until.map(|b| b <= *d).unwrap_or(false),
         Query::Phrase(p) => {
             let q = tokenize(p);
             if q.is_empty() {
@@ -148,7 +159,7 @@ fn unescape(s: &str) -> String {
     res
 }
 
-fn parse_search(db: &DbDump, pairs: Pairs<Rule>) -> Query {
+fn parse_search(db: &DbDump, tz: impl chrono::TimeZone, pairs: Pairs<Rule>) -> Query {
     SEARCH_PARSER
         .map_primary(|p| match p.as_rule() {
             Rule::archived => Query::Archived(match p.into_inner().next().map(|p| p.as_rule()) {
@@ -177,7 +188,19 @@ fn parse_search(db: &DbDump, pairs: Pairs<Rule>) -> Query {
                     .map(|tag| Query::Tag { tag, backlog: None })
                     .unwrap_or_else(|| Query::Phrase(format!("tag:{tagname}")))
             }
-            Rule::search => parse_search(db, p.into_inner()),
+            Rule::scheduled => parse_date_cmp(
+                p.into_inner(),
+                tz.clone(),
+                Query::ScheduledForAfter,
+                Query::ScheduledForBefore,
+            ),
+            Rule::blocked => parse_date_cmp(
+                p.into_inner(),
+                tz.clone(),
+                Query::BlockedUntilAtLeast,
+                Query::BlockedUntilAtMost,
+            ),
+            Rule::search => parse_search(db, tz.clone(), p.into_inner()),
             Rule::phrase => Query::Phrase(unescape(p.as_str())),
             Rule::word => Query::Phrase(p.as_str().to_string()),
             r => unreachable!("Search unexpected primary: {:?}", r),
@@ -204,6 +227,38 @@ fn parse_search(db: &DbDump, pairs: Pairs<Rule>) -> Query {
             r => unreachable!("Search unexpected prefix: {:?}", r),
         })
         .parse(pairs)
+}
+
+fn parse_date_cmp(
+    mut reader: Pairs<Rule>,
+    tz: impl chrono::TimeZone,
+    date_after: impl Fn(Time) -> Query,
+    date_before: impl Fn(Time) -> Query,
+) -> Query {
+    let cmp = reader.next().expect("parsing date cmp without an operator");
+    let date = reader.next().expect("parsing date cmp without a date");
+    let date = chrono::NaiveDate::parse_from_str(date.as_str(), "%Y-%m-%d")
+        .expect("parsing date cmp with ill-formed date");
+    let next_date = date
+        .succ_opt()
+        .expect("failed figuring out a date for tomorrow");
+    let early_day = |d: &chrono::NaiveDate| {
+        d.and_hms_opt(0, 0, 0)
+            .expect("failed setting hms to 000")
+            .and_local_timezone(tz.clone())
+            .unwrap()
+            .with_timezone(&chrono::Utc)
+    };
+    match cmp.as_str() {
+        // TODO: for safety, see (currently open) https://github.com/chronotope/chrono/pull/927
+        ">" => date_after(early_day(&date)),
+        "<" => date_before(early_day(&next_date)),
+        ":" => Query::All(vec![
+            date_after(early_day(&date)),
+            date_before(early_day(&next_date)),
+        ]),
+        _ => panic!("parsing date cmp with ill-formed cmp op"),
+    }
 }
 
 #[cfg(test)]

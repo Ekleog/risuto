@@ -517,6 +517,10 @@ pub async fn search_tasks_for_user(
                         ON vtt.task_id = t.id
                     LEFT JOIN v_tasks_is_tagged vtit
                         ON vtit.task_id = t.id
+                    LEFT JOIN v_tasks_scheduled vts
+                        ON vts.task_id = t.id AND vts.owner_id = $1
+                    LEFT JOIN v_tasks_blocked vtb
+                        ON vtb.task_id = t.id
                     LEFT JOIN v_tasks_comments vtc
                         ON vtc.task_id = t.id
                     WHERE vtu.user_id = $1
@@ -529,6 +533,7 @@ pub async fn search_tasks_for_user(
                     query::Bind::Bool(b) => q = q.bind(b),
                     query::Bind::Uuid(u) => q = q.bind(u),
                     query::Bind::String(s) => q = q.bind(s),
+                    query::Bind::Time(t) => q = q.bind(t.naive_utc()),
                 };
             }
             q.execute(&mut *conn)
