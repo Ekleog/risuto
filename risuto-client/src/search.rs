@@ -29,7 +29,13 @@ impl Order {
     pub fn sort(&self, tasks: &mut [Arc<Task>]) {
         match self {
             Order::Custom(o) => {
-                tasks.sort_unstable_by_key(|t| t.orders.get(o).copied().unwrap_or(0))
+                // Put any unordered task at the top of the list
+                tasks.sort_unstable_by_key(|t| {
+                    (
+                        t.orders.get(o).copied().unwrap_or(i64::MIN),
+                        Reverse(t.date),
+                    )
+                })
             }
             Order::Tag(tag) => tasks.sort_unstable_by_key(|t| {
                 let tag_data = t
@@ -40,20 +46,12 @@ impl Order {
             }),
             Order::CreationDate(OrderType::Asc) => tasks.sort_unstable_by_key(|t| t.date),
             Order::CreationDate(OrderType::Desc) => tasks.sort_unstable_by_key(|t| Reverse(t.date)),
-            Order::LastEventDate(OrderType::Asc) => tasks.sort_unstable_by_key(|t| {
-                t.events
-                    .last_key_value()
-                    .map(|(d, _)| d.clone())
-                    .unwrap_or(t.date)
-            }),
-            Order::LastEventDate(OrderType::Desc) => tasks.sort_unstable_by_key(|t| {
-                Reverse(
-                    t.events
-                        .last_key_value()
-                        .map(|(d, _)| d.clone())
-                        .unwrap_or(t.date),
-                )
-            }),
+            Order::LastEventDate(OrderType::Asc) => {
+                tasks.sort_unstable_by_key(|t| t.last_event_time())
+            }
+            Order::LastEventDate(OrderType::Desc) => {
+                tasks.sort_unstable_by_key(|t| Reverse(t.last_event_time()))
+            }
             Order::ScheduledFor(OrderType::Asc) => tasks.sort_unstable_by_key(|t| t.scheduled_for),
             Order::ScheduledFor(OrderType::Desc) => {
                 tasks.sort_unstable_by_key(|t| Reverse(t.scheduled_for))

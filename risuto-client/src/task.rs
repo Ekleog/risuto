@@ -61,6 +61,13 @@ impl Task {
         self.current_tags.get(tag).map(|t| t.priority)
     }
 
+    pub fn last_event_time(&self) -> Time {
+        self.events
+            .last_key_value()
+            .map(|(d, _)| d.clone())
+            .unwrap_or(self.date)
+    }
+
     pub fn add_event(&mut self, e: Event) {
         let insert_into = self.events.entry(e.date).or_insert(Vec::new());
         if insert_into.iter().find(|evt| **evt == e).is_none() {
