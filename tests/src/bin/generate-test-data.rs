@@ -55,18 +55,18 @@ fn gen_tag(rng: &mut StdRng) -> String {
 }
 
 fn gen_date(rng: &mut StdRng) -> chrono::DateTime<chrono::Utc> {
-    let start = chrono::DateTime::parse_from_rfc3339("1970-01-01T01:01:01Z")
+    let start = chrono::DateTime::parse_from_rfc3339("2020-01-01T01:01:01Z")
         .unwrap()
         .with_timezone(&chrono::Utc);
-    let end = chrono::DateTime::parse_from_rfc3339("2022-01-01T01:01:01Z")
+    let end = chrono::DateTime::parse_from_rfc3339("2030-01-01T01:01:01Z")
         .unwrap()
         .with_timezone(&chrono::Utc);
-    let nanos = end
+    let max_nanos = end
         .signed_duration_since(start)
         .to_std()
         .unwrap()
         .as_nanos();
-    let nanos = rng.gen_range(0..nanos);
+    let nanos = rng.gen_range(0..max_nanos);
     start
         .checked_add_signed(
             chrono::Duration::from_std(
