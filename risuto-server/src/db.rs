@@ -1,4 +1,4 @@
-use anyhow::Context;
+use anyhow::{anyhow, Context};
 use axum::async_trait;
 use chrono::Utc;
 use futures::{Future, Stream, StreamExt, TryStreamExt};
@@ -15,7 +15,7 @@ pub struct PostgresDb<'a> {
     pub user: UserId,
 }
 
-#[derive(Eq, PartialEq, sqlx::Type)]
+#[derive(Debug, Eq, PartialEq, sqlx::Type)]
 #[sqlx(type_name = "event_type", rename_all = "snake_case")]
 enum DbType {
     SetTitle,
@@ -61,7 +61,7 @@ impl From<DbTask> for Task {
     }
 }
 
-#[derive(Eq, PartialEq, sqlx::FromRow)]
+#[derive(Debug, Eq, PartialEq, sqlx::FromRow)]
 struct DbEvent {
     id: Uuid,
     owner_id: Uuid,
@@ -604,13 +604,13 @@ pub async fn submit_event(conn: &mut sqlx::PgConnection, e: Event) -> Result<(),
         0 => {
             let already_present = sqlx::query_as::<_, DbEvent>("SELECT * FROM events WHERE id=$1")
                 .bind(e.id)
-                .fetch_one(&mut *db.conn)
+                .fetch_optional(&mut *db.conn)
                 .await
                 .context("sanity-checking the already-present event")?;
-            if already_present == e {
-                Ok(()) // the submission was a duplicate, return a successful result
-            } else {
-                Err(Error::UuidAlreadyUsed(e.id))
+            match already_present {
+                Some(p) if p == e => Ok(()),
+                Some(p) if p.id == e.id => Err(Error::UuidAlreadyUsed(e.id)),
+                _ => Err(Error::Anyhow(anyhow!("unknown event insertion conflict: trying to insert {e:?}, already had {already_present:?}")))
             }
         }
         rows => panic!("insertion of single event {event_id:?} affected multiple ({rows}) rows"),
