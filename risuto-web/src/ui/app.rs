@@ -80,11 +80,18 @@ impl App {
                     all_tasks.partition_point(|t| !t.current_tags.get(&tag).unwrap().backlog),
                 ));
                 let done = Rc::new(all_tasks.split_off(all_tasks.partition_point(|t| !t.is_done)));
-                let open = Rc::new(all_tasks);
                 TaskLists {
-                    open,
+                    open: Rc::new(all_tasks),
                     done,
                     backlog,
+                }
+            }
+            Order::Custom(_) => {
+                let done = Rc::new(all_tasks.split_off(all_tasks.partition_point(|t| !t.is_done)));
+                TaskLists {
+                    open: Rc::new(all_tasks),
+                    done,
+                    backlog: Rc::new(Vec::new()),
                 }
             }
             _ => TaskLists {

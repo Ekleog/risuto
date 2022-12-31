@@ -71,7 +71,8 @@ impl DbDump {
             .map(|(t, _)| t.clone())
     }
 
-    /// Returns a list of all the tasks currently in this tag, ordered by increasing priority
+    /// Returns a list of all the tasks currently in this tag, ordered by increasing
+    /// priority and partitioned according to the sorting order
     pub fn search(&self, s: &Search) -> Vec<Arc<Task>> {
         let mut res = self
             .tasks

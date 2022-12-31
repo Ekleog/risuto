@@ -86,10 +86,8 @@ impl Order {
             Order::Custom(o) => {
                 // Put any unordered task at the top of the list
                 tasks.sort_unstable_by_key(|t| {
-                    (
-                        t.orders.get(o).copied().unwrap_or(i64::MIN),
-                        Reverse(t.date),
-                    )
+                    let prio = t.orders.get(o).copied().unwrap_or(i64::MIN);
+                    (t.is_done, prio, Reverse(t.date), t.id)
                 })
             }
             Order::Tag(tag) => tasks.sort_unstable_by_key(|t| {
@@ -102,7 +100,7 @@ impl Order {
                     (false, true) => 1,
                     (true, _) => 2,
                 };
-                (category, tag_data.priority, t.id)
+                (category, tag_data.priority, Reverse(t.date), t.id)
             }),
             Order::CreationDate(OrderType::Asc) => tasks.sort_unstable_by_key(|t| t.date),
             Order::CreationDate(OrderType::Desc) => tasks.sort_unstable_by_key(|t| Reverse(t.date)),
