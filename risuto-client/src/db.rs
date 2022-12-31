@@ -12,7 +12,7 @@ use crate::{
 pub struct DbDump {
     pub owner: UserId,
     pub users: HashMap<UserId, User>,
-    pub tags: HashMap<TagId, (Tag, AuthInfo)>,
+    pub tags: HashMap<TagId, (Tag, AuthInfo)>, // TODO: decouple into one tags and one perms table
     pub tasks: HashMap<TaskId, Arc<Task>>,
 }
 
@@ -55,13 +55,20 @@ impl DbDump {
 
     pub fn tag_id(&self, tagname: &str) -> Option<TagId> {
         self.tags
-            .iter()
-            .find(|(_, (t, _))| t.name == tagname)
-            .map(|(id, _)| *id)
+            .values()
+            .find(|(t, _)| t.name == tagname)
+            .map(|(t, _)| t.id)
     }
 
     pub fn tag_name(&self, id: &TagId) -> Option<&str> {
         self.tags.get(id).map(|(t, _)| &t.name as &str)
+    }
+
+    pub fn tag(&self, tagname: &str) -> Option<Tag> {
+        self.tags
+            .values()
+            .find(|(t, _)| t.name == tagname)
+            .map(|(t, _)| t.clone())
     }
 
     /// Returns a list of all the tasks currently in this tag, ordered by increasing priority

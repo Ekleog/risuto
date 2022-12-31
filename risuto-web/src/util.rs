@@ -2,7 +2,7 @@ use std::{str::FromStr, sync::Arc};
 
 use risuto_client::{
     api::{AuthInfo, Event, EventData, Tag, TagId, TaskId, UserId},
-    Task,
+    Order, Search, Task,
 };
 use wasm_bindgen::prelude::*;
 
@@ -46,7 +46,7 @@ pub fn sort_tags(current_user: &UserId, tags: &mut Vec<(&TagId, &(Tag, AuthInfo)
 
 pub fn compute_reordering_events(
     owner: UserId,
-    tag: TagId,
+    search: &Search,
     task: TaskId,
     index: usize,
     into_backlog: bool,
@@ -54,22 +54,39 @@ pub fn compute_reordering_events(
 ) -> Vec<Event> {
     macro_rules! evt {
         ( $task:expr, $prio:expr ) => {
-            Event::now(
-                owner,
-                $task,
-                EventData::AddTag {
-                    tag,
-                    prio: $prio,
-                    backlog: into_backlog,
-                },
-            )
+            match &search.order {
+                Order::Tag(tag) => Event::now(
+                    owner,
+                    $task,
+                    EventData::AddTag {
+                        tag: tag.clone(),
+                        prio: $prio,
+                        backlog: into_backlog,
+                    },
+                ),
+                Order::Custom(order) => Event::now(
+                    owner,
+                    $task,
+                    EventData::SetOrder {
+                        order: order.clone(),
+                        prio: $prio,
+                    },
+                ),
+                _ => panic!("attempted reordering in a non-reorderable search"),
+            }
         };
     }
     macro_rules! prio {
         ($task:expr) => {
-            $task
-                .prio(&tag)
-                .expect("computing events reordering with task not in tag")
+            match &search.order {
+                Order::Tag(tag) => $task
+                    .prio_tag(tag)
+                    .expect("computing events reordering with task not in tag"),
+                Order::Custom(order) => $task
+                    .prio_order(order)
+                    .expect("computing events reordering with task not in search"),
+                _ => panic!("attempted reordering in a non-reorderable search"),
+            }
         };
     }
     // this value was taken after intense finger-based wind-speed-taking

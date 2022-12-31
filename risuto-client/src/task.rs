@@ -57,8 +57,12 @@ impl From<api::Task> for Task {
 }
 
 impl Task {
-    pub fn prio(&self, tag: &TagId) -> Option<i64> {
+    pub fn prio_tag(&self, tag: &TagId) -> Option<i64> {
         self.current_tags.get(tag).map(|t| t.priority)
+    }
+
+    pub fn prio_order(&self, order: &OrderId) -> Option<i64> {
+        self.orders.get(order).copied()
     }
 
     pub fn last_event_time(&self) -> Time {

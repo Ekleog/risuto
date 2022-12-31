@@ -1,15 +1,58 @@
 use std::{cmp::Reverse, sync::Arc};
 
 use crate::{
-    api::{OrderId, Query, TagId},
+    api::{OrderId, Query, Tag, TagId},
     Task,
 };
 
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Search {
+    pub name: String,
     pub filter: Query,
     pub order: Order,
 }
 
+impl Search {
+    pub fn untagged() -> Search {
+        Search {
+            name: String::from("Untagged"),
+            filter: Query::Untagged(true),
+            order: Order::Custom(OrderId::untagged()),
+        }
+    }
+
+    pub fn for_tag(t: &Tag) -> Search {
+        Search {
+            name: format!("#{}", t.name),
+            filter: Query::tag(t.id),
+            order: Order::Tag(t.id),
+        }
+    }
+
+    pub fn for_tag_full(tag: &Tag, backlog: bool) -> Search {
+        Search {
+            name: format!(
+                "#{} ({})",
+                tag.name,
+                if backlog { "backlog" } else { "not-backlog " }
+            ),
+            filter: Query::Tag {
+                tag: tag.id,
+                backlog: Some(backlog),
+            },
+            order: Order::Tag(tag.id),
+        }
+    }
+
+    pub fn is_order_tag(&self) -> Option<TagId> {
+        match self.order {
+            Order::Tag(t) => Some(t),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Order {
     Custom(OrderId),
     Tag(TagId),
@@ -19,6 +62,7 @@ pub enum Order {
     BlockedUntil(OrderType),
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum OrderType {
     Asc,
     Desc,
@@ -42,7 +86,12 @@ impl Order {
                     .current_tags
                     .get(tag)
                     .expect("task passed to Order::Tag(t)::sort is not actually in the tag");
-                (tag_data.priority, t.id)
+                let category = match (tag_data.backlog, t.is_done) {
+                    (false, false) => 0,
+                    (false, true) => 1,
+                    (true, _) => 2,
+                };
+                (category, tag_data.priority, t.id)
             }),
             Order::CreationDate(OrderType::Asc) => tasks.sort_unstable_by_key(|t| t.date),
             Order::CreationDate(OrderType::Desc) => tasks.sort_unstable_by_key(|t| Reverse(t.date)),

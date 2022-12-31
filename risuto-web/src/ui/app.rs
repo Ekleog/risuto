@@ -1,9 +1,8 @@
-use chrono::Timelike;
 use futures::{channel::oneshot, executor::block_on};
 use gloo_storage::{LocalStorage, Storage};
 use risuto_client::{
-    api::{Event, EventData, TagId},
-    DbDump, Task,
+    api::{Event, EventData},
+    DbDump, Order, Search, Task,
 };
 use std::{collections::VecDeque, rc::Rc, sync::Arc};
 use wasm_bindgen_futures::spawn_local;
@@ -12,7 +11,7 @@ use yew::prelude::*;
 use crate::{
     api, ui,
     ui::{ListType, TaskOrderChangeEvent},
-    util, LoginInfo, TODAY_TAG,
+    util, LoginInfo,
 };
 
 const KEY_EVTS_PENDING_SUBMISSION: &str = "events-pending-submission";
@@ -30,7 +29,7 @@ pub enum AppMsg {
     ReceivedDb(DbDump),
     WebsocketDisconnected,
 
-    SetTag(Option<TagId>),
+    SetActiveSearch(usize),
     NewUserEvent(Event),
     NewNetworkEvent(Event),
     EventSubmissionComplete,
@@ -46,7 +45,8 @@ pub enum ConnState {
 pub struct App {
     db: Rc<DbDump>,
     connection_state: ConnState,
-    tag: Option<TagId>,
+    searches: Vec<Search>,
+    active_search: usize,
     events_pending_submission: VecDeque<Event>, // push_back, pop_front
     feed_canceller: oneshot::Receiver<()>,
 }
@@ -72,45 +72,26 @@ impl App {
     }
 
     fn current_task_lists(&self) -> TaskLists {
-        let mut open = Vec::new();
-        let mut done = Vec::new();
-        let mut backlog = Vec::new();
-        let now = chrono::Utc::now().with_timezone(&util::local_tz());
-        // TODO: improved depending on https://github.com/chronotope/chrono/pull/927
-        let end_of_today =
-            now + chrono::Duration::seconds(86400 - now.num_seconds_from_midnight() as i64);
-        for t in self.db.tasks.values() {
-            if t.blocked_until.map(|t| t > end_of_today).unwrap_or(false) {
-                continue;
-            }
-            if let Some(tag) = self.tag {
-                if let Some(info) = t.current_tags.get(&tag) {
-                    if info.backlog {
-                        backlog.push((info.priority, t.clone()));
-                    } else if t.is_done {
-                        done.push((info.priority, t.clone()));
-                    } else {
-                        open.push((info.priority, t.clone()));
-                    }
-                }
-            } else {
-                if t.current_tags.len() == 0 {
-                    if t.is_done {
-                        done.push((0, t.clone()));
-                    } else {
-                        open.push((0, t.clone()));
-                    }
+        let search = &self.searches[self.active_search];
+        let mut all_tasks = self.db.search(search);
+        match search.order {
+            Order::Tag(tag) => {
+                let backlog = Rc::new(all_tasks.split_off(
+                    all_tasks.partition_point(|t| !t.current_tags.get(&tag).unwrap().backlog),
+                ));
+                let done = Rc::new(all_tasks.split_off(all_tasks.partition_point(|t| !t.is_done)));
+                let open = Rc::new(all_tasks);
+                TaskLists {
+                    open,
+                    done,
+                    backlog,
                 }
             }
-        }
-        open.sort_unstable_by_key(|(prio, t)| (*prio, t.id));
-        done.sort_unstable_by_key(|(prio, t)| (*prio, t.id));
-        backlog.sort_unstable_by_key(|(prio, t)| (*prio, t.id));
-        let cleanup = |v: Vec<(i64, Arc<Task>)>| Rc::new(v.into_iter().map(|(_, t)| t).collect());
-        TaskLists {
-            open: cleanup(open),
-            done: cleanup(done),
-            backlog: cleanup(backlog),
+            _ => TaskLists {
+                open: Rc::new(all_tasks),
+                done: Rc::new(Vec::new()),
+                backlog: Rc::new(Vec::new()),
+            },
         }
     }
 }
@@ -141,7 +122,8 @@ impl Component for App {
         App {
             db: Rc::new(DbDump::stub()),
             connection_state: ConnState::Disconnected,
-            tag: Some(TagId::stub()), // A value that cannot happen when choosing an actual tag
+            searches: vec![Search::untagged()],
+            active_search: 0,
             events_pending_submission,
             feed_canceller,
         }
@@ -172,21 +154,20 @@ impl Component for App {
                 for e in events_already_received {
                     self.locally_insert_new_event(e);
                 }
-                if self.tag == Some(TagId::stub()) {
-                    self.tag = Some(
-                        self.db
-                            .tags
-                            .iter()
-                            .find(|(_, t)| t.0.name == TODAY_TAG)
-                            .expect("found no tag named 'today'")
-                            .0
-                            .clone(),
-                    );
+                self.searches = self
+                    .db
+                    .tags
+                    .values()
+                    .map(|(t, _)| Search::for_tag(t))
+                    .chain(std::iter::once(Search::untagged()))
+                    .collect();
+                if self.active_search >= self.searches.len() {
+                    self.active_search = 0;
                 }
                 self.connection_state = ConnState::Connected;
             }
-            AppMsg::SetTag(id) => {
-                self.tag = id;
+            AppMsg::SetActiveSearch(id) => {
+                self.active_search = id;
             }
             AppMsg::NewUserEvent(e) => {
                 tracing::debug!("got new user event {e:?}");
@@ -229,7 +210,7 @@ impl Component for App {
 
         let on_order_change = {
             let owner = self.db.owner.clone();
-            let tag = self.tag.clone();
+            let search = self.searches[self.active_search].clone();
             let tasks = tasks.clone();
             ctx.link().batch_callback(move |e: TaskOrderChangeEvent| {
                 let task_id = match e.before.list {
@@ -247,7 +228,7 @@ impl Component for App {
                 }
                 let evts = util::compute_reordering_events(
                     owner,
-                    tag.expect("attempted to reorder in untagged list"),
+                    &search,
                     task_id,
                     e.after.index,
                     e.after.list.is_backlog(),
@@ -272,25 +253,25 @@ impl Component for App {
             <div class="container-fluid vh-100">
                 <div class="row h-100">
                     <nav class="col-md-2 sidebar overflow-auto p-0">
-                        <ui::TagList
-                            tags={self.db.tags.clone()}
-                            current_user={self.db.owner}
-                            active={self.tag}
-                            on_select_tag={ctx.link().callback(|id| AppMsg::SetTag(id))}
+                        <ui::SearchList
+                            searches={ self.searches.clone() }
+                            current_user={ self.db.owner }
+                            active_search={ self.active_search }
+                            on_select_search={ ctx.link().callback(AppMsg::SetActiveSearch) }
                         />
                     </nav>
                     <main class="col-md-10 h-100 p-0">
                         <ui::MainView
-                            connection_state={self.connection_state.clone()}
-                            events_pending_submission={self.events_pending_submission.clone()}
-                            db={self.db.clone()}
-                            current_tag={self.tag}
-                            tasks_open={tasks.open}
-                            tasks_done={tasks.done}
-                            tasks_backlog={tasks.backlog}
-                            on_logout={ctx.link().callback(|_| AppMsg::Logout)}
-                            on_event={ctx.link().callback(AppMsg::NewUserEvent)}
-                            {on_order_change}
+                            connection_state={ self.connection_state.clone() }
+                            events_pending_submission={ self.events_pending_submission.clone() }
+                            db={ self.db.clone() }
+                            current_tag={ self.searches[self.active_search].is_order_tag() }
+                            tasks_open={ tasks.open }
+                            tasks_done={ tasks.done }
+                            tasks_backlog={ tasks.backlog }
+                            on_logout={ ctx.link().callback(|_| AppMsg::Logout) }
+                            on_event={ ctx.link().callback(AppMsg::NewUserEvent) }
+                            { on_order_change }
                         />
                     </main>
                 </div>

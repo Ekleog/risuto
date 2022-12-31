@@ -19,8 +19,8 @@ pub use search_bar::SearchBar;
 mod settings_menu;
 pub use settings_menu::SettingsMenu;
 
-mod tag_list;
-pub use tag_list::TagList;
+mod search_list;
+pub use search_list::SearchList;
 
 mod task_list;
 pub use task_list::TaskList;

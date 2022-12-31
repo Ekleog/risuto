@@ -36,6 +36,7 @@ pub fn search_bar(p: &SearchBarProps) -> Html {
                     tracing::debug!("searching with query {:?}", filter);
                     tracing::debug!("(parsed from {:?})", search.trim());
                     let search = Search {
+                        name: String::from("Search Bar"),
                         filter,
                         order: Order::LastEventDate(OrderType::Desc),
                     };
