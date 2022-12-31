@@ -1,3 +1,11 @@
 DROP VIEW v_tasks_users;
+DROP VIEW v_tags_users;
+DROP VIEW v_tasks_is_tagged;
 DROP VIEW v_tasks_tags;
+DROP VIEW v_tasks_text;
+DROP VIEW v_tasks_comments;
+DROP VIEW v_tasks_title;
+DROP VIEW v_tasks_blocked;
+DROP VIEW v_tasks_scheduled;
+DROP VIEW v_tasks_done;
 DROP VIEW v_tasks_archived;

@@ -38,7 +38,7 @@ CREATE TABLE events (
     d_time TIMESTAMP,
     d_tag_id UUID,
     d_parent_id UUID,
-    d_order_id UUID, -- TODO: make this a fkey to a searches table
+    d_order_id UUID,
 
     -- foreign keys
     FOREIGN KEY (owner_id) REFERENCES users (id)
