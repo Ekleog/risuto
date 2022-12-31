@@ -7,20 +7,25 @@ everything      =  _{ SOI ~ search ~ EOI }
       or        =   { ^"OR" }
     prefix      =  _{ not }
       not       =   { "-" }
-    primary     =  _{ archived | done | tag | untagged  | scheduled | blocked | "(" ~ search ~ ")" | phrase | word }
+    primary     =  _{ archived | done | tag | untagged | today | scheduled | blocked | "(" ~ search ~ ")" | phrase | word }
       archived  =  ${ "archived:" ~ bool }
       done      =  ${ "done:" ~ bool }
       tag       =  ${ "tag:" ~ tagname }
       untagged  =  ${ "untagged:" ~ bool }
       today     =  ${ "today:" ~ bool }
-      scheduled =  ${ "scheduled" ~ timecmp ~ date }
-      blocked   =  ${ "blocked" ~ timecmp ~ date }
+      scheduled =  ${ "scheduled" ~ timecmp ~ timequery }
+      blocked   =  ${ "blocked" ~ timecmp ~ timequery }
       phrase    =  ${ "\"" ~ (!"\"" ~ !"\\" ~ ANY | "\\" ~ ANY)* ~ "\"" }
       word      =  ${ (!WHITESPACE ~ !"(" ~ !")" ~ ANY)+ }
 
-bool    = _{ true | false }
-  true  = { ^"true" }
-  false = { ^"false" }
-tagname = { (ASCII_ALPHANUMERIC | ":")+ }
-timecmp = { ":" | ">" | "<" | ">=" | "<=" }
-date    = { ASCII_DIGIT{4} ~ "-" ~ ASCII_DIGIT{2} ~ "-" ~ ASCII_DIGIT{2} }
+bool         =  _{ true | false }
+  true       =   { ^"true" }
+  false      =   { ^"false" }
+int          =  ${ ASCII_DIGIT+ }
+date         =  ${ ASCII_DIGIT{4} ~ "-" ~ ASCII_DIGIT{2} ~ "-" ~ ASCII_DIGIT{2} }
+tagname      =  ${ (ASCII_ALPHANUMERIC | ":")+ }
+timecmp      =   { ":" | ">=" | "<=" | ">" | "<" }
+timequery    =  _{ abstimeq | reltimeq }
+  abstimeq   =   { date }
+  reltimeq   =   { "today" ~ (reltimeqop ~ int)? }
+    reltimeqop =   { "+" | "-" }

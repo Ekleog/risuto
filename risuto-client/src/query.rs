@@ -1,17 +1,19 @@
+use std::str::FromStr;
+
 use crate::{
-    api::{Query, Time},
+    api::{Query, TimeQuery},
     Comment, DbDump, Task,
 };
 
 use pest::{iterators::Pairs, pratt_parser::PrattParser, Parser as PestParser};
 
 pub trait QueryExt {
-    fn from_search(db: &DbDump, tz: &impl chrono::TimeZone, search: &str) -> Query;
+    fn from_search(db: &DbDump, tz: &chrono_tz::Tz, search: &str) -> Query;
     fn matches(&self, task: &Task) -> bool;
 }
 
 impl QueryExt for Query {
-    fn from_search(db: &DbDump, tz: &impl chrono::TimeZone, search: &str) -> Query {
+    fn from_search(db: &DbDump, tz: &chrono_tz::Tz, search: &str) -> Query {
         tracing::trace!(?search, "parsing query");
         let res = match Parser::parse(Rule::everything, search) {
             Ok(mut pairs) => {
@@ -65,10 +67,22 @@ fn matches_impl(q: &Query, task: &Task, tokenized: &Option<Vec<Vec<String>>>) ->
             },
         },
         Query::Untagged(u) => task.current_tags.is_empty() == *u,
-        Query::ScheduledForAfter(d) => task.scheduled_for.map(|s| s >= *d).unwrap_or(false),
-        Query::ScheduledForBefore(d) => task.scheduled_for.map(|s| s <= *d).unwrap_or(false),
-        Query::BlockedUntilAtLeast(d) => task.blocked_until.map(|b| b >= *d).unwrap_or(false),
-        Query::BlockedUntilAtMost(d) => task.blocked_until.map(|b| b <= *d).unwrap_or(false),
+        Query::ScheduledForAfter(d) => task
+            .scheduled_for
+            .map(|s| s >= d.eval_now().expect("failed to eval query"))
+            .unwrap_or(false),
+        Query::ScheduledForBefore(d) => task
+            .scheduled_for
+            .map(|s| s <= d.eval_now().expect("failed to eval query"))
+            .unwrap_or(false),
+        Query::BlockedUntilAtLeast(d) => task
+            .blocked_until
+            .map(|b| b >= d.eval_now().expect("failed to eval query"))
+            .unwrap_or(false),
+        Query::BlockedUntilAtMost(d) => task
+            .blocked_until
+            .map(|b| b <= d.eval_now().expect("failed to eval query"))
+            .unwrap_or(false),
         Query::Phrase(p) => {
             let q = tokenize(p);
             if q.is_empty() {
@@ -159,7 +173,7 @@ fn unescape(s: &str) -> String {
     res
 }
 
-fn parse_search(db: &DbDump, tz: &impl chrono::TimeZone, pairs: Pairs<Rule>) -> Query {
+fn parse_search(db: &DbDump, tz: &chrono_tz::Tz, pairs: Pairs<Rule>) -> Query {
     SEARCH_PARSER
         .map_primary(|p| match p.as_rule() {
             Rule::archived => Query::Archived(match p.into_inner().next().map(|p| p.as_rule()) {
@@ -231,38 +245,85 @@ fn parse_search(db: &DbDump, tz: &impl chrono::TimeZone, pairs: Pairs<Rule>) -> 
 
 fn parse_date_cmp(
     mut reader: Pairs<Rule>,
-    tz: &impl chrono::TimeZone,
-    date_after: impl Fn(Time) -> Query,
-    date_before: impl Fn(Time) -> Query,
+    tz: &chrono_tz::Tz,
+    date_after: impl Fn(TimeQuery) -> Query,
+    date_before: impl Fn(TimeQuery) -> Query,
 ) -> Query {
     let cmp = reader.next().expect("parsing date cmp without an operator");
-    let date = reader.next().expect("parsing date cmp without a date");
-    let (day_begin, day_end) = begin_and_end_of_day(tz, date.as_str());
+    let timequery = reader.next().expect("parsing date cmp without a timequery");
+    let timequery = match timequery.as_rule() {
+        Rule::abstimeq => TimeQuery::Absolute(
+            // TODO: for safety, see (currently open) https://github.com/chronotope/chrono/pull/927
+            chrono::NaiveDate::parse_from_str(timequery.as_str(), "%Y-%m-%d")
+                .expect("parsing date cmp with ill-formed absolute date")
+                .and_hms_opt(0, 0, 0)
+                .expect("failed adding hms 000 to date")
+                .and_local_timezone(tz.clone())
+                .unwrap()
+                .with_timezone(&chrono::Utc),
+        ),
+        Rule::reltimeq => {
+            let mut reader = timequery.into_inner();
+            let op = reader.next();
+            match op {
+                None => TimeQuery::DayRelative {
+                    timezone: tz.clone(),
+                    day_offset: 0,
+                },
+                Some(op) => {
+                    let offset = reader
+                        .next()
+                        .expect("parsing relative time query without offset");
+                    let offset =
+                        i64::from_str(offset.as_str()).expect("failed parsing i64 from str");
+                    let day_offset = match op.as_str() {
+                        "+" => offset,
+                        "-" => -offset,
+                        _ => unreachable!("got unexpected offset operator"),
+                    };
+                    TimeQuery::DayRelative {
+                        timezone: tz.clone(),
+                        day_offset,
+                    }
+                }
+            }
+        }
+        _ => unreachable!("got unexpected timequery type"),
+    };
     match cmp.as_str() {
-        ">" => date_after(day_end),
-        "<" => date_before(day_begin),
-        ">=" => date_after(day_begin),
-        "<=" => date_before(day_end),
-        ":" => Query::All(vec![date_after(day_begin), date_before(day_end)]),
+        ">" => date_after(start_of_next_day(tz, timequery)),
+        "<=" => date_before(start_of_next_day(tz, timequery)),
+        "<" => date_before(timequery),
+        ">=" => date_after(timequery),
+        ":" => Query::All(vec![
+            date_after(timequery.clone()),
+            date_before(start_of_next_day(tz, timequery)),
+        ]),
         _ => panic!("parsing date cmp with ill-formed cmp op"),
     }
 }
 
-fn begin_and_end_of_day(tz: &impl chrono::TimeZone, date: &str) -> (Time, Time) {
-    // TODO: for safety, see (currently open) https://github.com/chronotope/chrono/pull/927
-    let date = chrono::NaiveDate::parse_from_str(date, "%Y-%m-%d")
-        .expect("parsing date cmp with ill-formed date");
-    let next_date = date
-        .succ_opt()
-        .expect("failed figuring out a date for tomorrow");
-    let early_day = |d: &chrono::NaiveDate| {
-        d.and_hms_opt(0, 0, 0)
-            .expect("failed setting hms to 000")
-            .and_local_timezone(tz.clone())
-            .unwrap()
-            .with_timezone(&chrono::Utc)
-    };
-    (early_day(&date), early_day(&next_date))
+fn start_of_next_day(tz: &impl chrono::TimeZone, day: TimeQuery) -> TimeQuery {
+    match day {
+        TimeQuery::DayRelative {
+            timezone,
+            day_offset,
+        } => TimeQuery::DayRelative {
+            timezone,
+            day_offset: day_offset + 1,
+        },
+        TimeQuery::Absolute(t) => TimeQuery::Absolute(
+            // TODO: for safety, see (currently open) https://github.com/chronotope/chrono/pull/927
+            t.date_naive()
+                .succ_opt()
+                .expect("failed figuring out a date for day+1")
+                .and_hms_opt(0, 0, 0)
+                .expect("failed setting hms to 000")
+                .and_local_timezone(tz.clone())
+                .unwrap()
+                .with_timezone(&chrono::Utc),
+        ),
+    }
 }
 
 #[cfg(test)]

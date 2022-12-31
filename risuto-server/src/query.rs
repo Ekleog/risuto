@@ -1,4 +1,4 @@
-use risuto_api::{Query, Time, Uuid};
+use risuto_api::{Query, Time, TimeQuery, Uuid};
 
 pub enum Bind {
     Bool(bool),
@@ -87,19 +87,19 @@ fn add_to_postgres(q: &Query, first_bind_idx: usize, res: &mut Sql) {
                 .push_str("(vtit.has_tag = false OR vtit.has_tag IS NULL)");
         }
         Query::ScheduledForBefore(date) => {
-            let idx = res.add_bind(first_bind_idx, Bind::Time(*date));
+            let idx = res.add_bind(first_bind_idx, timeq_to_bind(date));
             res.where_clause.push_str(&format!("(vts.time <= ${idx})"));
         }
         Query::ScheduledForAfter(date) => {
-            let idx = res.add_bind(first_bind_idx, Bind::Time(*date));
+            let idx = res.add_bind(first_bind_idx, timeq_to_bind(date));
             res.where_clause.push_str(&format!("(vts.time >= ${idx})"));
         }
         Query::BlockedUntilAtMost(date) => {
-            let idx = res.add_bind(first_bind_idx, Bind::Time(*date));
+            let idx = res.add_bind(first_bind_idx, timeq_to_bind(date));
             res.where_clause.push_str(&format!("(vtb.time <= ${idx})"));
         }
         Query::BlockedUntilAtLeast(date) => {
-            let idx = res.add_bind(first_bind_idx, Bind::Time(*date));
+            let idx = res.add_bind(first_bind_idx, timeq_to_bind(date));
             res.where_clause.push_str(&format!("(vtb.time >= ${idx})"));
         }
         Query::Phrase(t) => {
@@ -108,4 +108,30 @@ fn add_to_postgres(q: &Query, first_bind_idx: usize, res: &mut Sql) {
                 .push_str(&format!("(vtx.text @@ phraseto_tsquery(${idx}))"));
         }
     }
+}
+
+fn timeq_to_bind(q: &TimeQuery) -> Bind {
+    Bind::Time(match q {
+        TimeQuery::Absolute(t) => *t,
+        TimeQuery::DayRelative {
+            timezone,
+            day_offset,
+        } => {
+            let now = chrono::Utc::now().with_timezone(timezone);
+            let date = now.date_naive();
+            let date = match *day_offset > 0 {
+                true => date
+                    .checked_add_days(chrono::naive::Days::new(*day_offset as u64))
+                    .expect("failed adding days"),
+                false => date
+                    .checked_sub_days(chrono::naive::Days::new((-day_offset) as u64))
+                    .expect("failed subtracting days"),
+            };
+            date.and_hms_opt(0, 0, 0)
+                .expect("naive_date and hms 000 failed")
+                .and_local_timezone(timezone.clone())
+                .unwrap()
+                .with_timezone(&chrono::Utc)
+        }
+    })
 }
