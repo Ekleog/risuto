@@ -49,8 +49,26 @@ pub fn task_list(p: &TaskListItemProps) -> Html {
                     <div class="px-3">{ for tags }</div>
                 </div>
                 <div class="d-flex align-items-center">
-                    <ButtonBlockedUntil ..p.clone() />
-                    <ButtonScheduleFor ..p.clone() />
+                    <TimesetButton
+                        current_date={ p.task.scheduled_for }
+                        label="Schedule for"
+                        icon="bi-alarm"
+                        on_time_set={
+                            let db = p.db.clone();
+                            let task = p.task.clone();
+                            p.on_event.reform(move |t| Event::now(db.owner, task.id, EventData::ScheduleFor(t)))
+                        }
+                    />
+                    <TimesetButton
+                        current_date={ p.task.blocked_until }
+                        label="Blocked until"
+                        icon="bi-hourglass-split"
+                        on_time_set={
+                            let db = p.db.clone();
+                            let task = p.task.clone();
+                            p.on_event.reform(move |t| Event::now(db.owner, task.id, EventData::BlockedUntil(t)))
+                        }
+                    />
                     <ButtonDoneChange ..p.clone() />
                 </div>
             </div>
@@ -184,18 +202,22 @@ fn button_done_change(p: &TaskListItemProps) -> Html {
     }
 }
 
-fn timeset_button(
-    input_ref: NodeRef,
-    is_shown: UseStateHandle<bool>,
-    current_date: &Option<Time>,
+#[derive(Clone, PartialEq, Properties)]
+struct TimesetButtonProps {
+    current_date: Option<Time>,
     label: &'static str,
     icon: &'static str,
-    callback: &Callback<Option<Time>>,
-) -> Html {
+    on_time_set: Callback<Option<Time>>,
+}
+
+#[function_component(TimesetButton)]
+fn timeset_button(p: &TimesetButtonProps) -> Html {
+    let input_ref = use_node_ref();
+    let is_shown = use_state(|| false);
     let close_input = {
         let input_ref = input_ref.clone();
         let is_shown = is_shown.clone();
-        let callback = callback.clone();
+        let on_time_set = p.on_time_set.clone();
         Callback::from(move |_| {
             is_shown.set(false);
             let input = input_ref
@@ -218,7 +240,7 @@ fn timeset_button(
                     date.with_timezone(&chrono::Utc)
                 }),
             };
-            callback.emit(date);
+            on_time_set.emit(date);
         })
     };
     let on_button_click = {
@@ -238,7 +260,7 @@ fn timeset_button(
             }
         })
     };
-    let current_date = current_date.map(|t| t.with_timezone(&util::local_tz()));
+    let current_date = p.current_date.map(|t| t.with_timezone(&util::local_tz()));
     let timeset_label = current_date
         .and_then(|d| {
             let remaining = d.signed_duration_since(chrono::Utc::now());
@@ -284,8 +306,8 @@ fn timeset_button(
         <div class={ classes!("timeset-container", "d-flex", "align-items-center", is_shown.then(|| "shown")) }>
             <button
                 type="button"
-                class={ classes!("timeset-button", "btn", "bi-btn", icon, "px-2") }
-                title={ label }
+                class={ classes!("timeset-button", "btn", "bi-btn", p.icon, "px-2") }
+                title={ p.label }
                 onclick={ on_button_click }
             >
                 { for timeset_label }
@@ -297,47 +319,9 @@ fn timeset_button(
                     type="datetime-local"
                     value={ start_value }
                     onfocusout={ close_input.reform(|_| ()) }
-                    aria-label={ label }
+                    aria-label={ p.label }
                 />
             </div>
         </div>
     }
-}
-
-#[function_component(ButtonScheduleFor)]
-fn button_schedule_for(p: &TaskListItemProps) -> Html {
-    let is_shown = use_state(|| false);
-    let input_ref = use_node_ref();
-    let db = p.db.clone();
-    let task = p.task.clone();
-    let on_event = p.on_event.clone();
-    timeset_button(
-        input_ref,
-        is_shown,
-        &p.task.scheduled_for,
-        "Schedule for",
-        "bi-alarm",
-        &Callback::from(move |t| {
-            on_event.emit(Event::now(db.owner, task.id, EventData::ScheduleFor(t)));
-        }),
-    )
-}
-
-#[function_component(ButtonBlockedUntil)]
-fn button_blocked_until(p: &TaskListItemProps) -> Html {
-    let is_shown = use_state(|| false);
-    let input_ref = use_node_ref();
-    let db = p.db.clone();
-    let task = p.task.clone();
-    let on_event = p.on_event.clone();
-    timeset_button(
-        input_ref,
-        is_shown,
-        &p.task.blocked_until,
-        "Blocked until",
-        "bi-hourglass-split",
-        &Callback::from(move |t| {
-            on_event.emit(Event::now(db.owner, task.id, EventData::BlockedUntil(t)));
-        }),
-    )
 }
