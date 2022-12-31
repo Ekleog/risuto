@@ -61,7 +61,7 @@ struct TaskLists {
 impl App {
     fn locally_insert_new_event(&mut self, e: Event) {
         let db = Rc::make_mut(&mut self.db);
-        match db.tasks.get_mut(&e.task_id) {
+        match Arc::make_mut(&mut db.tasks).get_mut(&e.task_id) {
             None => tracing::warn!(evt=?e, "got event for task not in db"),
             Some(t) => {
                 let task = Arc::make_mut(t);
@@ -163,9 +163,9 @@ impl Component for App {
                 }
                 self.searches = vec![Search::today(util::local_tz())];
                 self.searches
-                    .extend(self.db.tags.values().map(|(t, _)| Search::for_tag(t)));
+                    .extend(self.db.tags.values().map(|t| Search::for_tag(t)));
                 util::sort_tags(&self.db.owner, &mut self.searches[1..], |s| {
-                    &self.db.tags.get(&s.is_order_tag().unwrap()).unwrap().0
+                    &self.db.tags.get(&s.is_order_tag().unwrap()).unwrap()
                 });
                 self.searches.push(Search::untagged());
                 if self.active_search >= self.searches.len() {

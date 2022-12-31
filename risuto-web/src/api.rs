@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
 use chrono::Utc;
 use futures::{channel::oneshot, pin_mut, select, FutureExt, SinkExt, StreamExt};
@@ -66,9 +66,10 @@ where
 async fn fetch_db_dump(login: &LoginInfo) -> DbDump {
     let mut db = DbDump {
         owner: fetch(login, "whoami", None).await,
-        users: HashMap::new(),
-        tags: HashMap::new(),
-        tasks: HashMap::new(),
+        users: Arc::new(HashMap::new()),
+        tags: Arc::new(HashMap::new()),
+        perms: Arc::new(HashMap::new()),
+        tasks: Arc::new(HashMap::new()),
     };
 
     db.add_users(fetch(login, "fetch-users", None).await);

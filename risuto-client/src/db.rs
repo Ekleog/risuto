@@ -11,64 +11,70 @@ use crate::{
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DbDump {
     pub owner: UserId,
-    pub users: HashMap<UserId, User>,
-    pub tags: HashMap<TagId, (Tag, AuthInfo)>, // TODO: decouple into one tags and one perms table
-    pub tasks: HashMap<TaskId, Arc<Task>>,
+    pub users: Arc<HashMap<UserId, User>>,
+    pub tags: Arc<HashMap<TagId, Tag>>,
+    pub perms: Arc<HashMap<TagId, AuthInfo>>,
+    pub tasks: Arc<HashMap<TaskId, Arc<Task>>>,
 }
 
 impl DbDump {
     pub fn stub() -> DbDump {
         DbDump {
             owner: UserId::stub(),
-            users: HashMap::new(),
-            tags: HashMap::new(),
-            tasks: HashMap::new(),
+            users: Arc::new(HashMap::new()),
+            tags: Arc::new(HashMap::new()),
+            perms: Arc::new(HashMap::new()),
+            tasks: Arc::new(HashMap::new()),
         }
     }
 
     pub fn add_users(&mut self, users: Vec<api::User>) {
-        self.users.extend(users.into_iter().map(|u| (u.id, u)));
+        Arc::make_mut(&mut self.users).extend(users.into_iter().map(|u| (u.id, u)));
     }
 
-    pub fn add_tags(&mut self, tags: Vec<(api::Tag, api::AuthInfo)>) {
-        self.tags
-            .extend(tags.into_iter().map(|(t, auth)| (t.id, (t, auth))));
+    pub fn add_tags(&mut self, new_tags: Vec<(api::Tag, api::AuthInfo)>) {
+        let tags = Arc::make_mut(&mut self.tags);
+        let perms = Arc::make_mut(&mut self.perms);
+        tags.reserve(tags.len());
+        perms.reserve(tags.len());
+        for (tag, perm) in new_tags.into_iter() {
+            perms.insert(tag.id, perm);
+            tags.insert(tag.id, tag);
+        }
     }
 
     pub fn add_tasks(&mut self, tasks: Vec<api::Task>) {
-        self.tasks
+        Arc::make_mut(&mut self.tasks)
             .extend(tasks.into_iter().map(|t| (t.id, Arc::new(Task::from(t)))))
     }
 
     pub fn add_events_and_refresh_all(&mut self, events: Vec<api::Event>) {
+        let tasks = Arc::make_mut(&mut self.tasks);
         for e in events {
-            if let Some(t) = self.tasks.get_mut(&e.task_id) {
+            if let Some(t) = tasks.get_mut(&e.task_id) {
                 let t = Arc::make_mut(t);
                 t.add_event(e);
             }
         }
-        for t in self.tasks.values_mut() {
+        for t in tasks.values_mut() {
             let t = Arc::make_mut(t);
             t.refresh_metadata(&self.owner);
         }
     }
 
     pub fn tag_id(&self, tagname: &str) -> Option<TagId> {
-        self.tags
-            .values()
-            .find(|(t, _)| t.name == tagname)
-            .map(|(t, _)| t.id)
+        self.tags.values().find(|t| t.name == tagname).map(|t| t.id)
     }
 
     pub fn tag_name(&self, id: &TagId) -> Option<&str> {
-        self.tags.get(id).map(|(t, _)| &t.name as &str)
+        self.tags.get(id).map(|t| &t.name as &str)
     }
 
     pub fn tag(&self, tagname: &str) -> Option<Tag> {
         self.tags
             .values()
-            .find(|(t, _)| t.name == tagname)
-            .map(|(t, _)| t.clone())
+            .find(|t| t.name == tagname)
+            .map(|t| t.clone())
     }
 
     /// Returns a list of all the tasks currently in this tag, ordered by increasing
@@ -118,7 +124,7 @@ impl Db for &DbDump {
         let for_task = AuthInfo::all_or_nothing(t.owner_id == self.owner);
         let mut for_tags = AuthInfo::none();
         for tag in t.current_tags.keys() {
-            if let Some((_, auth)) = self.tags.get(&tag) {
+            if let Some(auth) = self.perms.get(&tag) {
                 for_tags = for_tags | *auth;
             }
         }
