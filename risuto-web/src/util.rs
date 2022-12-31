@@ -1,7 +1,7 @@
 use std::{str::FromStr, sync::Arc};
 
 use risuto_client::{
-    api::{AuthInfo, Event, EventData, Tag, TagId, TaskId, UserId},
+    api::{Event, EventData, Tag, TaskId, UserId},
     Order, Search, Task,
 };
 use wasm_bindgen::prelude::*;
@@ -33,13 +33,16 @@ pub fn local_tz() -> chrono_tz::Tz {
     LOCAL_TZ.clone()
 }
 
-pub fn sort_tags(current_user: &UserId, tags: &mut Vec<(&TagId, &(Tag, AuthInfo))>) {
-    tags.sort_unstable_by_key(|(id, t)| {
-        // TODO: extract into a freestanding fn and reuse for sorting the tag list below tasks
-        let is_tag_today = t.0.name == TODAY_TAG;
-        let is_owner_me = t.0.owner_id == *current_user;
-        let name = t.0.name.clone();
-        let id = (*id).clone();
+pub fn sort_tags<'a, T, F>(current_user: &UserId, tags: &mut [T], get_tag: F)
+where
+    F: for<'b> Fn(&'b T) -> &'a Tag,
+{
+    tags.sort_unstable_by_key(|t| {
+        let t = get_tag(t);
+        let is_tag_today = t.name == TODAY_TAG;
+        let is_owner_me = t.owner_id == *current_user;
+        let name = t.name.clone();
+        let id = t.id;
         (!is_tag_today, !is_owner_me, name, id)
     });
 }

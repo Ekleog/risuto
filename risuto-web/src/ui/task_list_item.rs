@@ -26,7 +26,7 @@ pub fn task_list(p: &TaskListItemProps) -> Html {
         .filter(|t| p.current_tag.as_ref().map(|c| c != *t).unwrap_or(true))
         .filter_map(|t| p.db.tags.get(t).map(|tag| (t, tag)))
         .collect::<Vec<_>>();
-    util::sort_tags(&p.db.owner, &mut tags);
+    util::sort_tags(&p.db.owner, &mut tags, |t| &t.1 .0);
     let no_tags = tags.is_empty();
     let tags = tags.into_iter().map(|(_, (t, _))| {
         html! {

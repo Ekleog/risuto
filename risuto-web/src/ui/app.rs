@@ -159,8 +159,11 @@ impl Component for App {
                     .tags
                     .values()
                     .map(|(t, _)| Search::for_tag(t))
-                    .chain(std::iter::once(Search::untagged()))
                     .collect();
+                util::sort_tags(&self.db.owner, &mut self.searches, |s| {
+                    &self.db.tags.get(&s.is_order_tag().unwrap()).unwrap().0
+                });
+                self.searches.push(Search::untagged());
                 if self.active_search >= self.searches.len() {
                     self.active_search = 0;
                 }
