@@ -117,15 +117,13 @@ fn main() {
 
     // Generate tags
     let mut tags = Vec::new();
-    gen_n_items("tags", NUM_TAGS, |i| {
+    gen_n_items("tags", NUM_TAGS, |_| {
         let uuid = gen_uuid(&mut rng);
         tags.push(uuid.clone());
-        // first, generate the "today" tags, then generate other tags
-        let (user, tag) = match i < NUM_USERS {
-            true => (users[i].clone(), String::from("today")),
-            false => (gen_user(&mut rng), gen_tag(&mut rng)),
-        };
-        format!("('{}', '{}', '{}', {})", uuid, user, tag, rng.gen::<bool>())
+        let user = gen_user(&mut rng);
+        let tag = gen_tag(&mut rng);
+        let archived = rng.gen::<bool>();
+        format!("('{uuid}', '{user}', '{tag}', {archived})")
     });
     let gen_tag = |rng: &mut StdRng| -> String { tags.choose(rng).unwrap().clone() };
 

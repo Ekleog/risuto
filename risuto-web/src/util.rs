@@ -6,8 +6,6 @@ use risuto_client::{
 };
 use wasm_bindgen::prelude::*;
 
-use crate::TODAY_TAG;
-
 #[wasm_bindgen(inline_js = "
     export function show_picker(elt) {
         elt.showPicker();
@@ -39,11 +37,10 @@ where
 {
     tags.sort_unstable_by_key(|t| {
         let t = get_tag(t);
-        let is_tag_today = t.name == TODAY_TAG;
         let is_owner_me = t.owner_id == *current_user;
         let name = t.name.clone();
         let id = t.id;
-        (!is_tag_today, !is_owner_me, name, id)
+        (!is_owner_me, name, id)
     });
 }
 

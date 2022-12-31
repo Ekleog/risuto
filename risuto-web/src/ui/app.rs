@@ -154,13 +154,10 @@ impl Component for App {
                 for e in events_already_received {
                     self.locally_insert_new_event(e);
                 }
-                self.searches = self
-                    .db
-                    .tags
-                    .values()
-                    .map(|(t, _)| Search::for_tag(t))
-                    .collect();
-                util::sort_tags(&self.db.owner, &mut self.searches, |s| {
+                self.searches = vec![Search::today(util::local_tz())];
+                self.searches
+                    .extend(self.db.tags.values().map(|(t, _)| Search::for_tag(t)));
+                util::sort_tags(&self.db.owner, &mut self.searches[1..], |s| {
                     &self.db.tags.get(&s.is_order_tag().unwrap()).unwrap().0
                 });
                 self.searches.push(Search::untagged());

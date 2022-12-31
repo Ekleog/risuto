@@ -1,7 +1,7 @@
 use std::{cmp::Reverse, sync::Arc};
 
 use crate::{
-    api::{OrderId, Query, Tag, TagId},
+    api::{OrderId, Query, Tag, TagId, TimeQuery},
     Task,
 };
 
@@ -18,6 +18,17 @@ impl Search {
             name: String::from("Untagged"),
             filter: Query::Untagged(true),
             order: Order::Custom(OrderId::untagged()),
+        }
+    }
+
+    pub fn today(timezone: chrono_tz::Tz) -> Search {
+        Search {
+            name: String::from("Today"),
+            filter: Query::ScheduledForBefore(TimeQuery::DayRelative {
+                timezone,
+                day_offset: 1,
+            }),
+            order: Order::Custom(OrderId::today()),
         }
     }
 

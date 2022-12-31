@@ -311,10 +311,6 @@ fn button_schedule_for(p: &TaskListItemProps) -> Html {
     let db = p.db.clone();
     let task = p.task.clone();
     let on_event = p.on_event.clone();
-    // TODO: re-add today tag when hitting the time
-    // This will require keeping one scheduled-date per owner actually!
-    // as each user has their own today tag and it wouldn't make sense to
-    // add stuff to other people's today tag
     timeset_button(
         input_ref,
         is_shown,
@@ -322,8 +318,6 @@ fn button_schedule_for(p: &TaskListItemProps) -> Html {
         "Schedule for",
         "bi-alarm",
         &Callback::from(move |t| {
-            // First reschedule, then remove tag
-            // Otherwise, if the tag was the one giving us the perms to edit the event, it'll crash
             on_event.emit(Event::now(db.owner, task.id, EventData::ScheduleFor(t)));
         }),
     )
