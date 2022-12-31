@@ -242,11 +242,23 @@ fn timeset_button(
     let timeset_label = current_date
         .and_then(|d| {
             let remaining = d.signed_duration_since(chrono::Utc::now());
+            // TODO: for safety, see (currently open) https://github.com/chronotope/chrono/pull/927
+            let since_beginning_of_day = d.signed_duration_since(
+                chrono::Utc::now()
+                    .date_naive()
+                    .and_hms_opt(0, 0, 0)
+                    .expect("failed figuring out the start of day")
+                    .and_local_timezone(util::local_tz())
+                    .unwrap(),
+            );
             match remaining {
                 r if r > chrono::Duration::days(365) => Some(format!("{}", d.year())),
                 r if r > chrono::Duration::days(1) => Some(format!("{}/{}", d.month(), d.day())),
                 r if r > chrono::Duration::seconds(0) => {
                     Some(format!("{}h{}", d.hour(), d.minute()))
+                }
+                _ if since_beginning_of_day > chrono::Duration::seconds(0) => {
+                    Some(String::from("(today)"))
                 }
                 _ => None, // task blocked or scheduled for the past is just not blocked/scheduled
             }
