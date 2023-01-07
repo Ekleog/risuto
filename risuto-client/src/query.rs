@@ -330,52 +330,35 @@ fn start_of_next_day(tz: &impl chrono::TimeZone, day: TimeQuery) -> TimeQuery {
 mod tests {
     use super::*;
     use crate::api::*;
-    use std::collections::HashMap;
+    use std::{collections::HashMap, sync::Arc};
 
     fn example_db() -> DbDump {
         let mut tags = HashMap::new();
-        tags.insert(
-            TagId(Uuid::new_v4()),
-            (
+        let mut perms = HashMap::new();
+        for t in ["foo", "bar", "baz"] {
+            let id = TagId(Uuid::new_v4());
+            tags.insert(
+                id,
                 Tag {
-                    id: TagId::stub(),
+                    id,
                     owner_id: UserId::stub(),
-                    name: String::from("foo"),
+                    name: String::from(t),
                     archived: false,
                 },
-                AuthInfo::all(),
-            ),
-        );
-        tags.insert(
-            TagId(Uuid::new_v4()),
-            (
-                Tag {
-                    id: TagId::stub(),
-                    owner_id: UserId::stub(),
-                    name: String::from("bar"),
-                    archived: false,
-                },
-                AuthInfo::all(),
-            ),
-        );
-        tags.insert(
-            TagId(Uuid::new_v4()),
-            (
-                Tag {
-                    id: TagId::stub(),
-                    owner_id: UserId::stub(),
-                    name: String::from("baz"),
-                    archived: false,
-                },
-                AuthInfo::all(),
-            ),
-        );
+            );
+            perms.insert(id, AuthInfo::all());
+        }
         DbDump {
             owner: UserId::stub(),
-            users: HashMap::new(),
-            tags,
-            tasks: HashMap::new(),
+            users: Arc::new(HashMap::new()),
+            tags: Arc::new(tags),
+            perms: Arc::new(perms),
+            tasks: Arc::new(HashMap::new()),
         }
+    }
+
+    fn example_tz() -> chrono_tz::Tz {
+        chrono_tz::Tz::Europe__Paris
     }
 
     fn phrase(s: &str) -> Query {
@@ -385,12 +368,13 @@ mod tests {
     #[test]
     fn primary_archived() {
         let db = example_db();
+        let tz = example_tz();
         assert_eq!(
-            Query::from_search(&db, "archived:true"),
+            Query::from_search(&db, &tz, "archived:true"),
             Query::Archived(true),
         );
         assert_eq!(
-            Query::from_search(&db, "archived:false"),
+            Query::from_search(&db, &tz, "archived:false"),
             Query::Archived(false),
         );
     }
@@ -398,19 +382,21 @@ mod tests {
     #[test]
     fn primary_done() {
         let db = example_db();
-        assert_eq!(Query::from_search(&db, "done:true"), Query::Done(true),);
-        assert_eq!(Query::from_search(&db, "done:false"), Query::Done(false),);
+        let tz = example_tz();
+        assert_eq!(Query::from_search(&db, &tz, "done:true"), Query::Done(true),);
+        assert_eq!(Query::from_search(&db, &tz, "done:false"), Query::Done(false),);
     }
 
     #[test]
     fn primary_tag() {
         let db = example_db();
+        let tz = example_tz();
         assert_eq!(
-            Query::from_search(&db, "tag:foo"),
+            Query::from_search(&db, &tz, "tag:foo"),
             Query::tag(db.tag_id("foo").unwrap()),
         );
         assert_eq!(
-            Query::from_search(&db, "tag:bar"),
+            Query::from_search(&db, &tz, "tag:bar"),
             Query::tag(db.tag_id("bar").unwrap()),
         );
         // TODO: also test behavior for unknown tag
@@ -419,12 +405,13 @@ mod tests {
     #[test]
     fn primary_untagged() {
         let db = example_db();
+        let tz = example_tz();
         assert_eq!(
-            Query::from_search(&db, "untagged:true"),
+            Query::from_search(&db, &tz, "untagged:true"),
             Query::Untagged(true),
         );
         assert_eq!(
-            Query::from_search(&db, "untagged:false"),
+            Query::from_search(&db, &tz, "untagged:false"),
             Query::Untagged(false),
         );
     }
@@ -432,42 +419,44 @@ mod tests {
     #[test]
     fn primary_word() {
         let db = example_db();
+        let tz = example_tz();
 
         // Basic words (including tag name)
-        assert_eq!(Query::from_search(&db, "test"), phrase("test"),);
-        assert_eq!(Query::from_search(&db, "foo"), phrase("foo"),);
+        assert_eq!(Query::from_search(&db, &tz, "test"), phrase("test"),);
+        assert_eq!(Query::from_search(&db, &tz, "foo"), phrase("foo"),);
 
         // Words matching special query parameters
-        assert_eq!(Query::from_search(&db, "archived"), phrase("archived"),);
-        assert_eq!(Query::from_search(&db, "tag"), phrase("tag"),);
+        assert_eq!(Query::from_search(&db, &tz, "archived"), phrase("archived"),);
+        assert_eq!(Query::from_search(&db, &tz, "tag"), phrase("tag"),);
     }
 
     #[test]
     fn primary_phrase() {
         let db = example_db();
+        let tz = example_tz();
 
         // Basic usage
-        assert_eq!(Query::from_search(&db, r#""test""#), phrase("test"),);
-        assert_eq!(Query::from_search(&db, r#""foo bar""#), phrase("foo bar"),);
+        assert_eq!(Query::from_search(&db, &tz, r#""test""#), phrase("test"),);
+        assert_eq!(Query::from_search(&db, &tz, r#""foo bar""#), phrase("foo bar"),);
 
         // Things that look like queries
         assert_eq!(
-            Query::from_search(&db, r#""(foo bar OR archived:false)""#),
+            Query::from_search(&db, &tz, r#""(foo bar OR archived:false)""#),
             phrase("(foo bar OR archived:false)"),
         );
-        assert_eq!(Query::from_search(&db, r#""(test""#), phrase("(test"),);
+        assert_eq!(Query::from_search(&db, &tz, r#""(test""#), phrase("(test"),);
 
         // Escapes
         assert_eq!(
-            Query::from_search(&db, r#""foo\" bar""#),
+            Query::from_search(&db, &tz, r#""foo\" bar""#),
             phrase(r#"foo" bar"#),
         );
         assert_eq!(
-            Query::from_search(&db, r#""foo\\ bar""#),
+            Query::from_search(&db, &tz, r#""foo\\ bar""#),
             phrase(r#"foo\ bar"#),
         );
         assert_eq!(
-            Query::from_search(&db, r#""foo\\\" bar""#),
+            Query::from_search(&db, &tz, r#""foo\\\" bar""#),
             phrase(r#"foo\" bar"#),
         );
     }
@@ -475,26 +464,27 @@ mod tests {
     #[test]
     fn infixes() {
         let db = example_db();
+        let tz = example_tz();
 
         // Nothing is and
         assert_eq!(
-            Query::from_search(&db, "foo bar"),
+            Query::from_search(&db, &tz, "foo bar"),
             Query::All(vec![phrase("foo"), phrase("bar")]),
         );
         assert_eq!(
-            Query::from_search(&db, r#""foo bar" "baz""#),
+            Query::from_search(&db, &tz, r#""foo bar" "baz""#),
             Query::All(vec![phrase("foo bar"), phrase("baz")]),
         );
 
         // Explicit and
         assert_eq!(
-            Query::from_search(&db, "foo AND archived:false"),
+            Query::from_search(&db, &tz, "foo AND archived:false"),
             Query::All(vec![phrase("foo"), Query::Archived(false)]),
         );
 
         // Explicit or
         assert_eq!(
-            Query::from_search(&db, "foo or archived:false"),
+            Query::from_search(&db, &tz, "foo or archived:false"),
             Query::Any(vec![phrase("foo"), Query::Archived(false)]),
         );
     }
@@ -502,26 +492,27 @@ mod tests {
     #[test]
     fn complex() {
         let db = example_db();
+        let tz = example_tz();
         assert_eq!(
-            Query::from_search(&db, "foo bar baz"),
+            Query::from_search(&db, &tz, "foo bar baz"),
             Query::All(vec![phrase("foo"), phrase("bar"), phrase("baz")]),
         );
         assert_eq!(
-            Query::from_search(&db, "foo bar or baz"),
+            Query::from_search(&db, &tz, "foo bar or baz"),
             Query::All(vec![
                 phrase("foo"),
                 Query::Any(vec![phrase("bar"), phrase("baz")])
             ]),
         );
         assert_eq!(
-            Query::from_search(&db, "(foo bar) or baz"),
+            Query::from_search(&db, &tz, "(foo bar) or baz"),
             Query::Any(vec![
                 Query::All(vec![phrase("foo"), phrase("bar")]),
                 phrase("baz")
             ]),
         );
         assert_eq!(
-            Query::from_search(&db, "(archived:true bar) or baz"),
+            Query::from_search(&db, &tz, "(archived:true bar) or baz"),
             Query::Any(vec![
                 Query::All(vec![Query::Archived(true), phrase("bar")]),
                 phrase("baz")
