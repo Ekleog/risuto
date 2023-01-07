@@ -3,11 +3,11 @@ use axum::{
     async_trait,
     extract::{
         ws::{Message, WebSocket},
-        FromRequest, RequestParts, WebSocketUpgrade,
+        FromRef, FromRequestParts, State, WebSocketUpgrade,
     },
-    http::StatusCode,
+    http::{request, StatusCode},
     routing::{get, post},
-    Extension, Json, Router,
+    Json, Router,
 };
 use futures::{channel::mpsc, select, SinkExt, StreamExt};
 use risuto_api::{
@@ -20,6 +20,12 @@ use tower_http::trace::TraceLayer;
 
 mod db;
 mod query;
+
+#[derive(Clone, FromRef)]
+struct AppState {
+    db: sqlx::PgPool,
+    feeds: UserFeeds,
+}
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -34,6 +40,8 @@ async fn main() -> anyhow::Result<()> {
 
     let feeds = UserFeeds(Arc::new(RwLock::new(HashMap::new())));
 
+    let state = AppState { db, feeds };
+
     let app = Router::new()
         .route("/api/auth", post(auth))
         .route("/api/unauth", post(unauth))
@@ -43,9 +51,8 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/search-tasks", post(search_tasks))
         .route("/ws/event-feed", get(event_feed))
         .route("/api/submit-event", post(submit_event))
-        .layer(Extension(db))
-        .layer(Extension(feeds))
-        .layer(TraceLayer::new_for_http());
+        .layer(TraceLayer::new_for_http())
+        .with_state(state);
 
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
     tracing::info!("listening on {}", addr);
@@ -58,11 +65,14 @@ async fn main() -> anyhow::Result<()> {
 struct PreAuth(AuthToken);
 
 #[async_trait]
-impl<B: Send + Sync> FromRequest<B> for PreAuth {
+impl FromRequestParts<AppState> for PreAuth {
     type Rejection = Error;
 
-    async fn from_request(req: &mut RequestParts<B>) -> Result<PreAuth, Error> {
-        match req.headers().get(axum::http::header::AUTHORIZATION) {
+    async fn from_request_parts(
+        req: &mut request::Parts,
+        _state: &AppState,
+    ) -> Result<PreAuth, Error> {
+        match req.headers.get(axum::http::header::AUTHORIZATION) {
             None => Err(Error::PermissionDenied),
             Some(auth) => {
                 let auth = auth.to_str().map_err(|_| Error::PermissionDenied)?;
@@ -88,16 +98,13 @@ impl<B: Send + Sync> FromRequest<B> for PreAuth {
 struct Auth(UserId);
 
 #[async_trait]
-impl<B: Send + Sync> FromRequest<B> for Auth {
+impl FromRequestParts<AppState> for Auth {
     type Rejection = Error;
 
-    async fn from_request(req: &mut RequestParts<B>) -> Result<Auth, Error> {
-        let token = req.extract::<PreAuth>().await?.0;
-        let db = req
-            .extract::<Extension<sqlx::PgPool>>()
-            .await
-            .context("recovering PgPool extension")?;
-        let mut conn = db
+    async fn from_request_parts(req: &mut request::Parts, state: &AppState) -> Result<Auth, Error> {
+        let token = PreAuth::from_request_parts(req, state).await?.0;
+        let mut conn = state
+            .db
             .acquire()
             .await
             .context("getting connection to database")?;
@@ -142,7 +149,7 @@ impl axum::response::IntoResponse for Error {
 }
 
 async fn auth(
-    Extension(db): Extension<sqlx::PgPool>,
+    State(db): State<sqlx::PgPool>,
     Json(data): Json<NewSession>,
 ) -> Result<Json<AuthToken>, Error> {
     let mut conn = db.acquire().await.context("acquiring db connection")?;
@@ -154,7 +161,7 @@ async fn auth(
     ))
 }
 
-async fn unauth(user: PreAuth, Extension(db): Extension<sqlx::PgPool>) -> Result<(), Error> {
+async fn unauth(user: PreAuth, State(db): State<sqlx::PgPool>) -> Result<(), Error> {
     let mut conn = db.acquire().await.context("acquiring db connection")?;
     match db::logout_user(&mut conn, &user.0).await {
         Ok(true) => Ok(()),
@@ -169,7 +176,7 @@ async fn whoami(Auth(user): Auth) -> Json<UserId> {
 
 async fn fetch_users(
     Auth(user): Auth,
-    Extension(db): Extension<sqlx::PgPool>,
+    State(db): State<sqlx::PgPool>,
 ) -> Result<Json<Vec<User>>, Error> {
     let mut conn = db.acquire().await.context("acquiring db connection")?;
     Ok(Json(db::fetch_users(&mut conn).await.with_context(
@@ -179,7 +186,7 @@ async fn fetch_users(
 
 async fn fetch_tags(
     Auth(user): Auth,
-    Extension(db): Extension<sqlx::PgPool>,
+    State(db): State<sqlx::PgPool>,
 ) -> Result<Json<Vec<(Tag, AuthInfo)>>, Error> {
     let mut conn = db.acquire().await.context("acquiring db connection")?;
     Ok(Json(
@@ -190,9 +197,9 @@ async fn fetch_tags(
 }
 
 async fn search_tasks(
-    Json(q): Json<risuto_api::Query>,
     Auth(user): Auth,
-    Extension(db): Extension<sqlx::PgPool>,
+    State(db): State<sqlx::PgPool>,
+    Json(q): Json<risuto_api::Query>,
 ) -> Result<Json<(Vec<Task>, Vec<Event>)>, Error> {
     let mut conn = db.acquire().await.context("acquiring db connection")?;
     Ok(Json(
@@ -203,10 +210,10 @@ async fn search_tasks(
 }
 
 async fn submit_event(
-    Json(e): Json<risuto_api::Event>,
     Auth(user): Auth,
-    Extension(db): Extension<sqlx::PgPool>,
-    Extension(feeds): Extension<UserFeeds>,
+    State(db): State<sqlx::PgPool>,
+    State(feeds): State<UserFeeds>,
+    Json(e): Json<risuto_api::Event>,
 ) -> Result<(), Error> {
     if user != e.owner_id {
         return Err(Error::PermissionDenied);
@@ -223,8 +230,8 @@ async fn submit_event(
 
 async fn event_feed(
     ws: WebSocketUpgrade,
-    Extension(db): Extension<sqlx::PgPool>,
-    Extension(feeds): Extension<UserFeeds>,
+    State(db): State<sqlx::PgPool>,
+    State(feeds): State<UserFeeds>,
 ) -> Result<axum::response::Response, Error> {
     Ok(ws.on_upgrade(move |mut sock| async move {
         // TODO: handle errors more gracefully

@@ -11,7 +11,6 @@ pub enum Bind {
 pub struct Sql {
     pub where_clause: String,
     pub binds: Vec<Bind>,
-    // TODO: order_clause: Option<String>,
 }
 
 impl Sql {

@@ -384,7 +384,10 @@ mod tests {
         let db = example_db();
         let tz = example_tz();
         assert_eq!(Query::from_search(&db, &tz, "done:true"), Query::Done(true),);
-        assert_eq!(Query::from_search(&db, &tz, "done:false"), Query::Done(false),);
+        assert_eq!(
+            Query::from_search(&db, &tz, "done:false"),
+            Query::Done(false),
+        );
     }
 
     #[test]
@@ -399,7 +402,6 @@ mod tests {
             Query::from_search(&db, &tz, "tag:bar"),
             Query::tag(db.tag_id("bar").unwrap()),
         );
-        // TODO: also test behavior for unknown tag
     }
 
     #[test]
@@ -437,7 +439,10 @@ mod tests {
 
         // Basic usage
         assert_eq!(Query::from_search(&db, &tz, r#""test""#), phrase("test"),);
-        assert_eq!(Query::from_search(&db, &tz, r#""foo bar""#), phrase("foo bar"),);
+        assert_eq!(
+            Query::from_search(&db, &tz, r#""foo bar""#),
+            phrase("foo bar"),
+        );
 
         // Things that look like queries
         assert_eq!(

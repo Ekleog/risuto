@@ -14,8 +14,7 @@ risuto-client = { path = "./risuto-client" }
 anyhow = "1.0"
 arrayvec = "0.7.2"
 async-trait = "0.1.58"
-axum = { version = "0.5.16", features = ["ws"] }
-axum-macros = "0.2.3"
+axum = { version = "0.6.1", features = ["macros", "ws"] }
 base64 = "0.13.0"
 # TODO: remove once these PRs land https://github.com/camshaft/bolero/pull/108 https://github.com/camshaft/bolero/pull/109
 bolero = { git = "https://github.com/Ekleog/bolero", rev = "12ab0cc90a6a6924447190feec64fa9069cb07ab" }
