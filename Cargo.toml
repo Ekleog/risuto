@@ -7,5 +7,53 @@ members = [
     "tests",
 ]
 
+[workspace.dependencies]
+risuto-api = { path = "./risuto-api" }
+risuto-client = { path = "./risuto-client" }
+
+anyhow = "1.0"
+arrayvec = "0.7.2"
+async-trait = "0.1.58"
+axum = { version = "0.5.16", features = ["ws"] }
+axum-macros = "0.2.3"
+base64 = "0.13.0"
+# TODO: remove once these PRs land https://github.com/camshaft/bolero/pull/108 https://github.com/camshaft/bolero/pull/109
+bolero = { git = "https://github.com/Ekleog/bolero", rev = "12ab0cc90a6a6924447190feec64fa9069cb07ab" }
+chrono = { version = "0.4.22", features = ["arbitrary", "serde"] }
+# TODO: remove once this PR lands https://github.com/chronotope/chrono-tz/pull/124
+chrono-tz = { git = "https://github.com/Ekleog/chrono-tz", rev = "d9be1348755f9b6300d363babd0862f20d4ae54d", features = ["arbitrary", "serde"] }
+futures = "0.3.25"
+getrandom = "0.2"
+gloo-storage = "0.2.2"
+lazy_static = "1.4"
+lipsum = "0.8.2"
+num = "0.4.0"
+parking_lot = { version = "0.11.2", features = ["wasm-bindgen"] } # work around https://github.com/tomaka/wasm-timer/issues/14
+pest = "2.5"
+pest_derive = "2.5"
+rand = "0.8.5"
+reqwest = { version = "0.11.12", features = ["json"] }
+# These need to be from git until this lands: https://github.com/TrueLayer/reqwest-middleware/pull/79
+reqwest-middleware = { git = "https://github.com/ekleog/reqwest-middleware", rev = "7690746f07df7d6acd1576e8eb28fdda3b6f50f4" }
+reqwest-retry = { git = "https://github.com/ekleog/reqwest-middleware", rev = "7690746f07df7d6acd1576e8eb28fdda3b6f50f4" }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+sortable-js = "0.1.5"
+sqlx = { version = "0.6.2", features = ["chrono", "postgres", "runtime-tokio-rustls", "uuid"] }
+tantivy = { version = "0.19.0", default-features = false, features = ["stopwords"] }
+tokio = { version = "1.21", features = ["full"] }
+tower-http = { version = "0.3.4", features = ["trace"] }
+tracing = "0.1.36"
+tracing-subscriber = "0.3.15"
+tracing-wasm = "0.2.1"
+uuid = { version = "1.2", features = ["arbitrary", "serde", "v4"] }
+wasm-bindgen = "0.2.83"
+wasm-bindgen-futures = "0.4.33"
+wasm-timer = "0.2.5"
+web-sys = { version = "0.3.60", features = ["CssStyleDeclaration", "DataTransfer"] }
+whoami = "1.2"
+ws_stream_wasm = "0.7.3"
+yew = { version = "0.20.0", features = ["csr"] }
+
 [profile.dev.package.sqlx-macros]
 opt-level = 3

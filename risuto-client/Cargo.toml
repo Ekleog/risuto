@@ -4,16 +4,14 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-anyhow = "1.0"
-async-trait = "0.1.58"
-# TODO: remove once these PRs land TODO
-bolero = { git = "https://github.com/Ekleog/bolero", rev = "12ab0cc90a6a6924447190feec64fa9069cb07ab" }
-chrono = "0.4.23"
-# TODO: remove once this PR lands https://github.com/chronotope/chrono-tz/pull/124
-chrono-tz = { git = "https://github.com/Ekleog/chrono-tz", rev = "d9be1348755f9b6300d363babd0862f20d4ae54d" }
-lazy_static = "1.4"
-pest = "2.5"
-pest_derive = "2.5"
-risuto-api = { path = "../risuto-api" }
-tantivy = { version = "0.19.0", default-features = false, features = ["stopwords"] }
-tracing = "0.1.36"
+anyhow.workspace = true
+async-trait.workspace = true
+bolero.workspace = true
+chrono.workspace = true
+chrono-tz.workspace = true
+lazy_static.workspace = true
+pest.workspace = true
+pest_derive.workspace = true
+risuto-api.workspace = true
+tantivy.workspace = true
+tracing.workspace = true
