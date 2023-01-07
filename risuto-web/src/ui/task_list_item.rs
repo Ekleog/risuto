@@ -28,6 +28,7 @@ pub fn task_list(p: &TaskListItemProps) -> Html {
         .collect::<Vec<_>>();
     util::sort_tags(&p.db.owner, &mut tags, |t| &t.1);
     let no_tags = tags.is_empty();
+    // TODO: in db, the search is stored in a table as (id, name, enum { Custom, Tag, Scheduled, Blocked }, Option<Tag>)
     let tags = tags.into_iter().map(|(_, t)| {
         html! {
             <span class="badge rounded-pill tag-pill me-1">{ &t.name }</span>

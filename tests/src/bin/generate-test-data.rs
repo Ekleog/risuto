@@ -1,13 +1,17 @@
 use std::cell::RefCell;
 
+use bolero::{bolero_engine::TypeGenerator, generator::bolero_generator::driver::ForcedRng};
 use chrono::Duration;
 use lipsum::lipsum_words_from_seed;
 use rand::{rngs::StdRng, seq::SliceRandom, Rng, SeedableRng};
+use risuto_api::Query;
+use risuto_client::{OrderType, Order};
 
 const NUM_USERS: usize = 3;
 
 const NUM_TAGS: usize = 10;
 const NUM_PERMS: usize = 20;
+const NUM_SEARCHES: usize = 20;
 
 const NUM_TASKS: usize = 200;
 const TASK_TITLE_LEN: usize = 10;
@@ -54,6 +58,10 @@ fn gen_tag(rng: &mut StdRng) -> String {
     escape(res)
 }
 
+fn gen_search_name(rng: &mut StdRng) -> String {
+    gen_tag(rng)
+}
+
 fn gen_date_range(rng: &mut StdRng, start: &str, end: &str) -> chrono::DateTime<chrono::Utc> {
     let start = chrono::DateTime::parse_from_rfc3339(start)
         .unwrap()
@@ -97,6 +105,10 @@ fn gen_comment_text(rng: &mut StdRng) -> String {
     escape(lipsum_words_from_seed(COMMENT_WORD_COUNT, rng.gen()))
 }
 
+fn gen_bolero<T: TypeGenerator>(rng: &mut StdRng) -> T {
+    T::generate(&mut ForcedRng::new(rng)).unwrap()
+}
+
 fn main() {
     // Prepare RNG
     let mut rng = rand::rngs::StdRng::from_seed(Default::default());
@@ -138,6 +150,33 @@ fn main() {
             rng.gen::<bool>(),
             rng.gen::<bool>(),
         )
+    });
+
+    // Generate searches
+    gen_n_items("searches", NUM_SEARCHES, |_| {
+        let id = gen_uuid(&mut rng);
+        let name = gen_search_name(&mut rng);
+        let filter = serde_json::to_string(&gen_bolero::<Query>(&mut rng)).unwrap();
+        let order_type = gen_bolero::<Order>(&mut rng);
+        let tag = match order_type {
+            Order::Tag(_) => {
+                format!("'{}'", gen_tag(&mut rng)) // ignore the given tag as it doesn't respect fkeys
+            }
+            _ => String::from("NULL"),
+        };
+        let order_type = match order_type {
+            Order::Custom(_) => "custom",
+            Order::Tag(_) => "tag",
+            Order::CreationDate(OrderType::Asc) => "creation_date_asc",
+            Order::CreationDate(OrderType::Desc) => "creation_date_desc",
+            Order::LastEventDate(OrderType::Asc) => "last_event_date_asc",
+            Order::LastEventDate(OrderType::Desc) => "last_event_date_desc",
+            Order::ScheduledFor(OrderType::Asc) => "scheduled_for_asc",
+            Order::ScheduledFor(OrderType::Desc) => "scheduled_for_desc",
+            Order::BlockedUntil(OrderType::Asc) => "blocked_until_asc",
+            Order::BlockedUntil(OrderType::Desc) => "blocked_until_desc",
+        };
+        format!("('{id}', '{name}', '{filter}', '{order_type}', {tag})")
     });
 
     // Generate tasks
@@ -200,7 +239,7 @@ fn main() {
                 *date.borrow_mut() = par_date.checked_add_signed(offset).unwrap_or(failover);
             };
         let mut mk_order = |rng: &mut StdRng| d_order_id = format!("'{}'", gen_uuid(rng));
-        let d_type = match rng.gen_range(0..11) {
+        let d_type = match rng.gen_range(0..11) { // TODO: replace with gen_bolero::<DbEventType>
             0 => {
                 mk_text(&mut rng, true);
                 "set_title"

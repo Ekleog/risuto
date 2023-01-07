@@ -4,8 +4,8 @@ use uuid::{uuid, Uuid};
 
 use crate::{Db, TagId, TaskId, Time, UserId};
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq, serde::Deserialize, serde::Serialize)]
-pub struct OrderId(pub Uuid);
+#[derive(Clone, Debug, Eq, Hash, PartialEq, bolero::generator::TypeGenerator, serde::Deserialize, serde::Serialize)]
+pub struct OrderId(#[generator(bolero::generator::gen_arbitrary())]pub Uuid);
 
 impl OrderId {
     pub fn today() -> OrderId {

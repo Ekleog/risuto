@@ -1,11 +1,12 @@
 use crate::{TagId, Time};
 
-#[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
+#[derive(Clone, Debug, Eq, PartialEq, bolero::generator::TypeGenerator, serde::Deserialize, serde::Serialize)]
 pub enum TimeQuery {
-    Absolute(Time),
+    Absolute(#[generator(bolero::generator::gen_arbitrary())] Time),
 
     /// Offset today().and_hms(0, 0, 0) by day_offset days
     DayRelative {
+        #[generator(bolero::generator::gen_arbitrary())]
         timezone: chrono_tz::Tz,
         day_offset: i64,
     },
@@ -33,11 +34,12 @@ impl TimeQuery {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
+#[derive(Clone, Debug, Eq, PartialEq, bolero::generator::TypeGenerator, serde::Deserialize, serde::Serialize)]
 pub enum Query {
-    Any(Vec<Query>),
-    All(Vec<Query>),
-    Not(Box<Query>),
+    Any(#[generator(bolero::generator::gen_with::<Vec<Query>>().len(0..5usize))] Vec<Query>),
+    All(#[generator(bolero::generator::gen_with::<Vec<Query>>().len(0..5usize))] Vec<Query>),
+    // TODO: the attr below should not be necessary, but see https://github.com/rust-lang/rust/issues/48214#issuecomment-1374372954
+    Not(#[generator(bolero::generator::gen())] Box<Query>),
     Archived(bool),
     Done(bool),
     Tag { tag: TagId, backlog: Option<bool> },

@@ -5,7 +5,12 @@ edition = "2021"
 publish = false
 
 [dependencies]
+# TODO: remove once these PRs land TODO
+bolero = { git = "https://github.com/Ekleog/bolero", rev = "12ab0cc90a6a6924447190feec64fa9069cb07ab" }
 chrono = "0.4.22"
 lipsum = "0.8.2"
 rand = "0.8.5"
+risuto-api = { path = "../risuto-api" }
+risuto-client = { path = "../risuto-client" }
+serde_json = "1.0"
 uuid = "1.2"

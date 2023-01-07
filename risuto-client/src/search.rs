@@ -63,7 +63,7 @@ impl Search {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, bolero::generator::TypeGenerator)]
 pub enum Order {
     Custom(OrderId),
     Tag(TagId),
@@ -73,7 +73,7 @@ pub enum Order {
     BlockedUntil(OrderType),
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, bolero::generator::TypeGenerator)]
 pub enum OrderType {
     Asc,
     Desc,

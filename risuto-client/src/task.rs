@@ -14,6 +14,7 @@ pub struct TaskInTag {
     pub backlog: bool,
 }
 
+// TODO: consider switching to the im crate for cheaply-clonable stuff here
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Task {
     pub id: TaskId,
