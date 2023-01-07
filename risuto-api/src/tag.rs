@@ -3,7 +3,17 @@ use uuid::Uuid;
 use crate::{UserId, STUB_UUID};
 
 #[derive(
-    Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, bolero::generator::TypeGenerator, serde::Deserialize, serde::Serialize,
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+    bolero::generator::TypeGenerator,
+    serde::Deserialize,
+    serde::Serialize,
 )]
 pub struct TagId(#[generator(bolero::generator::gen_arbitrary())] pub Uuid);
 

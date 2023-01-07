@@ -1,6 +1,14 @@
 use crate::{TagId, Time};
 
-#[derive(Clone, Debug, Eq, PartialEq, bolero::generator::TypeGenerator, serde::Deserialize, serde::Serialize)]
+#[derive(
+    Clone,
+    Debug,
+    Eq,
+    PartialEq,
+    bolero::generator::TypeGenerator,
+    serde::Deserialize,
+    serde::Serialize,
+)]
 pub enum TimeQuery {
     Absolute(#[generator(bolero::generator::gen_arbitrary())] Time),
 
@@ -34,7 +42,15 @@ impl TimeQuery {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, bolero::generator::TypeGenerator, serde::Deserialize, serde::Serialize)]
+#[derive(
+    Clone,
+    Debug,
+    Eq,
+    PartialEq,
+    bolero::generator::TypeGenerator,
+    serde::Deserialize,
+    serde::Serialize,
+)]
 pub enum Query {
     Any(#[generator(bolero::generator::gen_with::<Vec<Query>>().len(0..5usize))] Vec<Query>),
     All(#[generator(bolero::generator::gen_with::<Vec<Query>>().len(0..5usize))] Vec<Query>),

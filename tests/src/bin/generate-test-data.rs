@@ -5,7 +5,7 @@ use chrono::Duration;
 use lipsum::lipsum_words_from_seed;
 use rand::{rngs::StdRng, seq::SliceRandom, Rng, SeedableRng};
 use risuto_api::Query;
-use risuto_client::{OrderType, Order};
+use risuto_client::{Order, OrderType};
 
 const NUM_USERS: usize = 3;
 
@@ -239,7 +239,8 @@ fn main() {
                 *date.borrow_mut() = par_date.checked_add_signed(offset).unwrap_or(failover);
             };
         let mut mk_order = |rng: &mut StdRng| d_order_id = format!("'{}'", gen_uuid(rng));
-        let d_type = match rng.gen_range(0..11) { // TODO: replace with gen_bolero::<DbEventType>
+        let d_type = match rng.gen_range(0..11) {
+            // TODO: replace with gen_bolero::<DbEventType>
             0 => {
                 mk_text(&mut rng, true);
                 "set_title"
