@@ -27,6 +27,8 @@ struct AppState {
     feeds: UserFeeds,
 }
 
+static MIGRATOR: sqlx::migrate::Migrator = sqlx::migrate!();
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt::init();
@@ -37,12 +39,27 @@ async fn main() -> anyhow::Result<()> {
         .connect(&db_url)
         .await
         .with_context(|| format!("Error opening database {:?}", db_url))?;
+    MIGRATOR
+        .run(&db)
+        .await
+        .context("running pending migrations")?;
 
+    let app = app(db).await;
+
+    let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
+    tracing::info!("listening on {}", addr);
+    axum::Server::bind(&addr)
+        .serve(app.into_make_service())
+        .await
+        .context("serving axum webserver")
+}
+
+async fn app(db: sqlx::PgPool) -> Router {
     let feeds = UserFeeds(Arc::new(RwLock::new(HashMap::new())));
 
     let state = AppState { db, feeds };
 
-    let app = Router::new()
+    Router::new()
         .route("/api/auth", post(auth))
         .route("/api/unauth", post(unauth))
         .route("/api/whoami", get(whoami))
@@ -52,14 +69,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/ws/event-feed", get(event_feed))
         .route("/api/submit-event", post(submit_event))
         .layer(TraceLayer::new_for_http())
-        .with_state(state);
-
-    let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
-    tracing::info!("listening on {}", addr);
-    axum::Server::bind(&addr)
-        .serve(app.into_make_service())
-        .await
-        .context("serving axum webserver")
+        .with_state(state)
 }
 
 struct PreAuth(AuthToken);
@@ -355,4 +365,78 @@ impl UserFeeds {
             })
             .await;
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sqlx::testing::TestSupport;
+    use std::panic::AssertUnwindSafe;
+
+    macro_rules! do_test {
+        ( $name:ident, $typ:ty, $fn:expr ) => {
+            #[test]
+            fn $name() {
+                let runtime = AssertUnwindSafe(
+                    tokio::runtime::Builder::new_current_thread()
+                        .enable_all()
+                        .build()
+                        .expect("failed initializing tokio runtime"),
+                );
+                // create test db
+                let test_context = runtime
+                    .block_on(sqlx::Postgres::test_context(&sqlx::testing::TestArgs::new(
+                        concat!(module_path!(), "::", stringify!($name)),
+                    )))
+                    .expect("failed connecting to setup test db");
+                let pool = AssertUnwindSafe(
+                    runtime
+                        .block_on(
+                            test_context
+                                .pool_opts
+                                .connect_with(test_context.connect_opts),
+                        )
+                        .expect("failed connecting test pool"),
+                );
+                bolero::check!()
+                    .with_type::<$typ>()
+                    .cloned()
+                    .for_each(move |v| {
+                        let pool = pool.clone();
+                        runtime.block_on(async move {
+                            // run the test
+                            MIGRATOR
+                                .run(
+                                    &mut pool.acquire().await.expect("getting migrator connection"),
+                                )
+                                .await
+                                .expect("failed applying migrations");
+                            let idle_before = pool.num_idle();
+                            let () = $fn(pool.clone(), v).await;
+                            // cleanup
+                            assert_eq!(
+                                pool.num_idle(),
+                                idle_before,
+                                "test {} held onto pool after exiting",
+                                stringify!($name)
+                            );
+                            MIGRATOR
+                                .undo(
+                                    &mut pool
+                                        .acquire()
+                                        .await
+                                        .expect("getting migrator undo connection"),
+                                    0,
+                                )
+                                .await
+                                .expect("failed undoing migrations");
+                        });
+                    });
+            }
+        };
+    }
+
+    do_test!(preauth_extractor_no_500, u8, |_pool, test| async move {
+        assert!(test != 100, "test is 100");
+    });
 }
