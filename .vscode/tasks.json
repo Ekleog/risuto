@@ -1,0 +1,31 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Run trunk serve",
+            "type": "shell",
+            "command": "cd risuto-web && trunk serve",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "group": "develop",
+            },
+            "runOptions": {
+                "runOn": "folderOpen"
+            }
+        },
+        {
+            "label": "Run server",
+            "type": "shell",
+            "command": "cd risuto-server && cargo run",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new",
+                "group": "develop",
+            },
+            "runOptions": {
+                "runOn": "folderOpen"
+            }
+        }
+    ]
+}
