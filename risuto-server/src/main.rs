@@ -368,7 +368,7 @@ impl UserFeeds {
 mod tests {
     use super::*;
     use axum::http;
-    use sqlx::testing::TestSupport;
+    //use sqlx::testing::TestSupport;
     use std::panic::AssertUnwindSafe;
 
     macro_rules! do_tokio_test {
@@ -391,6 +391,7 @@ mod tests {
         };
     }
 
+    /*
     macro_rules! do_sqlx_test {
         ( $name:ident, $typ:ty, $fn:expr ) => {
             #[test]
@@ -452,6 +453,7 @@ mod tests {
             }
         };
     }
+    */
 
     do_tokio_test!(fuzz_preauth_extractor, String, |token| async move {
         if let Ok(req) = http::Request::builder()
