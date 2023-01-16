@@ -3,9 +3,19 @@ use uuid::Uuid;
 use crate::{Time, UserId, STUB_UUID};
 
 #[derive(
-    Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, serde::Deserialize, serde::Serialize,
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+    bolero::generator::TypeGenerator,
+    serde::Deserialize,
+    serde::Serialize,
 )]
-pub struct TaskId(pub Uuid);
+pub struct TaskId(#[generator(bolero::generator::gen_arbitrary())] pub Uuid);
 
 impl TaskId {
     pub fn stub() -> TaskId {

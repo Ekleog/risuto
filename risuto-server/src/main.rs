@@ -470,7 +470,41 @@ mod tests {
         }
     });
 
-    do_sqlx_test!(preauth_extractor_no_500, u8, |_pool, test| async move {
-        // TODO: assert!(test != 100, "test is 100");
-    });
+    #[derive(Clone, Debug, bolero::generator::TypeGenerator)]
+    enum FuzzOp {
+        Auth {
+            info: NewSession,
+        },
+        Unauth {
+            uid: usize,
+        },
+        Whoami {
+            uid: usize,
+        },
+        FetchUsers {
+            uid: usize,
+        },
+        FetchTags {
+            uid: usize,
+        },
+        SearchTasks {
+            uid: usize,
+            query: risuto_api::Query,
+        },
+        SubmitEvent {
+            uid: usize,
+            evt: risuto_api::Event,
+        },
+        OpenEventFeed {
+            uid: usize,
+        },
+        CloseEventFeed {
+            feed_id: usize,
+        },
+    }
+
+    /* TODO: actually introduce it after having added code for creating users, tags and tasks at least
+    do_sqlx_test!(auth_extractor_no_500, Vec<FuzzOp>, |pool, test| async move {
+        let app = app(pool).await;
+    }); */
 }

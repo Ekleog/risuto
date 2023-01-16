@@ -28,26 +28,52 @@ impl OrderId {
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
-pub struct EventId(pub Uuid);
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    PartialEq,
+    bolero::generator::TypeGenerator,
+    serde::Deserialize,
+    serde::Serialize,
+)]
+pub struct EventId(#[generator(bolero::generator::gen_arbitrary())] pub Uuid);
 
-#[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
+#[derive(
+    Clone,
+    Debug,
+    Eq,
+    PartialEq,
+    bolero::generator::TypeGenerator,
+    serde::Deserialize,
+    serde::Serialize,
+)]
 pub struct Event {
     pub id: EventId,
     pub owner_id: UserId,
+    #[generator(bolero::generator::gen_arbitrary())]
     pub date: Time,
     pub task_id: TaskId,
 
     pub data: EventData,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
+#[derive(
+    Clone,
+    Debug,
+    Eq,
+    PartialEq,
+    bolero::generator::TypeGenerator,
+    serde::Deserialize,
+    serde::Serialize,
+)]
 pub enum EventData {
     SetTitle(String),
     SetDone(bool),
     SetArchived(bool),
-    BlockedUntil(Option<Time>),
-    ScheduleFor(Option<Time>),
+    BlockedUntil(#[generator(bolero::generator::gen_arbitrary())] Option<Time>),
+    ScheduleFor(#[generator(bolero::generator::gen_arbitrary())] Option<Time>),
     SetOrder {
         order: OrderId,
         prio: i64,

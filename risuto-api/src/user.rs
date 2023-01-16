@@ -2,8 +2,18 @@ use crate::STUB_UUID;
 
 use uuid::Uuid;
 
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, serde::Deserialize, serde::Serialize)]
-pub struct UserId(pub Uuid);
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    PartialEq,
+    bolero::generator::TypeGenerator,
+    serde::Deserialize,
+    serde::Serialize,
+)]
+pub struct UserId(#[generator(bolero::generator::gen_arbitrary())] pub Uuid);
 
 impl UserId {
     pub fn stub() -> UserId {

@@ -4,7 +4,7 @@ use uuid::Uuid;
 
 use crate::STUB_UUID;
 
-#[derive(serde::Deserialize, serde::Serialize)]
+#[derive(Clone, Debug, bolero::generator::TypeGenerator, serde::Deserialize, serde::Serialize)]
 pub struct NewSession {
     pub user: String,
     pub password: String,
