@@ -384,20 +384,27 @@ mod tests {
                         .expect("failed initializing tokio runtime"),
                 );
                 // create test db
-                let test_context = runtime
-                    .block_on(sqlx::Postgres::test_context(&sqlx::testing::TestArgs::new(
+                let pool = AssertUnwindSafe(runtime.block_on(async move {
+                    let test_context = sqlx::Postgres::test_context(&sqlx::testing::TestArgs::new(
                         concat!(module_path!(), "::", stringify!($name)),
-                    )))
+                    ))
+                    .await
                     .expect("failed connecting to setup test db");
-                let pool = AssertUnwindSafe(
-                    runtime
-                        .block_on(
-                            test_context
-                                .pool_opts
-                                .connect_with(test_context.connect_opts),
-                        )
-                        .expect("failed connecting test pool"),
-                );
+                    let pool = test_context
+                        .pool_opts
+                        .connect_with(test_context.connect_opts)
+                        .await
+                        .expect("failed connecting test pool");
+                    MIGRATOR
+                        .run(&mut pool.acquire().await.expect("getting migrator connection"))
+                        .await
+                        .expect("failed applying migrations");
+                    pool
+                }));
+                let cleanup_queries = include_str!("../reset-test-db.sql")
+                    .split(";")
+                    .collect::<Vec<_>>();
+                let cleanup_queries: &[&str] = &cleanup_queries;
                 bolero::check!()
                     .with_type::<$typ>()
                     .cloned()
@@ -405,12 +412,6 @@ mod tests {
                         let pool = pool.clone();
                         runtime.block_on(async move {
                             // run the test
-                            MIGRATOR
-                                .run(
-                                    &mut pool.acquire().await.expect("getting migrator connection"),
-                                )
-                                .await
-                                .expect("failed applying migrations");
                             let idle_before = pool.num_idle();
                             let () = $fn(pool.clone(), v).await;
                             // cleanup
@@ -420,16 +421,13 @@ mod tests {
                                 "test {} held onto pool after exiting",
                                 stringify!($name)
                             );
-                            MIGRATOR
-                                .undo(
-                                    &mut pool
-                                        .acquire()
-                                        .await
-                                        .expect("getting migrator undo connection"),
-                                    0,
-                                )
-                                .await
-                                .expect("failed undoing migrations");
+                            let mut conn = pool.acquire().await.expect("getting db cleanup connection");
+                            for q in cleanup_queries {
+                                sqlx::query(&q)
+                                    .execute(&mut conn)
+                                    .await
+                                    .expect("failed cleaning up database");
+                            }
                         });
                     });
             }
