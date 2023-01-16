@@ -2237,6 +2237,7 @@ dependencies = [
  "risuto-api",
  "serde_json",
  "sqlx",
+ "thiserror",
  "tokio",
  "tower-http",
  "tracing",

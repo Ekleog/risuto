@@ -1,7 +1,7 @@
 let
   pkgs = import ./nix;
 
-  risuto-app-env = pkgs.npmlock2nix.node_modules {
+  risuto-app-env = pkgs.npmlock2nix.v1.node_modules {
     src = ./risuto-app;
     ELECTRON_SKIP_BINARY_DOWNLOAD = 1;
     ELECTRON_OVERRIDE_DIST_PATH = "${pkgs.electron}/bin";
@@ -13,7 +13,7 @@ let
     platformVersions = [ "30" ];
 
     includeEmulator = true;
-    emulatorVersion = "31.3.9";
+    emulatorVersion = "31.3.14";
     includeSystemImages = true;
     abiVersions = [ "x86_64" ];
   };
@@ -24,6 +24,7 @@ pkgs.stdenv.mkDerivation {
     (with pkgs; [
       androidPkgs.androidsdk
       cacert
+      cargo-bolero
       gradle
       jdk8_headless
       mdbook

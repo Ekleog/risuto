@@ -75,13 +75,10 @@ async fn app(db: sqlx::PgPool) -> Router {
 struct PreAuth(AuthToken);
 
 #[async_trait]
-impl FromRequestParts<AppState> for PreAuth {
+impl<S: Sync> FromRequestParts<S> for PreAuth {
     type Rejection = Error;
 
-    async fn from_request_parts(
-        req: &mut request::Parts,
-        _state: &AppState,
-    ) -> Result<PreAuth, Error> {
+    async fn from_request_parts(req: &mut request::Parts, _state: &S) -> Result<PreAuth, Error> {
         match req.headers.get(axum::http::header::AUTHORIZATION) {
             None => Err(Error::PermissionDenied),
             Some(auth) => {
@@ -122,16 +119,16 @@ impl FromRequestParts<AppState> for Auth {
     }
 }
 
+#[derive(Debug, thiserror::Error)]
 pub enum Error {
-    Anyhow(anyhow::Error),
-    PermissionDenied,
-    UuidAlreadyUsed(Uuid),
-}
+    #[error(transparent)]
+    Anyhow(#[from] anyhow::Error),
 
-impl From<anyhow::Error> for Error {
-    fn from(e: anyhow::Error) -> Error {
-        Error::Anyhow(e)
-    }
+    #[error("Permission denied")]
+    PermissionDenied,
+
+    #[error("Uuid already used {0}")]
+    UuidAlreadyUsed(Uuid),
 }
 
 impl axum::response::IntoResponse for Error {
@@ -370,10 +367,31 @@ impl UserFeeds {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use axum::http;
     use sqlx::testing::TestSupport;
     use std::panic::AssertUnwindSafe;
 
-    macro_rules! do_test {
+    macro_rules! do_tokio_test {
+        ( $name:ident, $typ:ty, $fn:expr ) => {
+            #[test]
+            fn $name() {
+                let runtime = AssertUnwindSafe(
+                    tokio::runtime::Builder::new_current_thread()
+                        .enable_all()
+                        .build()
+                        .expect("failed initializing tokio runtime"),
+                );
+                bolero::check!()
+                    .with_type::<$typ>()
+                    .cloned()
+                    .for_each(move |v| {
+                        let () = runtime.block_on($fn(v));
+                    })
+            }
+        };
+    }
+
+    macro_rules! do_sqlx_test {
         ( $name:ident, $typ:ty, $fn:expr ) => {
             #[test]
             fn $name() {
@@ -421,7 +439,8 @@ mod tests {
                                 "test {} held onto pool after exiting",
                                 stringify!($name)
                             );
-                            let mut conn = pool.acquire().await.expect("getting db cleanup connection");
+                            let mut conn =
+                                pool.acquire().await.expect("getting db cleanup connection");
                             for q in cleanup_queries {
                                 sqlx::query(&q)
                                     .execute(&mut conn)
@@ -434,7 +453,24 @@ mod tests {
         };
     }
 
-    do_test!(preauth_extractor_no_500, u8, |_pool, test| async move {
-        assert!(test != 100, "test is 100");
+    do_tokio_test!(fuzz_preauth_extractor, String, |token| async move {
+        if let Ok(req) = http::Request::builder()
+            .method(http::Method::GET)
+            .uri("/")
+            .header(http::header::AUTHORIZATION, token)
+            .body(())
+        {
+            let mut req = req.into_parts().0;
+            let res = PreAuth::from_request_parts(&mut req, &()).await;
+            match res {
+                Ok(_) => (),
+                Err(Error::PermissionDenied) => (),
+                Err(e) => panic!("got unexpected error: {e}"),
+            }
+        }
+    });
+
+    do_sqlx_test!(preauth_extractor_no_500, u8, |_pool, test| async move {
+        // TODO: assert!(test != 100, "test is 100");
     });
 }

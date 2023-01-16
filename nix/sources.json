@@ -5,10 +5,10 @@
         "homepage": "",
         "owner": "nix-community",
         "repo": "fenix",
-        "rev": "65fcbcc6dce1feb9c3f6f53bd1ce63c9976791cc",
-        "sha256": "1w071s91whwhb5a15dg1plm4829xmf50g40fp1m0607lhvkw2wcx",
+        "rev": "ada3f508ccff5394c27d2801b4f1f3a0b7cae0f7",
+        "sha256": "0p2igs9mhs6q2258in04njpgzq690smk38inqw8pxqkhl06x7cay",
         "type": "tarball",
-        "url": "https://github.com/nix-community/fenix/archive/65fcbcc6dce1feb9c3f6f53bd1ce63c9976791cc.tar.gz",
+        "url": "https://github.com/nix-community/fenix/archive/ada3f508ccff5394c27d2801b4f1f3a0b7cae0f7.tar.gz",
         "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
     },
     "nixpkgs": {
@@ -17,10 +17,10 @@
         "homepage": "",
         "owner": "NixOS",
         "repo": "nixpkgs",
-        "rev": "cd00072eeb6ca71e6f30831385ce9d613508ad1d",
-        "sha256": "1hmwmp73hba7kd89wfv3nir3xv760w31z4m31vs1mjinwmb6955v",
+        "rev": "37b97ae3dd714de9a17923d004a2c5b5543dfa6d",
+        "sha256": "1jdxji52s1qydjx7gj0xn3aw9dvv1101n6nk9phh6drhapih7mn1",
         "type": "tarball",
-        "url": "https://github.com/NixOS/nixpkgs/archive/cd00072eeb6ca71e6f30831385ce9d613508ad1d.tar.gz",
+        "url": "https://github.com/NixOS/nixpkgs/archive/37b97ae3dd714de9a17923d004a2c5b5543dfa6d.tar.gz",
         "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
     },
     "npmlock2nix": {
@@ -29,10 +29,10 @@
         "homepage": "",
         "owner": "nix-community",
         "repo": "npmlock2nix",
-        "rev": "eeed152290ec2425f96c5e74e469c40b621e1468",
-        "sha256": "00p9m7hldpm1qbv00bhswg0nda0rhcsh9zniaqa2rg5cgjp3mh8w",
+        "rev": "9197bbf397d76059a76310523d45df10d2e4ca81",
+        "sha256": "1ddfby72fsnpn4yw43g4zxvg6jzlk5hi5cfnnccg9jgw53ckr4xh",
         "type": "tarball",
-        "url": "https://github.com/nix-community/npmlock2nix/archive/eeed152290ec2425f96c5e74e469c40b621e1468.tar.gz",
+        "url": "https://github.com/nix-community/npmlock2nix/archive/9197bbf397d76059a76310523d45df10d2e4ca81.tar.gz",
         "url_template": "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
     }
 }
