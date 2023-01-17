@@ -99,7 +99,7 @@ async fn fetch_db_dump(login: &LoginInfo) -> DbDump {
 
     db.add_users(fetch(login, "fetch-users", None).await);
     db.add_tags(fetch(login, "fetch-tags", None).await);
-    db.add_tags(fetch(login, "fetch-searches", None).await);
+    db.add_searches(fetch(login, "fetch-searches", None).await);
     let (tasks, events): (Vec<api::Task>, Vec<api::Event>) =
         fetch(login, "search-tasks", Some(&api::Query::Archived(false))).await;
     db.add_tasks(tasks);

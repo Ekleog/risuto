@@ -2219,6 +2219,7 @@ dependencies = [
  "pest",
  "pest_derive",
  "risuto-api",
+ "serde",
  "tantivy",
  "tracing",
 ]

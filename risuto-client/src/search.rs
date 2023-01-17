@@ -7,7 +7,7 @@ use crate::{
     Task,
 };
 
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, serde::Deserialize)]
 pub struct SearchId(pub Uuid);
 
 impl SearchId {
@@ -20,7 +20,7 @@ impl SearchId {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize)]
 pub struct Search {
     pub id: SearchId,
     pub name: String,
@@ -89,7 +89,7 @@ impl Search {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, bolero::generator::TypeGenerator)]
+#[derive(Clone, Debug, Eq, PartialEq, bolero::generator::TypeGenerator, serde::Deserialize)]
 pub enum Order {
     Custom(OrderId),
     Tag(TagId),
@@ -99,7 +99,7 @@ pub enum Order {
     BlockedUntil(OrderType),
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, bolero::generator::TypeGenerator)]
+#[derive(Clone, Debug, Eq, PartialEq, bolero::generator::TypeGenerator, serde::Deserialize)]
 pub enum OrderType {
     Asc,
     Desc,
