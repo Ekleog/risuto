@@ -14,6 +14,7 @@ pub struct Login {
     host: String,
     user: String,
     pass: String,
+    error: Option<&'static str>,
 }
 
 pub enum LoginMsg {
@@ -42,6 +43,7 @@ impl Component for Login {
             host,
             user,
             pass: String::new(),
+            error: None,
         }
     }
 
@@ -72,9 +74,17 @@ impl Component for Login {
                 ctx.props().on_authed.emit(LoginInfo { host, user, token });
                 return false;
             }
-            LoginMsg::Authed(_, _, Err(_)) => {
-                // TODO: at least PermissionDenied must be handled separately
-                return false;
+            LoginMsg::Authed(_, _, Err(ApiError::SendingRequest(err))) => {
+                tracing::error!(?err, "login failed sending request");
+                self.error = Some("Failed connecting to server. Maybe the URL is mistyped?");
+            }
+            LoginMsg::Authed(_, _, Err(ApiError::ParsingResponse(err))) => {
+                tracing::error!(?err, "login failed parsing response");
+                self.error = Some("The server seems to not be a valid risuto server. Maybe the URL is mistyped?");
+            }
+            LoginMsg::Authed(_, _, Err(ApiError::PermissionDenied)) => {
+                tracing::error!("login failed due to permission denied");
+                self.error = Some("Failed to authenticate. Please check your username and password.");
             }
         }
         true
@@ -93,6 +103,11 @@ impl Component for Login {
             <div class="text-center my-4">
                 <h1>{ "Login" }</h1>
             </div>
+            {for self.error.map(|err| html! {
+                <div class="alert alert-danger">
+                    { err }
+                </div>
+            })}
             <form class="login-form">
                 <div class="input-group mb-3">
                     <label class="input-group-text col-xl-1" for="host">{ "Host" }</label>
