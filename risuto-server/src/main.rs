@@ -11,7 +11,8 @@ use axum::{
 };
 use futures::{channel::mpsc, select, SinkExt, StreamExt};
 use risuto_api::{
-    AuthInfo, AuthToken, Event, FeedMessage, NewSession, Tag, Task, User, UserId, Uuid, Search,
+    Action, AuthInfo, AuthToken, Event, FeedMessage, NewSession, Search, Tag, Task, User, UserId,
+    Uuid,
 };
 use serde_json::json;
 use std::{collections::HashMap, net::SocketAddr, sync::Arc};
@@ -67,8 +68,8 @@ async fn app(db: sqlx::PgPool) -> Router {
         .route("/api/fetch-tags", get(fetch_tags))
         .route("/api/fetch-searches", get(fetch_searches))
         .route("/api/search-tasks", post(search_tasks))
-        .route("/ws/event-feed", get(event_feed))
-        .route("/api/submit-event", post(submit_event))
+        .route("/ws/action-feed", get(action_feed))
+        .route("/api/submit-action", post(submit_action))
         .layer(TraceLayer::new_for_http())
         .with_state(state)
 }
@@ -229,26 +230,30 @@ async fn search_tasks(
     ))
 }
 
-async fn submit_event(
+async fn submit_action(
     Auth(user): Auth,
     State(db): State<sqlx::PgPool>,
     State(feeds): State<UserFeeds>,
-    Json(e): Json<risuto_api::Event>,
+    Json(a): Json<Action>,
 ) -> Result<(), Error> {
-    if user != e.owner_id {
-        return Err(Error::PermissionDenied);
-    }
     let mut conn = db.acquire().await.context("acquiring db connection")?;
-    db::submit_event(&mut conn, e.clone()).await?;
-    let db = db::PostgresDb {
+    let mut db = db::PostgresDb {
         conn: &mut conn,
         user,
     };
-    feeds.relay_event(db, e).await;
+    match &a {
+        Action::NewEvent(e) => {
+            if user != e.owner_id {
+                return Err(Error::PermissionDenied);
+            }
+            db::submit_event(&mut db.conn, e.clone()).await?;
+        }
+    }
+    feeds.relay_action(db, a).await;
     Ok(())
 }
 
-async fn event_feed(
+async fn action_feed(
     ws: WebSocketUpgrade,
     State(db): State<sqlx::PgPool>,
     State(feeds): State<UserFeeds>,
@@ -353,27 +358,29 @@ impl UserFeeds {
         });
     }
 
-    async fn relay_event(&self, mut db: db::PostgresDb<'_>, e: risuto_api::Event) {
+    async fn relay_action(&self, mut db: db::PostgresDb<'_>, a: Action) {
+        match &a {
+            Action::NewEvent(e) => db::users_interested_by(&mut db.conn, &[e.task_id.0]),
+        }
         // TODO: magic numbers below should be at least explained
-        db::users_interested_by(&mut db.conn, &[e.task_id.0])
-            .for_each_concurrent(Some(16), |u| {
-                let e = e.clone();
-                async move {
-                    match u {
-                        Err(err) => {
-                            tracing::error!(?err, "error occurred while listing interested users");
-                        }
-                        Ok(u) => {
-                            if let Some(socks) = self.0.read().await.get(&u) {
-                                for s in socks.values() {
-                                    let _ = s.unbounded_send(FeedMessage::NewEvent(e.clone()));
-                                }
+        .for_each_concurrent(Some(16), |u| {
+            let a = a.clone();
+            async move {
+                match u {
+                    Err(err) => {
+                        tracing::error!(?err, "error occurred while listing interested users");
+                    }
+                    Ok(u) => {
+                        if let Some(socks) = self.0.read().await.get(&u) {
+                            for s in socks.values() {
+                                let _ = s.unbounded_send(FeedMessage::Action(a.clone()));
                             }
                         }
                     }
                 }
-            })
-            .await;
+            }
+        })
+        .await;
     }
 }
 

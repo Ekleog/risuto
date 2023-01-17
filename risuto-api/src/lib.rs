@@ -1,3 +1,4 @@
+mod action;
 mod auth;
 mod db;
 mod event;
@@ -7,6 +8,7 @@ mod tag;
 mod task;
 mod user;
 
+pub use action::Action;
 pub use auth::{AuthInfo, AuthToken, NewSession};
 pub use db::Db;
 pub use event::{Event, EventData, EventId, OrderId};
@@ -24,5 +26,5 @@ pub const STUB_UUID: Uuid = uuid!("ffffffff-ffff-ffff-ffff-ffffffffffff");
 #[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
 pub enum FeedMessage {
     Pong,
-    NewEvent(Event),
+    Action(Action),
 }

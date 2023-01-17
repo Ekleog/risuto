@@ -136,7 +136,7 @@ pub async fn start_event_feed(
 
         // Connect to websocket
         let ws_url = format!(
-            "ws{}/ws/event-feed",
+            "ws{}/ws/action-feed",
             login.host.strip_prefix("http").expect("TODO")
         );
         let mut sock = match WsMeta::connect(ws_url, None).await {
@@ -195,7 +195,7 @@ pub async fn start_event_feed(
                     }.expect("TODO");
                     match msg {
                         api::FeedMessage::Pong => last_pong = Utc::now(),
-                        api::FeedMessage::NewEvent(e) => feed_sender.send_message(ui::AppMsg::NewNetworkEvent(e)),
+                        api::FeedMessage::Action(api::Action::NewEvent(e)) => feed_sender.send_message(ui::AppMsg::NewNetworkEvent(e)),
                     }
                 }
             }
@@ -205,9 +205,9 @@ pub async fn start_event_feed(
 
 pub async fn send_event(login: &LoginInfo, event: api::Event) {
     let res = crate::CLIENT
-        .post(format!("{}/api/submit-event", login.host))
+        .post(format!("{}/api/submit-action", login.host))
         .bearer_auth(login.token.0)
-        .json(&event)
+        .json(&api::Action::NewEvent(event))
         .send()
         .await;
     match res {
