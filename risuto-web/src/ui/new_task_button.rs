@@ -72,6 +72,7 @@ pub fn new_task_button(p: &NewTaskButtonProps) -> Html {
                                 "Enter" => {
                                     let elt: web_sys::HtmlInputElement = e.target_unchecked_into();
                                     on_submit.emit(elt.value());
+                                    elt.set_value("");
                                     let _ = elt.blur();
                                     popup_shown.set(false);
                                 }
