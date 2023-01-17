@@ -618,7 +618,7 @@ async fn fetch_tasks_from_tmp_tasks_table(
 ) -> anyhow::Result<(Vec<Task>, Vec<Event>)> {
     let tasks = sqlx::query_as::<_, DbTask>(
         "
-            SELECT t.id, t.owner_id, t.date, t.initial_title
+            SELECT t.id, t.owner_id, t.date, t.initial_title, t.top_comment_id
                 FROM tmp_tasks interesting_tasks
             INNER JOIN tasks t
                 ON t.id = interesting_tasks.id
