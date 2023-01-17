@@ -16,6 +16,8 @@ CREATE TABLE searches (
     name TEXT NOT NULL,
     filter JSON NOT NULL,
     order_type search_order_type NOT NULL,
+    priority BIGINT NOT NULL,
+    -- TODO: add "last-updated" field so that a long-offline machine can't mess with searches
 
     -- optional part
     tag_id UUID,

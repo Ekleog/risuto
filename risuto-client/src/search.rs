@@ -7,7 +7,7 @@ use crate::{
     Task,
 };
 
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct SearchId(pub Uuid);
 
 impl SearchId {
@@ -26,6 +26,8 @@ pub struct Search {
     pub name: String,
     pub filter: Query,
     pub order: Order,
+    pub priority: i64,
+    // TODO: add "available offline" toggle for queries that also match archived tasks
 }
 
 impl Search {
@@ -35,6 +37,7 @@ impl Search {
             name: String::from("Untagged"),
             filter: Query::Untagged(true),
             order: Order::Custom(OrderId::untagged()),
+            priority: 0,
         }
     }
 
@@ -47,6 +50,7 @@ impl Search {
                 day_offset: 1,
             }),
             order: Order::Custom(OrderId::today()),
+            priority: 0,
         }
     }
 
@@ -56,6 +60,7 @@ impl Search {
             name: format!("#{}", t.name),
             filter: Query::tag(t.id),
             order: Order::Tag(t.id),
+            priority: 0,
         }
     }
 
@@ -72,6 +77,7 @@ impl Search {
                 backlog: Some(backlog),
             },
             order: Order::Tag(tag.id),
+            priority: 0,
         }
     }
 

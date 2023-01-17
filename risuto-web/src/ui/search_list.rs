@@ -24,6 +24,8 @@ enum Item {
 
 #[function_component(SearchList)]
 pub fn search_list(p: &SearchListProps) -> Html {
+    let mut searches = p.searches.values().collect::<Vec<_>>();
+    searches.sort_by_key(|s| (s.priority, &s.name, s.id));
     let mut tags = p.tags.values().collect::<Vec<_>>();
     util::sort_tags(&p.current_user, &mut tags, |t| t);
     let list_items = iter::once(Item::Search(Search::today(util::local_tz())))

@@ -40,6 +40,7 @@ pub fn search_bar(p: &SearchBarProps) -> Html {
                         name: String::from("Search Bar"),
                         filter,
                         order: Order::LastEventDate(OrderType::Desc),
+                        priority: 0,
                     };
                     Some(SearchResults::Local(db.search(&search)))
                 }
