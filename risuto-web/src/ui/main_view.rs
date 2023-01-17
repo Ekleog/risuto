@@ -173,9 +173,10 @@ pub fn main_view(p: &MainViewProps) -> Html {
 
             // Top float-above bar corner
             <div class="float-above-container">
-                <ui::SearchBar db={p.db.clone()} />
-                <ui::ActionSubmissionSpinner actions_pending_submission={p.actions_pending_submission.clone()} />
-                <ui::SettingsMenu on_logout={p.on_logout.clone()} />
+                <ui::SearchBar db={ p.db.clone() } />
+                <ui::ActionSubmissionSpinner actions_pending_submission={ p.actions_pending_submission.clone() } />
+                <ui::NewTaskButton user_id={ p.db.owner } on_action={ p.on_action.clone() }/>
+                <ui::SettingsMenu on_logout={ p.on_logout.clone() } />
             </div>
 
             // Main task list

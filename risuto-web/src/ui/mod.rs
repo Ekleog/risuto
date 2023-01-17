@@ -10,6 +10,9 @@ pub use login::Login;
 mod main_view;
 pub use main_view::{ListType, MainView, TaskOrderChangeEvent, TaskPosition};
 
+mod new_task_button;
+pub use new_task_button::NewTaskButton;
+
 mod offline_banner;
 pub use offline_banner::OfflineBanner;
 

@@ -23,6 +23,9 @@ $tag-list-category-bg: lighten($blue, 2%);
 $tag-list-active-bg: lighten($blue, 3%);
 $tag-list-hover: lighten($blue, 70%);
 
+$new-task-form-bg: lighten($black, 15%);
+$new-task-input-bg: lighten($new-task-form-bg, 5%);
+
 $search-bar-bg: lighten($blue, 10%);
 $search-bar-border: darken($text, 20%);
 $search-results-bg: lighten($blue, 15%);
@@ -111,6 +114,32 @@ $dark: lighten($blue, 3%);
     right: 0px;
 
     display: flex;
+}
+
+.new-task-popup {
+    position: absolute;
+    left: 0px;
+    right: 0px;
+    top: 0px;
+
+    transition: transform .35s ease-in-out;
+}
+
+.new-task-popup:not(.shown) {
+    transform: translateY(-100%);
+}
+
+.new-task-form {
+    background-color: $new-task-form-bg;
+    border-radius: 10px;
+}
+
+.new-task-form input {
+    color: $text;
+    background-color: $new-task-input-bg;
+    width: 100%;
+    border: 0px solid transparent;
+    outline: 0px;
 }
 
 .search-bar {
@@ -300,6 +329,10 @@ $dark: lighten($blue, 3%);
 
 .float-above {
     z-index: 10;
+}
+
+.float-above-20 {
+    z-index: 20;
 }
 
 .drag-handle {
