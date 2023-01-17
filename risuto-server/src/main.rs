@@ -475,30 +475,34 @@ mod tests {
     #[derive(Clone, Debug, bolero::generator::TypeGenerator)]
     enum FuzzOp {
         Auth {
+            uid: usize,
+            device: String,
+        },
+        AuthRaw {
             info: NewSession,
         },
         Unauth {
-            uid: usize,
+            sid: usize,
         },
         Whoami {
-            uid: usize,
+            sid: usize,
         },
         FetchUsers {
-            uid: usize,
+            sid: usize,
         },
         FetchTags {
-            uid: usize,
+            sid: usize,
         },
         SearchTasks {
-            uid: usize,
+            sid: usize,
             query: risuto_api::Query,
         },
         SubmitEvent {
-            uid: usize,
+            sid: usize,
             evt: risuto_api::Event,
         },
         OpenEventFeed {
-            uid: usize,
+            sid: usize,
         },
         CloseEventFeed {
             feed_id: usize,
