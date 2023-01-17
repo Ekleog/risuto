@@ -1,8 +1,8 @@
 use std::{str::FromStr, sync::Arc};
 
 use risuto_client::{
-    api::{Event, EventData, Order, Search, Tag, TaskId, UserId},
-    Task,
+    api::{Event, EventData, Order, Search, SearchId, Tag, TaskId, UserId},
+    DbDump, Task,
 };
 use wasm_bindgen::prelude::*;
 
@@ -146,4 +146,35 @@ pub fn compute_reordering_events(
             )
         }))
         .collect()
+}
+
+pub fn parse_tag_changes(db: &DbDump, task_id: TaskId, mut title: String) -> (String, Vec<Event>) {
+    let mut res = Vec::new();
+    loop {
+        title.truncate(title.trim_end().len());
+
+        if let Some(i) = title.rfind(" -") {
+            let tag_start = i + " -".len();
+            if let Some(t) = title.get(tag_start..).and_then(|t| db.tag_id(t)) {
+                res.push(Event::now(db.owner, task_id, EventData::RmTag(t)));
+                title.truncate(i);
+                continue;
+            }
+        }
+
+        if let Some(i) = title.rfind(" +") {
+            let tag_start = i + " +".len();
+            if let Some(tag) = title.get(tag_start..).and_then(|t| db.tag(t)) {
+                let search = Search::for_tag_full(SearchId::stub(), &tag, false);
+                let tasks = db.search(&search);
+                res.extend(compute_reordering_events(
+                    db.owner, &search, task_id, 0, false, &tasks,
+                ));
+                title.truncate(i);
+                continue;
+            }
+        }
+
+        return (title, res);
+    }
 }

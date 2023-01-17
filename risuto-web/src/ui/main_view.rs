@@ -175,7 +175,7 @@ pub fn main_view(p: &MainViewProps) -> Html {
             <div class="float-above-container">
                 <ui::SearchBar db={ p.db.clone() } />
                 <ui::ActionSubmissionSpinner actions_pending_submission={ p.actions_pending_submission.clone() } />
-                <ui::NewTaskButton user_id={ p.db.owner } on_action={ p.on_action.clone() }/>
+                <ui::NewTaskButton db={ p.db.clone() } on_action={ p.on_action.clone() }/>
                 <ui::SettingsMenu on_logout={ p.on_logout.clone() } />
             </div>
 

@@ -2,7 +2,7 @@ use std::{rc::Rc, sync::Arc};
 
 use chrono::{Datelike, Timelike};
 use risuto_client::{
-    api::{Event, EventData, Search, SearchId, TagId, Time},
+    api::{Event, EventData, TagId, Time},
     DbDump, Task,
 };
 use yew::prelude::*;
@@ -139,39 +139,12 @@ fn title_div(p: &TitleDivProps) -> Html {
     }
 }
 
-fn parse_new_title(db: &DbDump, mut title: String, task: &Task) -> Vec<Event> {
-    let mut res = Vec::new();
-    loop {
-        title.truncate(title.trim_end().len());
-
-        if let Some(i) = title.rfind(" -") {
-            let tag_start = i + " -".len();
-            if let Some(t) = title.get(tag_start..).and_then(|t| db.tag_id(t)) {
-                res.push(Event::now(db.owner, task.id, EventData::RmTag(t)));
-                title.truncate(i);
-                continue;
-            }
-        }
-
-        if let Some(i) = title.rfind(" +") {
-            let tag_start = i + " +".len();
-            if let Some(tag) = title.get(tag_start..).and_then(|t| db.tag(t)) {
-                let search = Search::for_tag_full(SearchId::stub(), &tag, false);
-                let tasks = db.search(&search);
-                res.extend(util::compute_reordering_events(
-                    db.owner, &search, task.id, 0, false, &tasks,
-                ));
-                title.truncate(i);
-                continue;
-            }
-        }
-
-        if title != task.current_title {
-            res.push(Event::now(db.owner, task.id, EventData::SetTitle(title)));
-        }
-
-        return res;
+fn parse_new_title(db: &DbDump, title: String, task: &Task) -> Vec<Event> {
+    let (title, mut evts) = util::parse_tag_changes(db, task.id, title);
+    if title != task.current_title {
+        evts.push(Event::now(db.owner, task.id, EventData::SetTitle(title)));
     }
+    evts
 }
 
 #[function_component(ButtonDoneChange)]
