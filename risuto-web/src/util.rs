@@ -1,8 +1,8 @@
 use std::{str::FromStr, sync::Arc};
 
 use risuto_client::{
-    api::{Event, EventData, Tag, TaskId, UserId},
-    Order, Search, Task,
+    api::{Event, EventData, Order, Search, Tag, TaskId, UserId},
+    Task,
 };
 use wasm_bindgen::prelude::*;
 

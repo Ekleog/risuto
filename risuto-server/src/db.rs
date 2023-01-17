@@ -3,8 +3,8 @@ use axum::async_trait;
 use chrono::Utc;
 use futures::{Future, Stream, StreamExt, TryStreamExt};
 use risuto_api::{
-    AuthInfo, AuthToken, Event, EventData, EventId, NewSession, OrderId, Query, Tag, TagId, Task,
-    TaskId, Time, User, UserId, Uuid,
+    AuthInfo, AuthToken, Event, EventData, EventId, NewSession, Order, OrderId, OrderType, Query,
+    Search, SearchId, Tag, TagId, Task, TaskId, Time, User, UserId, Uuid,
 };
 use std::pin::Pin;
 
@@ -29,6 +29,38 @@ enum DbType {
     AddComment,
     EditComment,
     SetEventRead,
+}
+
+#[derive(Debug, Eq, PartialEq, sqlx::Type)]
+#[sqlx(type_name = "order_type", rename_all = "snake_case")]
+enum DbOrderType {
+    Custom,
+    Tag,
+    CreationDateAsc,
+    CreationDateDesc,
+    LastEventDateAsc,
+    LastEventDateDesc,
+    ScheduledForAsc,
+    ScheduledForDesc,
+    BlockedUntilAsc,
+    BlockedUntilDesc,
+}
+
+impl DbOrderType {
+    fn into_api(self, id: Uuid, tag_id: Option<Uuid>) -> Order {
+        match self {
+            DbOrderType::Custom => Order::Custom(OrderId(id)),
+            DbOrderType::Tag => Order::Tag(TagId(tag_id.expect("ill-formed db entry"))),
+            DbOrderType::CreationDateAsc => Order::CreationDate(OrderType::Asc),
+            DbOrderType::CreationDateDesc => Order::CreationDate(OrderType::Desc),
+            DbOrderType::LastEventDateAsc => Order::LastEventDate(OrderType::Asc),
+            DbOrderType::LastEventDateDesc => Order::LastEventDate(OrderType::Desc),
+            DbOrderType::ScheduledForAsc => Order::ScheduledFor(OrderType::Asc),
+            DbOrderType::ScheduledForDesc => Order::ScheduledFor(OrderType::Desc),
+            DbOrderType::BlockedUntilAsc => Order::BlockedUntil(OrderType::Asc),
+            DbOrderType::BlockedUntilDesc => Order::BlockedUntil(OrderType::Desc),
+        }
+    }
 }
 
 #[derive(sqlx::FromRow)]
@@ -485,6 +517,37 @@ pub async fn fetch_tags_for_user(
                 can_comment: t.can_comment,
             },
         )
+    })
+    .try_collect()
+    .await
+    .context("querying tags table")?)
+}
+
+pub async fn fetch_searches_for_user(
+    conn: &mut sqlx::PgConnection,
+    user: &UserId,
+) -> anyhow::Result<Vec<Search>> {
+    Ok(sqlx::query!(
+        r#"
+            SELECT
+                id,
+                name,
+                filter AS "filter: sqlx::types::Json<Query>",
+                order_type AS "order_type: DbOrderType",
+                priority,
+                tag_id
+            FROM searches
+            WHERE owner_id = $1
+        "#,
+        user.0
+    )
+    .fetch(conn)
+    .map_ok(|s| Search {
+        id: SearchId(s.id),
+        name: s.name,
+        filter: s.filter.0,
+        priority: s.priority,
+        order: s.order_type.into_api(s.id, s.tag_id),
     })
     .try_collect()
     .await

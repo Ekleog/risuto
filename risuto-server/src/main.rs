@@ -11,7 +11,7 @@ use axum::{
 };
 use futures::{channel::mpsc, select, SinkExt, StreamExt};
 use risuto_api::{
-    AuthInfo, AuthToken, Event, FeedMessage, NewSession, Tag, Task, User, UserId, Uuid,
+    AuthInfo, AuthToken, Event, FeedMessage, NewSession, Tag, Task, User, UserId, Uuid, Search,
 };
 use serde_json::json;
 use std::{collections::HashMap, net::SocketAddr, sync::Arc};
@@ -65,6 +65,7 @@ async fn app(db: sqlx::PgPool) -> Router {
         .route("/api/whoami", get(whoami))
         .route("/api/fetch-users", get(fetch_users))
         .route("/api/fetch-tags", get(fetch_tags))
+        .route("/api/fetch-searches", get(fetch_searches))
         .route("/api/search-tasks", post(search_tasks))
         .route("/ws/event-feed", get(event_feed))
         .route("/api/submit-event", post(submit_event))
@@ -200,6 +201,18 @@ async fn fetch_tags(
         db::fetch_tags_for_user(&mut conn, &user)
             .await
             .with_context(|| format!("fetching tag list for {:?}", user))?,
+    ))
+}
+
+async fn fetch_searches(
+    Auth(user): Auth,
+    State(db): State<sqlx::PgPool>,
+) -> Result<Json<Vec<Search>>, Error> {
+    let mut conn = db.acquire().await.context("acquiring db connection")?;
+    Ok(Json(
+        db::fetch_searches_for_user(&mut conn, &user)
+            .await
+            .with_context(|| format!("fetching saved search list for {:?}", user))?,
     ))
 }
 

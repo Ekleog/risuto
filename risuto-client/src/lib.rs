@@ -4,11 +4,11 @@ pub use db::DbDump;
 mod comment;
 pub use comment::Comment;
 
+mod order;
+pub use order::OrderExt;
+
 mod query;
 pub use query::QueryExt;
-
-mod search;
-pub use search::{Order, OrderType, Search, SearchId};
 
 mod task;
 pub use task::{Task, TaskInTag};
@@ -18,5 +18,5 @@ pub mod api {
 }
 
 pub mod prelude {
-    pub use crate::QueryExt;
+    pub use crate::{OrderExt, QueryExt};
 }

@@ -1,9 +1,6 @@
 use std::{collections::HashMap, iter, sync::Arc};
 
-use risuto_client::{
-    api::{Tag, TagId, UserId},
-    Search, SearchId,
-};
+use risuto_client::api::{Search, SearchId, Tag, TagId, UserId};
 use yew::prelude::*;
 
 use crate::util;

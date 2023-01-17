@@ -1,6 +1,9 @@
 use std::{rc::Rc, sync::Arc};
 
-use risuto_client::{api::Query, DbDump, Order, OrderType, QueryExt, Search, SearchId, Task};
+use risuto_client::{
+    api::{Order, OrderType, Query, Search, SearchId},
+    DbDump, QueryExt, Task,
+};
 use yew::prelude::*;
 
 use crate::util;

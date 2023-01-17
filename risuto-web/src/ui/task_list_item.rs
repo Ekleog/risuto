@@ -2,8 +2,8 @@ use std::{rc::Rc, sync::Arc};
 
 use chrono::{Datelike, Timelike};
 use risuto_client::{
-    api::{Event, EventData, TagId, Time},
-    DbDump, Search, SearchId, Task,
+    api::{Event, EventData, Search, SearchId, TagId, Time},
+    DbDump, Task,
 };
 use yew::prelude::*;
 

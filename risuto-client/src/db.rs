@@ -4,8 +4,8 @@ use anyhow::anyhow;
 use async_trait::async_trait;
 
 use crate::{
-    api::{self, AuthInfo, Db, EventId, Tag, TagId, TaskId, Time, User, UserId},
-    QueryExt, Search, SearchId, Task,
+    api::{self, AuthInfo, Db, EventId, Search, SearchId, Tag, TagId, TaskId, Time, User, UserId},
+    OrderExt, QueryExt, Task,
 };
 
 #[derive(Clone, Debug, Eq, PartialEq)]

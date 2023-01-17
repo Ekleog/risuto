@@ -1,8 +1,8 @@
 use futures::{channel::oneshot, executor::block_on};
 use gloo_storage::{LocalStorage, Storage};
 use risuto_client::{
-    api::{Event, EventData},
-    DbDump, Order, Search, Task,
+    api::{Event, EventData, Order, Search},
+    DbDump, Task,
 };
 use std::{collections::VecDeque, rc::Rc, sync::Arc};
 use wasm_bindgen_futures::spawn_local;
