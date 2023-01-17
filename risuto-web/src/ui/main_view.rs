@@ -1,6 +1,6 @@
 use crate::ui;
 use risuto_client::{
-    api::{Event, TagId},
+    api::{Action, TagId},
     DbDump, Task,
 };
 use std::{collections::VecDeque, rc::Rc, sync::Arc};
@@ -48,14 +48,14 @@ pub struct TaskOrderChangeEvent {
 #[derive(Clone, PartialEq, Properties)]
 pub struct MainViewProps {
     pub connection_state: ui::ConnState,
-    pub events_pending_submission: VecDeque<Event>,
+    pub actions_pending_submission: VecDeque<Action>,
     pub db: Rc<DbDump>,
     pub current_tag: Option<TagId>,
     pub tasks_open: Rc<Vec<Arc<Task>>>,
     pub tasks_done: Rc<Vec<Arc<Task>>>,
     pub tasks_backlog: Rc<Vec<Arc<Task>>>,
     pub on_logout: Callback<()>,
-    pub on_event: Callback<Event>,
+    pub on_action: Callback<Action>,
     pub on_order_change: Callback<TaskOrderChangeEvent>,
 }
 
@@ -174,7 +174,7 @@ pub fn main_view(p: &MainViewProps) -> Html {
             // Top float-above bar corner
             <div class="float-above-container">
                 <ui::SearchBar db={p.db.clone()} />
-                <ui::EventSubmissionSpinner events_pending_submission={p.events_pending_submission.clone()} />
+                <ui::ActionSubmissionSpinner actions_pending_submission={p.actions_pending_submission.clone()} />
                 <ui::SettingsMenu on_logout={p.on_logout.clone()} />
             </div>
 
@@ -182,21 +182,21 @@ pub fn main_view(p: &MainViewProps) -> Html {
             <div class="flex-fill overflow-auto p-0">
                 <div class="m-lg-5">
                     <ui::TaskList
-                        ref_this={ref_open}
-                        db={p.db.clone()}
-                        current_tag={p.current_tag.clone()}
-                        tasks={p.tasks_open.clone()}
-                        on_event={p.on_event.clone()}
+                        ref_this={ ref_open }
+                        db={ p.db.clone() }
+                        current_tag={ p.current_tag.clone() }
+                        tasks={ p.tasks_open.clone() }
+                        on_event={ p.on_action.reform(Action::NewEvent) }
                     />
                 </div>
 
                 <div class="m-lg-5">
                     <ui::TaskList
-                        ref_this={ref_done}
-                        db={p.db.clone()}
-                        current_tag={p.current_tag.clone()}
-                        tasks={p.tasks_done.clone()}
-                        on_event={p.on_event.clone()}
+                        ref_this={ ref_done }
+                        db={ p.db.clone() }
+                        current_tag={ p.current_tag.clone() }
+                        tasks={ p.tasks_done.clone() }
+                        on_event={ p.on_action.reform(Action::NewEvent) }
                     />
                 </div>
             </div>
@@ -220,11 +220,11 @@ pub fn main_view(p: &MainViewProps) -> Html {
                 <div class="overflow-auto p-0 mh-100">
                     <div class="m-lg-5">
                         <ui::TaskList
-                            ref_this={ref_backlog}
-                            db={p.db.clone()}
-                            current_tag={p.current_tag.clone()}
-                            tasks={p.tasks_backlog.clone()}
-                            on_event={p.on_event.clone()}
+                            ref_this={ ref_backlog }
+                            db={ p.db.clone() }
+                            current_tag={ p.current_tag.clone() }
+                            tasks={ p.tasks_backlog.clone() }
+                            on_event={ p.on_action.reform(Action::NewEvent) }
                         />
                     </div>
                 </div>

@@ -1,20 +1,20 @@
-use risuto_client::api::Event;
+use risuto_client::api::Action;
 use std::collections::VecDeque;
 use yew::prelude::*;
 
 #[derive(Clone, PartialEq, Properties)]
-pub struct EventSubmissionSpinnerProps {
-    pub events_pending_submission: VecDeque<Event>,
+pub struct ActionSubmissionSpinnerProps {
+    pub actions_pending_submission: VecDeque<Action>,
 }
 
-#[function_component(EventSubmissionSpinner)]
-pub fn event_submission_spinner(p: &EventSubmissionSpinnerProps) -> Html {
+#[function_component(ActionSubmissionSpinner)]
+pub fn action_submission_spinner(p: &ActionSubmissionSpinnerProps) -> Html {
     html! {
         <div class="float-above dropdown">
             <button
                 class={ classes!(
                     "events-pending-spinner",
-                    p.events_pending_submission.is_empty().then(|| "no-events"),
+                    p.actions_pending_submission.is_empty().then(|| "no-events"),
                     "btn", "btn-secondary", "btn-circle", "mt-3"
                 ) }
                 type="button"
@@ -25,10 +25,10 @@ pub fn event_submission_spinner(p: &EventSubmissionSpinnerProps) -> Html {
             </button>
             <ul class={ classes!(
                 "events-pending-list",
-                p.events_pending_submission.is_empty().then(|| "no-events"),
+                p.actions_pending_submission.is_empty().then(|| "no-events"),
                 "dropdown-menu", "dropdown-menu-dark"
             ) }>
-                { for p.events_pending_submission.iter().map(|e| html! {
+                { for p.actions_pending_submission.iter().map(|e| html! {
                     <li>{ format!("{:?}", e) }</li> // TODO: make events prettier
                 }) }
             </ul>

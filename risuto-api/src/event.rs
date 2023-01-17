@@ -109,8 +109,10 @@ impl Event {
         }
     }
 
-    /// Takes AuthInfo as the authorization status for the user for self.task_id
     pub async fn is_authorized<D: Db>(&self, db: &mut D) -> anyhow::Result<bool> {
+        if self.owner_id != db.current_user() {
+            return Ok(false);
+        }
         macro_rules! auth {
             ($t:expr) => {{
                 let t = $t;

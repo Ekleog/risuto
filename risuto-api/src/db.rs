@@ -4,6 +4,7 @@ use crate::{AuthInfo, EventId, TagId, TaskId, Time, UserId};
 
 #[async_trait]
 pub trait Db {
+    fn current_user(&self) -> UserId;
     async fn auth_info_for(&mut self, t: TaskId) -> anyhow::Result<AuthInfo>;
     async fn list_tags_for(&mut self, t: TaskId) -> anyhow::Result<Vec<TagId>>;
     async fn get_event_info(&mut self, e: EventId) -> anyhow::Result<(UserId, Time, TaskId)>;

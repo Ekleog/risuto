@@ -117,6 +117,10 @@ impl DbDump {
 
 #[async_trait]
 impl Db for &DbDump {
+    fn current_user(&self) -> UserId {
+        self.owner
+    }
+
     async fn auth_info_for(&mut self, t: TaskId) -> anyhow::Result<AuthInfo> {
         let t = match self.tasks.get(&t) {
             None => {

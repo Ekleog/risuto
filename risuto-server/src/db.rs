@@ -251,6 +251,10 @@ impl From<DbEvent> for Event {
 
 #[async_trait]
 impl<'a> risuto_api::Db for PostgresDb<'a> {
+    fn current_user(&self) -> UserId {
+        self.user
+    }
+
     async fn auth_info_for(&mut self, task: TaskId) -> anyhow::Result<AuthInfo> {
         let auth = sqlx::query!(
             r#"

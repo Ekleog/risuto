@@ -1,7 +1,7 @@
 use futures::{channel::oneshot, executor::block_on};
 use gloo_storage::{LocalStorage, Storage};
 use risuto_client::{
-    api::{Event, EventData, Order, Search},
+    api::{Action, Event, EventData, Order, Search},
     DbDump, Task,
 };
 use std::{collections::VecDeque, rc::Rc, sync::Arc};
@@ -14,7 +14,7 @@ use crate::{
     util, LoginInfo,
 };
 
-const KEY_EVTS_PENDING_SUBMISSION: &str = "events-pending-submission";
+const KEY_ACTS_PENDING_SUBMISSION: &str = "actions-pending-submission";
 
 #[derive(Clone, PartialEq, Properties)]
 pub struct AppProps {
@@ -30,15 +30,15 @@ pub enum AppMsg {
     WebsocketDisconnected,
 
     SetActiveSearch(Search),
-    NewUserEvent(Event),
-    NewNetworkEvent(Event),
-    EventSubmissionComplete,
+    NewUserAction(Action),
+    NewNetworkAction(Action),
+    ActionSubmissionComplete,
 }
 
 #[derive(Clone, PartialEq)]
 pub enum ConnState {
     Disconnected,
-    WebsocketConnected(VecDeque<Event>),
+    WebsocketConnected(VecDeque<Action>),
     Connected,
 }
 
@@ -46,7 +46,7 @@ pub struct App {
     db: Rc<DbDump>,
     connection_state: ConnState,
     active_search: Search,
-    events_pending_submission: VecDeque<Event>, // push_back, pop_front
+    actions_pending_submission: VecDeque<Action>, // push_back, pop_front
     feed_canceller: oneshot::Receiver<()>,
 }
 
@@ -58,15 +58,20 @@ struct TaskLists {
 }
 
 impl App {
-    fn locally_insert_new_event(&mut self, e: Event) {
+    fn locally_insert_new_action(&mut self, a: Action) {
         let db = Rc::make_mut(&mut self.db);
-        match Arc::make_mut(&mut db.tasks).get_mut(&e.task_id) {
-            None => tracing::warn!(evt=?e, "got event for task not in db"),
-            Some(t) => {
-                let task = Arc::make_mut(t);
-                task.add_event(e);
-                task.refresh_metadata(&db.owner);
+        match a {
+            Action::NewTask(t) => {
+                Arc::make_mut(&mut db.tasks).insert(t.id, Arc::new(Task::from(t)));
             }
+            Action::NewEvent(e) => match Arc::make_mut(&mut db.tasks).get_mut(&e.task_id) {
+                None => tracing::warn!(evt=?e, "got event for task not in db"),
+                Some(t) => {
+                    let task = Arc::make_mut(t);
+                    task.add_event(e);
+                    task.refresh_metadata(&db.owner);
+                }
+            },
         }
     }
 
@@ -116,19 +121,19 @@ impl Component for App {
         ));
 
         // Load event submission queue
-        let events_pending_submission: VecDeque<Event> =
-            LocalStorage::get(KEY_EVTS_PENDING_SUBMISSION).unwrap_or(VecDeque::new());
+        let actions_pending_submission: VecDeque<Action> =
+            LocalStorage::get(KEY_ACTS_PENDING_SUBMISSION).unwrap_or(VecDeque::new());
 
         // Start event submission if need be
-        if !events_pending_submission.is_empty() {
-            send_event(ctx, events_pending_submission[0].clone());
+        if !actions_pending_submission.is_empty() {
+            send_action(ctx, actions_pending_submission[0].clone());
         }
 
         App {
             db: Rc::new(DbDump::stub()),
             connection_state: ConnState::Disconnected,
             active_search: Search::today(util::local_tz()),
-            events_pending_submission,
+            actions_pending_submission,
             feed_canceller,
         }
     }
@@ -137,7 +142,7 @@ impl Component for App {
         match msg {
             AppMsg::Logout => {
                 self.feed_canceller.close(); // This should be unneeded as it closes on drop, but better safe than sorry
-                LocalStorage::delete(KEY_EVTS_PENDING_SUBMISSION);
+                LocalStorage::delete(KEY_ACTS_PENDING_SUBMISSION);
                 ctx.props().on_logout.emit(());
             }
             AppMsg::WebsocketConnected => {
@@ -148,51 +153,57 @@ impl Component for App {
             }
             AppMsg::ReceivedDb(db) => {
                 self.db = Rc::new(db);
-                for e in self.events_pending_submission.clone() {
-                    self.locally_insert_new_event(e.clone());
+                for a in self.actions_pending_submission.clone() {
+                    self.locally_insert_new_action(a.clone());
                 }
-                let events_already_received = match &self.connection_state {
+                let actions_already_received = match &self.connection_state {
                     ConnState::WebsocketConnected(e) => e.clone(),
                     _ => panic!("received database while websocket is not connected"),
                 };
-                for e in events_already_received {
-                    self.locally_insert_new_event(e);
+                for a in actions_already_received {
+                    self.locally_insert_new_action(a);
                 }
                 self.connection_state = ConnState::Connected;
             }
             AppMsg::SetActiveSearch(search) => {
                 self.active_search = search;
             }
-            AppMsg::NewUserEvent(e) => {
-                tracing::debug!("got new user event {e:?}");
+            AppMsg::NewUserAction(a) => {
+                tracing::debug!("got new user action {a:?}");
                 // Sanity-check that we're allowed to submit the event before adding it to the queue
                 assert!(
-                    block_on(e.is_authorized(&mut &*self.db)).expect("checking is_authorized on local db dump"),
-                    "Submitted userevent that is not authorized. The button should have been disabled! {e:?}",
+                    block_on(a.is_authorized(&mut &*self.db)).expect("checking is_authorized on local db dump"),
+                    "Submitted user action that is not authorized. The button should have been disabled! Please report a bug. {a:?}",
                 );
-                tracing::trace!("user event authorized {e:?}");
+                tracing::trace!("user action authorized {a:?}");
 
                 // Submit the event to the upload queue and update our state
-                self.events_pending_submission.push_back(e.clone());
-                LocalStorage::set(KEY_EVTS_PENDING_SUBMISSION, &self.events_pending_submission)
-                    .expect("failed saving queue to local storage");
-                tracing::trace!("events pending submission queue saved");
-                if self.events_pending_submission.len() == 1 {
+                self.actions_pending_submission.push_back(a.clone());
+                LocalStorage::set(
+                    KEY_ACTS_PENDING_SUBMISSION,
+                    &self.actions_pending_submission,
+                )
+                .expect("failed saving queue to local storage");
+                tracing::trace!("actions pending submission queue saved");
+                if self.actions_pending_submission.len() == 1 {
                     // this is the first event from the queue
-                    send_event(ctx, e.clone());
-                    tracing::debug!("started event submission with event {e:?}");
+                    send_action(ctx, a.clone());
+                    tracing::debug!("started action submission with action {a:?}");
                 }
-                self.locally_insert_new_event(e.clone());
-                tracing::debug!("handled new user event {e:?}");
+                self.locally_insert_new_action(a.clone());
+                tracing::debug!("handled new user action {a:?}");
             }
-            AppMsg::NewNetworkEvent(e) => self.locally_insert_new_event(e),
-            AppMsg::EventSubmissionComplete => {
-                self.events_pending_submission.pop_front();
-                LocalStorage::set(KEY_EVTS_PENDING_SUBMISSION, &self.events_pending_submission)
-                    .expect("failed saving queue to local storage");
-                if !self.events_pending_submission.is_empty() {
-                    let e = self.events_pending_submission[0].clone();
-                    send_event(ctx, e);
+            AppMsg::NewNetworkAction(a) => self.locally_insert_new_action(a),
+            AppMsg::ActionSubmissionComplete => {
+                self.actions_pending_submission.pop_front();
+                LocalStorage::set(
+                    KEY_ACTS_PENDING_SUBMISSION,
+                    &self.actions_pending_submission,
+                )
+                .expect("failed saving queue to local storage");
+                if !self.actions_pending_submission.is_empty() {
+                    let e = self.actions_pending_submission[0].clone();
+                    send_action(ctx, e);
                 }
             }
         }
@@ -230,14 +241,15 @@ impl Component for App {
                 );
                 let mut evts = evts
                     .into_iter()
-                    .map(|e| AppMsg::NewUserEvent(e))
+                    .map(Action::NewEvent)
+                    .map(AppMsg::NewUserAction)
                     .collect::<Vec<_>>();
                 if e.before.list.is_done() != e.after.list.is_done() {
-                    evts.push(AppMsg::NewUserEvent(Event::now(
+                    evts.push(AppMsg::NewUserAction(Action::NewEvent(Event::now(
                         owner,
                         task_id,
                         EventData::SetDone(e.after.list.is_done()),
-                    )));
+                    ))));
                 }
                 evts
             })
@@ -258,14 +270,14 @@ impl Component for App {
                     <main class="col-md-10 h-100 p-0">
                         <ui::MainView
                             connection_state={ self.connection_state.clone() }
-                            events_pending_submission={ self.events_pending_submission.clone() }
+                            actions_pending_submission={ self.actions_pending_submission.clone() }
                             db={ self.db.clone() }
                             current_tag={ self.active_search.is_order_tag() }
                             tasks_open={ tasks.open }
                             tasks_done={ tasks.done }
                             tasks_backlog={ tasks.backlog }
                             on_logout={ ctx.link().callback(|_| AppMsg::Logout) }
-                            on_event={ ctx.link().callback(AppMsg::NewUserEvent) }
+                            on_action={ ctx.link().callback(AppMsg::NewUserAction) }
                             { on_order_change }
                         />
                     </main>
@@ -275,10 +287,10 @@ impl Component for App {
     }
 }
 
-fn send_event(ctx: &Context<App>, e: Event) {
+fn send_action(ctx: &Context<App>, a: Action) {
     let info = ctx.props().login.clone();
     ctx.link().send_future(async move {
-        api::send_event(&info, e).await;
-        AppMsg::EventSubmissionComplete
+        api::send_action(&info, a).await;
+        AppMsg::ActionSubmissionComplete
     });
 }

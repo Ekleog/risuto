@@ -195,7 +195,7 @@ pub async fn start_event_feed(
                     }.expect("TODO");
                     match msg {
                         api::FeedMessage::Pong => last_pong = Utc::now(),
-                        api::FeedMessage::Action(api::Action::NewEvent(e)) => feed_sender.send_message(ui::AppMsg::NewNetworkEvent(e)),
+                        api::FeedMessage::Action(a) => feed_sender.send_message(ui::AppMsg::NewNetworkAction(a)),
                     }
                 }
             }
@@ -203,11 +203,11 @@ pub async fn start_event_feed(
     }
 }
 
-pub async fn send_event(login: &LoginInfo, event: api::Event) {
+pub async fn send_action(login: &LoginInfo, action: api::Action) {
     let res = crate::CLIENT
         .post(format!("{}/api/submit-action", login.host))
         .bearer_auth(login.token.0)
-        .json(&api::Action::NewEvent(event))
+        .json(&action)
         .send()
         .await;
     match res {
