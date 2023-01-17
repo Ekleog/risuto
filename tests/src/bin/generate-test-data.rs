@@ -4,8 +4,7 @@ use bolero::{bolero_engine::TypeGenerator, generator::bolero_generator::driver::
 use chrono::Duration;
 use lipsum::lipsum_words_from_seed;
 use rand::{rngs::StdRng, seq::SliceRandom, Rng, SeedableRng};
-use risuto_api::Query;
-use risuto_client::{Order, OrderType};
+use risuto_api::{Order, OrderType, Query};
 
 const NUM_USERS: usize = 3;
 
@@ -182,18 +181,36 @@ fn main() {
     });
 
     // Generate tasks
+    println!("BEGIN;");
     let mut tasks = Vec::new();
+    let mut top_comments = Vec::new();
     gen_n_items("tasks", NUM_TASKS, |_| {
         let uuid = gen_uuid(&mut rng);
+        let user_id = gen_user(&mut rng);
+        let date = gen_past_date(&mut rng);
+        let top_comm_id = gen_uuid(&mut rng);
         tasks.push(uuid.clone());
+        top_comments.push((top_comm_id.clone(), user_id.clone(), date.clone()));
         format!(
-            "('{}', '{}', '{}', '{}')",
+            "('{}', '{}', '{}', '{}', '{}')",
             uuid,
-            gen_user(&mut rng),
-            gen_past_date(&mut rng),
+            user_id,
+            date,
             gen_task_title(&mut rng),
+            top_comm_id,
         )
     });
+    gen_n_items("events", NUM_TASKS, |i| {
+        format!(
+            "('{}', '{}', '{}', '{}', 'add_comment', '{}', NULL, NULL, NULL, NULL, NULL, NULL)",
+            top_comments[i].0,
+            top_comments[i].1,
+            top_comments[i].2,
+            tasks[i],
+            gen_comment_text(&mut rng),
+        )
+    });
+    println!("COMMIT;");
     let gen_task = |rng: &mut StdRng| -> String { tasks.choose(rng).unwrap().clone() };
 
     // Finally, generate events

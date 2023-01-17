@@ -4,6 +4,7 @@ CREATE TABLE tasks (
     date TIMESTAMP NOT NULL,
 
     initial_title VARCHAR NOT NULL,
+    top_comment_id UUID NOT NULL, -- see down this file for the fkey constraint
 
     FOREIGN KEY (owner_id) REFERENCES users (id)
         ON DELETE CASCADE
@@ -48,6 +49,7 @@ CREATE TABLE events (
     FOREIGN KEY (d_tag_id) REFERENCES tags (id)
         ON DELETE CASCADE,
     UNIQUE (id, task_id), -- needed for foreign key below, id is pkey anyway
+    UNIQUE (id, owner_id, date), -- needed for foreign key at the bottom of the file, id is pkey anyway
     FOREIGN KEY (d_parent_id, task_id) REFERENCES events (id, task_id)
         ON DELETE CASCADE,
 
@@ -87,3 +89,10 @@ CREATE TABLE events (
             d_text IS NULL AND d_int IS NULL AND d_time IS NULL AND d_tag_id IS NULL AND d_order_id IS NULL)
     )
 );
+
+ALTER TABLE tasks
+ADD CONSTRAINT task_has_top_comment
+    FOREIGN KEY (top_comment_id, owner_id, date)
+    REFERENCES events (id, owner_id, date) -- TODO: find a way to have as constraint that the event referenced is an add_comment event
+    DEFERRABLE
+    INITIALLY DEFERRED;
