@@ -18,14 +18,36 @@ const DISCONNECT_INTERVAL_SECS: i64 = 20;
 // Space each reconnect attempt by ATTEMPT_SPACING
 const ATTEMPT_SPACING_SECS: i64 = 1;
 
-pub async fn auth(host: String, session: api::NewSession) -> anyhow::Result<api::AuthToken> {
-    Ok(crate::CLIENT
-        .post(format!("{}/api/auth", host))
-        .json(&session)
-        .send()
-        .await?
-        .json()
-        .await?)
+#[derive(Debug, thiserror::Error)]
+pub enum ApiError {
+    #[error("sending http request")]
+    SendingRequest(#[source] reqwest_middleware::Error),
+
+    #[error("permission denied")]
+    PermissionDenied,
+
+    #[error("parsing http response")]
+    ParsingResponse(#[source] reqwest::Error),
+}
+
+async fn submit<T: for<'de> serde::Deserialize<'de>>(req: reqwest_middleware::RequestBuilder) -> Result<T, ApiError> {
+    let resp = req.send()
+        .await
+        .map_err(ApiError::SendingRequest)?;
+    match resp.status() {
+        reqwest::StatusCode::FORBIDDEN => Err(ApiError::PermissionDenied),
+        reqwest::StatusCode::OK => resp.json().await.map_err(ApiError::ParsingResponse),
+        _ => Err(ApiError::ParsingResponse(resp.error_for_status().unwrap_err())),
+    }
+}
+
+pub async fn auth(host: String, session: api::NewSession) -> Result<api::AuthToken, ApiError> {
+    submit(
+        crate::CLIENT
+            .post(format!("{}/api/auth", host))
+            .json(&session),
+    )
+    .await
 }
 
 pub async fn unauth(host: String, token: api::AuthToken) {

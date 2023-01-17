@@ -20,6 +20,7 @@ risuto-client.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sortable-js.workspace = true
+thiserror.workspace = true
 tracing.workspace = true
 tracing-wasm.workspace = true
 yew.workspace = true

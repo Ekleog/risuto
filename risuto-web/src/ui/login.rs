@@ -2,7 +2,7 @@ use futures::FutureExt;
 use risuto_client::api::{AuthToken, NewSession};
 use yew::prelude::*;
 
-use crate::{api, LoginInfo};
+use crate::{api::{self, ApiError}, LoginInfo};
 
 #[derive(Clone, PartialEq, Properties)]
 pub struct LoginProps {
@@ -21,7 +21,7 @@ pub enum LoginMsg {
     UserChanged(String),
     PassChanged(String),
     SubmitClicked,
-    Authed(String, String, anyhow::Result<AuthToken>),
+    Authed(String, String, Result<AuthToken, ApiError>),
 }
 
 fn get_device() -> anyhow::Result<String> {
