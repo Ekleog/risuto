@@ -526,14 +526,14 @@ mod tests {
             sid: usize,
             query: risuto_api::Query,
         },
-        SubmitEvent {
+        SubmitAction {
             sid: usize,
-            evt: risuto_api::Event,
+            evt: risuto_api::Action,
         },
-        OpenEventFeed {
+        OpenActionFeed {
             sid: usize,
         },
-        CloseEventFeed {
+        CloseActionFeed {
             feed_id: usize,
         },
     }
