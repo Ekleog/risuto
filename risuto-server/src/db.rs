@@ -70,6 +70,7 @@ struct DbTask {
     date: chrono::NaiveDateTime,
 
     initial_title: String,
+    top_comment_id: Uuid,
 }
 
 impl From<Task> for DbTask {
@@ -79,6 +80,7 @@ impl From<Task> for DbTask {
             owner_id: t.owner_id.0,
             date: t.date.naive_utc(),
             initial_title: t.initial_title,
+            top_comment_id: t.top_comment_id.0,
         }
     }
 }
@@ -90,6 +92,7 @@ impl From<DbTask> for Task {
             owner_id: UserId(t.owner_id),
             date: t.date.and_local_timezone(chrono::Utc).unwrap(),
             initial_title: t.initial_title,
+            top_comment_id: EventId(t.top_comment_id),
         }
     }
 }
@@ -327,18 +330,14 @@ impl<'a> risuto_api::Db for PostgresDb<'a> {
         ))
     }
 
-    async fn is_first_comment(&mut self, task: TaskId, comment: EventId) -> anyhow::Result<bool> {
-        Ok(sqlx::query!(
-            "SELECT id FROM events
-            WHERE task_id = $1
-                AND d_type = 'add_comment'
-                AND d_parent_id IS NULL
-            ORDER BY date LIMIT 1",
-            task.0
+    async fn is_top_comment(&mut self, task: TaskId, comment: EventId) -> anyhow::Result<bool> {
+        Ok(
+            sqlx::query!("SELECT top_comment_id FROM tasks WHERE id = $1", task.0)
+                .fetch_one(&mut *self.conn)
+                .await?
+                .top_comment_id
+                == comment.0,
         )
-        .fetch_one(&mut *self.conn)
-        .await?
-        .id == comment.0)
     }
 }
 

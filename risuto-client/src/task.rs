@@ -24,6 +24,8 @@ pub struct Task {
     pub initial_title: String,
     pub current_title: String,
 
+    pub top_comment: Comment,
+
     pub is_done: bool,
     pub is_archived: bool,
     pub blocked_until: Option<Time>,
@@ -45,6 +47,12 @@ impl From<api::Task> for Task {
             date: t.date,
             initial_title: t.initial_title.clone(),
             current_title: t.initial_title,
+            top_comment: Comment {
+                creation_id: t.top_comment_id,
+                edits: BTreeMap::new(),
+                read: HashSet::new(),
+                children: BTreeMap::new(),
+            },
             is_done: false,
             is_archived: false,
             blocked_until: None,
@@ -117,6 +125,16 @@ impl Task {
                     EventData::RmTag(tag) => {
                         self.current_tags.remove(tag);
                     }
+                    EventData::AddComment { text, parent_id }
+                        if e.id == self.top_comment.creation_id =>
+                    {
+                        assert!(
+                            parent_id.is_none(),
+                            "parent_id must be None for a task's top-comment"
+                        );
+                        self.top_comment.edits.insert(e.date, vec![text.clone()]);
+                        self.top_comment.read.insert(e.owner_id);
+                    }
                     EventData::AddComment { text, parent_id } => {
                         let mut edits = BTreeMap::new();
                         edits.insert(e.date, vec![text.clone()]);
@@ -150,6 +168,17 @@ impl Task {
                                 });
                         }
                     }
+                    EventData::EditComment { comment_id, text }
+                        if *comment_id == self.top_comment.creation_id =>
+                    {
+                        self.top_comment
+                            .edits
+                            .entry(e.date)
+                            .or_insert(Vec::new())
+                            .push(text.clone());
+                        self.top_comment.read = HashSet::new();
+                        self.top_comment.read.insert(e.owner_id);
+                    }
                     EventData::EditComment { comment_id, text } => {
                         if let Some(comment) =
                             Comment::find_in(&mut self.current_comments, comment_id)
@@ -177,5 +206,9 @@ impl Task {
                 }
             }
         }
+        assert!(
+            !self.top_comment.edits.is_empty(),
+            "task {self:?} has no top comment"
+        );
     }
 }

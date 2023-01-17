@@ -162,27 +162,18 @@ impl Db for &DbDump {
         Ok((t.owner_id, t.date, task_id))
     }
 
-    async fn is_first_comment(&mut self, task: TaskId, comment: EventId) -> anyhow::Result<bool> {
+    async fn is_top_comment(&mut self, task: TaskId, comment: EventId) -> anyhow::Result<bool> {
         Ok(comment
             == self
                 .tasks
                 .get(&task)
                 .ok_or_else(|| {
                     anyhow!(
-                        "requested is_first_comment for task {:?} that is not in db",
+                        "requested is_top_comment for task {:?} that is not in db",
                         task
                     )
                 })?
-                .current_comments
-                .values()
-                .flat_map(|comms| comms.iter())
-                .next()
-                .ok_or_else(|| {
-                    anyhow!(
-                        "requested is_first_comment for task {:?} that has no comment",
-                        task
-                    )
-                })?
+                .top_comment
                 .creation_id)
     }
 }

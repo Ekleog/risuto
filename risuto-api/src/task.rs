@@ -1,6 +1,6 @@
 use uuid::Uuid;
 
-use crate::{Time, UserId, STUB_UUID};
+use crate::{EventId, Time, UserId, STUB_UUID};
 
 #[derive(
     Clone,
@@ -39,4 +39,5 @@ pub struct Task {
     pub date: Time,
 
     pub initial_title: String,
+    pub top_comment_id: EventId,
 }

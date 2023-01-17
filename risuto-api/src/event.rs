@@ -162,13 +162,13 @@ impl Event {
             EventData::EditComment { comment_id, .. } => {
                 let (comm_owner, _, comm_task) = check_parent_event!(comment_id);
                 let is_comment_owner = self.owner_id == comm_owner;
-                let is_first_comment = db
-                    .is_first_comment(comm_task, comment_id)
+                let is_top_comment = db
+                    .is_top_comment(comm_task, comment_id)
                     .await
                     .with_context(|| {
                         format!("checking if comment {:?} is first comment", comment_id)
                     })?;
-                is_comment_owner || (auth!(comm_task).can_edit && is_first_comment)
+                is_comment_owner || (auth!(comm_task).can_edit && is_top_comment)
             }
             EventData::SetEventRead { event_id, .. } => {
                 let (_, _, par_task) = check_parent_event!(event_id);
