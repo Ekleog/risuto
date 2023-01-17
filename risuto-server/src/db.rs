@@ -643,16 +643,12 @@ async fn fetch_tasks_from_tmp_tasks_table(
     Ok((tasks, events))
 }
 
-pub async fn submit_event(conn: &mut sqlx::PgConnection, e: Event) -> Result<(), Error> {
+pub async fn submit_event(db: &mut PostgresDb<'_>, e: Event) -> Result<(), Error> {
     let event_id = e.id;
 
     // Check authorization
-    let mut db = PostgresDb {
-        conn,
-        user: e.owner_id,
-    };
     let auth = e
-        .is_authorized(&mut db)
+        .is_authorized(&mut *db)
         .await
         .with_context(|| format!("checking if user is authorized to add event {:?}", event_id))?;
     if !auth {
@@ -694,5 +690,36 @@ pub async fn submit_event(conn: &mut sqlx::PgConnection, e: Event) -> Result<(),
             }
         }
         rows => panic!("insertion of single event {event_id:?} affected multiple ({rows}) rows"),
+    }
+}
+
+pub async fn submit_task(db: &mut PostgresDb<'_>, t: Task) -> Result<(), Error> {
+    let task_id = t.id.0;
+
+    let res = sqlx::query!(
+        "INSERT INTO tasks VALUES ($1, $2, $3, $4)",
+        &t.id.0,
+        &t.owner_id.0,
+        &t.date.naive_utc(),
+        &t.initial_title,
+    )
+    .execute(&mut *db.conn)
+    .await
+    .with_context(|| format!("creating task {:?}", t.id))?;
+
+    match res.rows_affected() {
+        1 => Ok(()),
+        0 => {
+            let already_present = sqlx::query!("SELECT * FROM tasks WHERE id=$1", t.id.0)
+                .fetch_optional(&mut *db.conn)
+                .await
+                .context("sanity-checking the already-present event")?;
+            match already_present {
+                Some(p) if p.id == t.id.0 && p.owner_id == t.owner_id.0 && p.date == t.date.naive_utc() && p.initial_title == t.initial_title => Ok(()),
+                Some(p) if p.id == t.id.0 => Err(Error::UuidAlreadyUsed(p.id)),
+                _ => Err(Error::Anyhow(anyhow!("unknown event insertion conflict: trying to insert {t:?}, already had {already_present:?}")))
+            }
+        }
+        rows => panic!("insertion of single event {task_id:?} affected multiple ({rows}) rows"),
     }
 }

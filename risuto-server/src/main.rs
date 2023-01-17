@@ -9,13 +9,13 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
-use futures::{channel::mpsc, select, SinkExt, StreamExt};
+use futures::{channel::mpsc, select, stream, SinkExt, Stream, StreamExt};
 use risuto_api::{
     Action, AuthInfo, AuthToken, Event, FeedMessage, NewSession, Search, Tag, Task, User, UserId,
     Uuid,
 };
 use serde_json::json;
-use std::{collections::HashMap, net::SocketAddr, sync::Arc};
+use std::{collections::HashMap, iter, net::SocketAddr, pin::Pin, sync::Arc};
 use tokio::sync::RwLock;
 use tower_http::trace::TraceLayer;
 
@@ -242,11 +242,17 @@ async fn submit_action(
         user,
     };
     match &a {
+        Action::NewTask(t) => {
+            if user != t.owner_id {
+                return Err(Error::PermissionDenied);
+            }
+            db::submit_task(&mut db, t.clone()).await?;
+        }
         Action::NewEvent(e) => {
             if user != e.owner_id {
                 return Err(Error::PermissionDenied);
             }
-            db::submit_event(&mut db.conn, e.clone()).await?;
+            db::submit_event(&mut db, e.clone()).await?;
         }
     }
     feeds.relay_action(db, a).await;
@@ -360,7 +366,10 @@ impl UserFeeds {
 
     async fn relay_action(&self, mut db: db::PostgresDb<'_>, a: Action) {
         match &a {
-            Action::NewEvent(e) => db::users_interested_by(&mut db.conn, &[e.task_id.0]),
+            Action::NewTask(t) => Box::pin(stream::iter(iter::once(Ok(t.owner_id))))
+                as Pin<Box<dyn Send + Stream<Item = anyhow::Result<UserId>>>>,
+            Action::NewEvent(e) => Box::pin(db::users_interested_by(&mut db.conn, &[e.task_id.0])),
+            // TODO: make sure we actually send the whole task if a user gets access to this task it didn't have before
         }
         // TODO: magic numbers below should be at least explained
         .for_each_concurrent(Some(16), |u| {
