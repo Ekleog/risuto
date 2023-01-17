@@ -6,6 +6,7 @@ use risuto_api::{
     AuthInfo, AuthToken, Event, EventData, EventId, NewSession, Order, OrderId, OrderType, Query,
     Search, SearchId, Tag, TagId, Task, TaskId, Time, User, UserId, Uuid,
 };
+use sqlx::Connection;
 use std::pin::Pin;
 
 use crate::{query, Error};
@@ -696,17 +697,28 @@ pub async fn submit_event(db: &mut PostgresDb<'_>, e: Event) -> Result<(), Error
     }
 }
 
-pub async fn submit_task(db: &mut PostgresDb<'_>, t: Task) -> Result<(), Error> {
+pub async fn submit_task(db: &mut PostgresDb<'_>, t: Task, top_comm: String) -> Result<(), Error> {
     let task_id = t.id.0;
 
+    if t.owner_id != db.user {
+        return Err(Error::PermissionDenied);
+    }
+
+    let mut transaction = db
+        .conn
+        .begin()
+        .await
+        .context("creating task submission transaction")?;
+
     let res = sqlx::query!(
-        "INSERT INTO tasks VALUES ($1, $2, $3, $4)",
+        "INSERT INTO tasks VALUES ($1, $2, $3, $4, $5)",
         &t.id.0,
         &t.owner_id.0,
         &t.date.naive_utc(),
         &t.initial_title,
+        &t.top_comment_id.0,
     )
-    .execute(&mut *db.conn)
+    .execute(&mut transaction)
     .await
     .with_context(|| format!("creating task {:?}", t.id))?;
 
@@ -714,7 +726,7 @@ pub async fn submit_task(db: &mut PostgresDb<'_>, t: Task) -> Result<(), Error> 
         1 => Ok(()),
         0 => {
             let already_present = sqlx::query!("SELECT * FROM tasks WHERE id=$1", t.id.0)
-                .fetch_optional(&mut *db.conn)
+                .fetch_optional(&mut transaction)
                 .await
                 .context("sanity-checking the already-present event")?;
             match already_present {
@@ -724,5 +736,41 @@ pub async fn submit_task(db: &mut PostgresDb<'_>, t: Task) -> Result<(), Error> 
             }
         }
         rows => panic!("insertion of single event {task_id:?} affected multiple ({rows}) rows"),
-    }
+    }?;
+
+    let res = sqlx::query!(
+        "INSERT INTO events VALUES ($1, $2, $3, $4, 'add_comment', $5, NULL, NULL, NULL, NULL, NULL, NULL)",
+        &t.top_comment_id.0,
+        &t.owner_id.0,
+        &t.date.naive_utc(),
+        &t.id.0,
+        &top_comm,
+    )
+    .execute(&mut transaction)
+    .await
+    .with_context(|| format!("creating top-comment {:?} for task {:?}", t.top_comment_id, t.id))?;
+
+    match res.rows_affected() {
+        1 => Ok(()),
+        0 => {
+            let already_present = sqlx::query_as::<_, DbEvent>("SELECT * FROM events WHERE id=$1")
+                .bind(&t.top_comment_id.0)
+                .fetch_optional(&mut transaction)
+                .await
+                .context("sanity-checking the already-present top-comment event")?;
+            match already_present {
+                Some(p) if p.id == t.top_comment_id.0 && p.owner_id == t.owner_id.0 && p.date == t.date.naive_utc() && p.task_id == t.id.0 && p.d_type == DbType::AddComment && p.d_text.as_ref() == Some(&top_comm) => Ok(()),
+                Some(p) if p.id == t.top_comment_id.0 => Err(Error::UuidAlreadyUsed(p.id)),
+                _ => Err(Error::Anyhow(anyhow!("unknown event insertion conflict: trying to insert top-comment for task {t:?} with text {top_comm:?}, already had {already_present:?}")))
+            }
+        }
+        rows => panic!("insertion of single event {task_id:?} affected multiple ({rows}) rows"),
+    }?;
+
+    transaction
+        .commit()
+        .await
+        .context("committing task creation transaction")?;
+
+    Ok(())
 }

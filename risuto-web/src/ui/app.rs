@@ -61,8 +61,20 @@ impl App {
     fn locally_insert_new_action(&mut self, a: Action) {
         let db = Rc::make_mut(&mut self.db);
         match a {
-            Action::NewTask(t) => {
-                Arc::make_mut(&mut db.tasks).insert(t.id, Arc::new(Task::from(t)));
+            Action::NewTask(t, top_comm) => {
+                let mut task = Task::from(t.clone());
+                task.add_event(Event {
+                    id: t.top_comment_id,
+                    owner_id: t.owner_id,
+                    date: t.date,
+                    task_id: t.id,
+                    data: EventData::AddComment {
+                        text: top_comm,
+                        parent_id: None,
+                    },
+                });
+                task.refresh_metadata(&db.owner);
+                Arc::make_mut(&mut db.tasks).insert(t.id, Arc::new(task));
             }
             Action::NewEvent(e) => match Arc::make_mut(&mut db.tasks).get_mut(&e.task_id) {
                 None => tracing::warn!(evt=?e, "got event for task not in db"),

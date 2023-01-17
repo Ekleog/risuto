@@ -242,11 +242,11 @@ async fn submit_action(
         user,
     };
     match &a {
-        Action::NewTask(t) => {
+        Action::NewTask(t, top_comm) => {
             if user != t.owner_id {
                 return Err(Error::PermissionDenied);
             }
-            db::submit_task(&mut db, t.clone()).await?;
+            db::submit_task(&mut db, t.clone(), top_comm.clone()).await?;
         }
         Action::NewEvent(e) => {
             if user != e.owner_id {
@@ -366,7 +366,7 @@ impl UserFeeds {
 
     async fn relay_action(&self, mut db: db::PostgresDb<'_>, a: Action) {
         match &a {
-            Action::NewTask(t) => Box::pin(stream::iter(iter::once(Ok(t.owner_id))))
+            Action::NewTask(t, _) => Box::pin(stream::iter(iter::once(Ok(t.owner_id))))
                 as Pin<Box<dyn Send + Stream<Item = anyhow::Result<UserId>>>>,
             Action::NewEvent(e) => Box::pin(db::users_interested_by(&mut db.conn, &[e.task_id.0])),
             // TODO: make sure we actually send the whole task if a user gets access to this task it didn't have before
