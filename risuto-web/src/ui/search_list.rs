@@ -33,7 +33,7 @@ pub fn search_list(p: &SearchListProps) -> Html {
         .chain(iter::once(Item::Search(Search::untagged())))
         .map(|it| match it {
             Item::Separator(name) => html! {
-                <li class="nav-item border-bottom p-1">
+                <li class="category border-bottom p-1">
                     { name }
                 </li>
             },
@@ -47,7 +47,7 @@ pub fn search_list(p: &SearchListProps) -> Html {
                     p.on_select_search.reform(move |_| search.clone())
                 };
                 html! {
-                    <li class={classes!("nav-item", is_active, "border-bottom", "p-2")}>
+                    <li class={classes!(is_active, "border-bottom", "p-2")}>
                         <a
                             class={classes!("nav-link", is_active)}
                             href={format!("#search-{}", js_sys::encode_uri(&search.name))}

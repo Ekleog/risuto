@@ -18,6 +18,8 @@ $offline-banner-bg: $yellow;
 $offline-banner-border: lighten($blue, 5%);
 
 $tag-list-bg: darken($blue, 2%);
+$tag-list-category-fg: darken($text, 15%);
+$tag-list-category-bg: lighten($blue, 2%);
 $tag-list-active-bg: lighten($blue, 3%);
 $tag-list-hover: lighten($blue, 70%);
 
@@ -91,7 +93,13 @@ $dark: lighten($blue, 3%);
     color: $tag-list-hover;
 }
 
-.sidebar .nav-item.active {
+.sidebar .category {
+    color: $tag-list-category-fg;
+    background-color: $tag-list-category-bg;
+    font-style: italic;
+}
+
+.sidebar .active {
     background-color: $tag-list-active-bg;
     font-weight: bold;
 }
