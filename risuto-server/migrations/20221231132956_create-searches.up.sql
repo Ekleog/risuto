@@ -13,6 +13,7 @@ CREATE TYPE search_order_type AS ENUM (
 
 CREATE TABLE searches (
     id UUID PRIMARY KEY NOT NULL, -- doubles as order id for events
+    owner_id UUID NOT NULL,
     name TEXT NOT NULL,
     filter JSON NOT NULL,
     order_type search_order_type NOT NULL,
@@ -22,6 +23,7 @@ CREATE TABLE searches (
     -- optional part
     tag_id UUID,
 
+    FOREIGN KEY (owner_id) REFERENCES users (id),
     FOREIGN KEY (tag_id) REFERENCES tags (id), -- TODO: ON DELETE set to creation_date_asc?
 
     CONSTRAINT search_is_valid CHECK (

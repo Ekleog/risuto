@@ -155,9 +155,11 @@ fn main() {
     // Generate searches
     gen_n_items("searches", NUM_SEARCHES, |_| {
         let id = gen_uuid(&mut rng);
+        let owner = gen_user(&mut rng);
         let name = gen_search_name(&mut rng);
         let filter = serde_json::to_string(&gen_bolero::<Query>(&mut rng)).unwrap();
         let order_type = gen_bolero::<Order>(&mut rng);
+        let prio = rng.gen::<i64>();
         let tag = match order_type {
             Order::Tag(_) => {
                 format!("'{}'", gen_tag(&mut rng)) // ignore the given tag as it doesn't respect fkeys
@@ -176,7 +178,7 @@ fn main() {
             Order::BlockedUntil(OrderType::Asc) => "blocked_until_asc",
             Order::BlockedUntil(OrderType::Desc) => "blocked_until_desc",
         };
-        format!("('{id}', '{name}', '{filter}', '{order_type}', {tag})")
+        format!("('{id}', '{owner}', '{name}', '{filter}', '{order_type}', '{prio}', {tag})")
     });
 
     // Generate tasks
