@@ -1,34 +1,65 @@
-use risuto_client::{api::UserId, Search};
+use std::{collections::HashMap, iter, sync::Arc};
+
+use risuto_client::{
+    api::{Tag, TagId, UserId},
+    Search, SearchId,
+};
 use yew::prelude::*;
+
+use crate::util;
 
 #[derive(Clone, PartialEq, Properties)]
 pub struct SearchListProps {
-    pub searches: Vec<Search>,
+    pub searches: Arc<HashMap<SearchId, Search>>,
+    pub tags: Arc<HashMap<TagId, Tag>>,
     pub current_user: UserId,
-    pub active_search: usize,
-    pub on_select_search: Callback<usize>,
+    pub active_search: SearchId,
+    pub on_select_search: Callback<Search>,
+}
+
+enum Item {
+    Search(Search),
+    Separator(&'static str),
 }
 
 #[function_component(SearchList)]
 pub fn search_list(p: &SearchListProps) -> Html {
-    let list_items = p.searches.iter().enumerate().map(|(id, s)| {
-        let is_active = match id == p.active_search {
-            true => "active",
-            false => "",
-        };
-        let on_select_tag = p.on_select_search.reform(move |_| id);
-        html! {
-            <li class={classes!("nav-item", is_active, "border-bottom", "p-2")}>
-                <a
-                    class={classes!("nav-link", is_active)}
-                    href={format!("#search-{}", id)} // TODO: replace with urlescape(s.name)
-                    onclick={on_select_tag}
-                >
-                    { s.name.clone() }
-                </a>
-            </li>
-        }
-    });
+    let mut tags = p.tags.values().collect::<Vec<_>>();
+    util::sort_tags(&p.current_user, &mut tags, |t| t);
+    let list_items = iter::once(Item::Search(Search::today(util::local_tz())))
+        .chain(iter::once(Item::Separator("Custom Searches")))
+        .chain(p.searches.values().cloned().map(Item::Search))
+        .chain(iter::once(Item::Separator("Tags")))
+        .chain(tags.into_iter().map(Search::for_tag).map(Item::Search))
+        .chain(iter::once(Item::Search(Search::untagged())))
+        .map(|it| match it {
+            Item::Separator(name) => html! {
+                <li class="nav-item border-bottom p-1">
+                    { name }
+                </li>
+            },
+            Item::Search(search) => {
+                let is_active = match search.id == p.active_search {
+                    true => "active",
+                    false => "",
+                };
+                let on_select_tag = {
+                    let search = search.clone();
+                    p.on_select_search.reform(move |_| search.clone())
+                };
+                html! {
+                    <li class={classes!("nav-item", is_active, "border-bottom", "p-2")}>
+                        <a
+                            class={classes!("nav-link", is_active)}
+                            href={format!("#search-{}", js_sys::encode_uri(&search.name))}
+                            onclick={on_select_tag}
+                        >
+                            { search.name.clone() }
+                        </a>
+                    </li>
+                }
+            }
+        });
     html! {
         <ul class="nav flex-column">
             { for list_items }

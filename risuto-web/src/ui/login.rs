@@ -2,7 +2,10 @@ use futures::FutureExt;
 use risuto_client::api::{AuthToken, NewSession};
 use yew::prelude::*;
 
-use crate::{api::{self, ApiError}, LoginInfo};
+use crate::{
+    api::{self, ApiError},
+    LoginInfo,
+};
 
 #[derive(Clone, PartialEq, Properties)]
 pub struct LoginProps {
@@ -80,11 +83,14 @@ impl Component for Login {
             }
             LoginMsg::Authed(_, _, Err(ApiError::ParsingResponse(err))) => {
                 tracing::error!(?err, "login failed parsing response");
-                self.error = Some("The server seems to not be a valid risuto server. Maybe the URL is mistyped?");
+                self.error = Some(
+                    "The server seems to not be a valid risuto server. Maybe the URL is mistyped?",
+                );
             }
             LoginMsg::Authed(_, _, Err(ApiError::PermissionDenied)) => {
                 tracing::error!("login failed due to permission denied");
-                self.error = Some("Failed to authenticate. Please check your username and password.");
+                self.error =
+                    Some("Failed to authenticate. Please check your username and password.");
             }
         }
         true

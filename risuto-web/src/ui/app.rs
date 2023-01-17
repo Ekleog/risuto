@@ -29,7 +29,7 @@ pub enum AppMsg {
     ReceivedDb(DbDump),
     WebsocketDisconnected,
 
-    SetActiveSearch(usize),
+    SetActiveSearch(Search),
     NewUserEvent(Event),
     NewNetworkEvent(Event),
     EventSubmissionComplete,
@@ -45,8 +45,7 @@ pub enum ConnState {
 pub struct App {
     db: Rc<DbDump>,
     connection_state: ConnState,
-    searches: Vec<Search>,
-    active_search: usize,
+    active_search: Search,
     events_pending_submission: VecDeque<Event>, // push_back, pop_front
     feed_canceller: oneshot::Receiver<()>,
 }
@@ -72,9 +71,8 @@ impl App {
     }
 
     fn current_task_lists(&self) -> TaskLists {
-        let search = &self.searches[self.active_search];
-        let mut all_tasks = self.db.search(search);
-        match search.order {
+        let mut all_tasks = self.db.search(&self.active_search);
+        match self.active_search.order {
             Order::Tag(tag) => {
                 let backlog = Rc::new(all_tasks.split_off(
                     all_tasks.partition_point(|t| !t.current_tags.get(&tag).unwrap().backlog),
@@ -129,8 +127,7 @@ impl Component for App {
         App {
             db: Rc::new(DbDump::stub()),
             connection_state: ConnState::Disconnected,
-            searches: vec![Search::untagged()],
-            active_search: 0,
+            active_search: Search::today(util::local_tz()),
             events_pending_submission,
             feed_canceller,
         }
@@ -161,20 +158,10 @@ impl Component for App {
                 for e in events_already_received {
                     self.locally_insert_new_event(e);
                 }
-                self.searches = vec![Search::today(util::local_tz())];
-                self.searches
-                    .extend(self.db.tags.values().map(|t| Search::for_tag(t)));
-                util::sort_tags(&self.db.owner, &mut self.searches[1..], |s| {
-                    &self.db.tags.get(&s.is_order_tag().unwrap()).unwrap()
-                });
-                self.searches.push(Search::untagged());
-                if self.active_search >= self.searches.len() {
-                    self.active_search = 0;
-                }
                 self.connection_state = ConnState::Connected;
             }
-            AppMsg::SetActiveSearch(id) => {
-                self.active_search = id;
+            AppMsg::SetActiveSearch(search) => {
+                self.active_search = search;
             }
             AppMsg::NewUserEvent(e) => {
                 tracing::debug!("got new user event {e:?}");
@@ -217,7 +204,7 @@ impl Component for App {
 
         let on_order_change = {
             let owner = self.db.owner.clone();
-            let search = self.searches[self.active_search].clone();
+            let search = self.active_search.clone();
             let tasks = tasks.clone();
             ctx.link().batch_callback(move |e: TaskOrderChangeEvent| {
                 let task_id = match e.before.list {
@@ -261,9 +248,10 @@ impl Component for App {
                 <div class="row h-100">
                     <nav class="col-md-2 sidebar overflow-auto p-0">
                         <ui::SearchList
-                            searches={ self.searches.clone() }
+                            searches={ self.db.searches.clone() }
+                            tags={ self.db.tags.clone() }
                             current_user={ self.db.owner }
-                            active_search={ self.active_search }
+                            active_search={ self.active_search.id }
                             on_select_search={ ctx.link().callback(AppMsg::SetActiveSearch) }
                         />
                     </nav>
@@ -272,7 +260,7 @@ impl Component for App {
                             connection_state={ self.connection_state.clone() }
                             events_pending_submission={ self.events_pending_submission.clone() }
                             db={ self.db.clone() }
-                            current_tag={ self.searches[self.active_search].is_order_tag() }
+                            current_tag={ self.active_search.is_order_tag() }
                             tasks_open={ tasks.open }
                             tasks_done={ tasks.done }
                             tasks_backlog={ tasks.backlog }

@@ -30,14 +30,16 @@ pub enum ApiError {
     ParsingResponse(#[source] reqwest::Error),
 }
 
-async fn submit<T: for<'de> serde::Deserialize<'de>>(req: reqwest_middleware::RequestBuilder) -> Result<T, ApiError> {
-    let resp = req.send()
-        .await
-        .map_err(ApiError::SendingRequest)?;
+async fn submit<T: for<'de> serde::Deserialize<'de>>(
+    req: reqwest_middleware::RequestBuilder,
+) -> Result<T, ApiError> {
+    let resp = req.send().await.map_err(ApiError::SendingRequest)?;
     match resp.status() {
         reqwest::StatusCode::FORBIDDEN => Err(ApiError::PermissionDenied),
         reqwest::StatusCode::OK => resp.json().await.map_err(ApiError::ParsingResponse),
-        _ => Err(ApiError::ParsingResponse(resp.error_for_status().unwrap_err())),
+        _ => Err(ApiError::ParsingResponse(
+            resp.error_for_status().unwrap_err(),
+        )),
     }
 }
 
@@ -90,12 +92,14 @@ async fn fetch_db_dump(login: &LoginInfo) -> DbDump {
         owner: fetch(login, "whoami", None).await,
         users: Arc::new(HashMap::new()),
         tags: Arc::new(HashMap::new()),
+        searches: Arc::new(HashMap::new()),
         perms: Arc::new(HashMap::new()),
         tasks: Arc::new(HashMap::new()),
     };
 
     db.add_users(fetch(login, "fetch-users", None).await);
     db.add_tags(fetch(login, "fetch-tags", None).await);
+    db.add_tags(fetch(login, "fetch-searches", None).await);
     let (tasks, events): (Vec<api::Task>, Vec<api::Event>) =
         fetch(login, "search-tasks", Some(&api::Query::Archived(false))).await;
     db.add_tasks(tasks);

@@ -1,6 +1,6 @@
 use std::{rc::Rc, sync::Arc};
 
-use risuto_client::{api::Query, DbDump, Order, OrderType, QueryExt, Search, Task};
+use risuto_client::{api::Query, DbDump, Order, OrderType, QueryExt, Search, SearchId, Task};
 use yew::prelude::*;
 
 use crate::util;
@@ -36,6 +36,7 @@ pub fn search_bar(p: &SearchBarProps) -> Html {
                     tracing::debug!("searching with query {:?}", filter);
                     tracing::debug!("(parsed from {:?})", search.trim());
                     let search = Search {
+                        id: SearchId::stub(),
                         name: String::from("Search Bar"),
                         filter,
                         order: Order::LastEventDate(OrderType::Desc),

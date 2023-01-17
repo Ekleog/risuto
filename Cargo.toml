@@ -24,6 +24,7 @@ chrono-tz = { git = "https://github.com/Ekleog/chrono-tz", rev = "d9be1348755f9b
 futures = "0.3.25"
 getrandom = "0.2"
 gloo-storage = "0.2.2"
+js-sys = "0.3.60"
 lazy_static = "1.4"
 lipsum = "0.8.2"
 num = "0.4.0"

@@ -1,12 +1,28 @@
 use std::{cmp::Reverse, sync::Arc};
 
+use risuto_api::{uuid, Uuid};
+
 use crate::{
     api::{OrderId, Query, Tag, TagId, TimeQuery},
     Task,
 };
 
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct SearchId(pub Uuid);
+
+impl SearchId {
+    pub fn stub() -> SearchId {
+        SearchId(risuto_api::STUB_UUID)
+    }
+
+    pub fn today() -> SearchId {
+        SearchId(uuid!("70DA1aaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")) // TODO: merge with risuto-api
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Search {
+    pub id: SearchId,
     pub name: String,
     pub filter: Query,
     pub order: Order,
@@ -15,6 +31,7 @@ pub struct Search {
 impl Search {
     pub fn untagged() -> Search {
         Search {
+            id: SearchId(uuid!("07A66EDa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")), // TODO: merge with risuto-api
             name: String::from("Untagged"),
             filter: Query::Untagged(true),
             order: Order::Custom(OrderId::untagged()),
@@ -23,6 +40,7 @@ impl Search {
 
     pub fn today(timezone: chrono_tz::Tz) -> Search {
         Search {
+            id: SearchId::today(),
             name: String::from("Today"),
             filter: Query::ScheduledForBefore(TimeQuery::DayRelative {
                 timezone,
@@ -34,14 +52,16 @@ impl Search {
 
     pub fn for_tag(t: &Tag) -> Search {
         Search {
+            id: SearchId(t.id.0),
             name: format!("#{}", t.name),
             filter: Query::tag(t.id),
             order: Order::Tag(t.id),
         }
     }
 
-    pub fn for_tag_full(tag: &Tag, backlog: bool) -> Search {
+    pub fn for_tag_full(id: SearchId, tag: &Tag, backlog: bool) -> Search {
         Search {
+            id,
             name: format!(
                 "#{} ({})",
                 tag.name,

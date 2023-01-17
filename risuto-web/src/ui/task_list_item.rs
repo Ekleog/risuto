@@ -3,7 +3,7 @@ use std::{rc::Rc, sync::Arc};
 use chrono::{Datelike, Timelike};
 use risuto_client::{
     api::{Event, EventData, TagId, Time},
-    DbDump, Search, Task,
+    DbDump, Search, SearchId, Task,
 };
 use yew::prelude::*;
 
@@ -157,7 +157,7 @@ fn parse_new_title(db: &DbDump, mut title: String, task: &Task) -> Vec<Event> {
         if let Some(i) = title.rfind(" +") {
             let tag_start = i + " +".len();
             if let Some(tag) = title.get(tag_start..).and_then(|t| db.tag(t)) {
-                let search = Search::for_tag_full(&tag, false);
+                let search = Search::for_tag_full(SearchId::stub(), &tag, false);
                 let tasks = db.search(&search);
                 res.extend(util::compute_reordering_events(
                     db.owner, &search, task.id, 0, false, &tasks,
