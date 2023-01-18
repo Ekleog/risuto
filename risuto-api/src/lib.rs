@@ -16,7 +16,7 @@ pub use query::{Query, TimeQuery};
 pub use search::{Order, OrderType, Search, SearchId};
 pub use tag::{Tag, TagId};
 pub use task::{Task, TaskId};
-pub use user::{User, UserId};
+pub use user::{NewUser, User, UserId};
 
 pub use uuid::{uuid, Uuid};
 pub type Time = chrono::DateTime<chrono::Utc>;

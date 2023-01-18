@@ -11,8 +11,8 @@ use axum::{
 };
 use futures::{channel::mpsc, select, stream, SinkExt, Stream, StreamExt};
 use risuto_api::{
-    Action, AuthInfo, AuthToken, Event, FeedMessage, NewSession, Search, Tag, Task, User, UserId,
-    Uuid,
+    Action, AuthInfo, AuthToken, Event, FeedMessage, NewSession, NewUser, Search, Tag, Task, User,
+    UserId, Uuid,
 };
 use serde_json::json;
 use std::{collections::HashMap, iter, net::SocketAddr, pin::Pin, sync::Arc};
@@ -80,9 +80,14 @@ async fn main() -> anyhow::Result<()> {
 async fn app(db: sqlx::PgPool, admin_token: Option<AuthToken>) -> Router {
     let feeds = UserFeeds(Arc::new(RwLock::new(HashMap::new())));
 
-    let state = AppState { db, feeds, admin_token };
+    let state = AppState {
+        db,
+        feeds,
+        admin_token,
+    };
 
     Router::new()
+        .route("/api/admin/create-user", post(admin_create_user))
         .route("/api/auth", post(auth))
         .route("/api/unauth", post(unauth))
         .route("/api/whoami", get(whoami))
@@ -149,7 +154,10 @@ struct AdminAuth;
 impl FromRequestParts<AppState> for AdminAuth {
     type Rejection = Error;
 
-    async fn from_request_parts(req: &mut request::Parts, state: &AppState) -> Result<AdminAuth, Error> {
+    async fn from_request_parts(
+        req: &mut request::Parts,
+        state: &AppState,
+    ) -> Result<AdminAuth, Error> {
         let token = PreAuth::from_request_parts(req, state).await?.0;
         if Some(token) == state.admin_token {
             Ok(AdminAuth)
@@ -193,6 +201,15 @@ impl axum::response::IntoResponse for Error {
                 .into_response(),
         }
     }
+}
+
+async fn admin_create_user(
+    State(db): State<sqlx::PgPool>,
+    AdminAuth: AdminAuth,
+    Json(data): Json<NewUser>,
+) -> Result<(), Error> {
+    let mut conn = db.acquire().await.context("acquiring db connection")?;
+    db::create_user(&mut conn, data).await
 }
 
 async fn auth(

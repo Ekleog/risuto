@@ -3,8 +3,8 @@ use axum::async_trait;
 use chrono::Utc;
 use futures::{Future, Stream, StreamExt, TryStreamExt};
 use risuto_api::{
-    AuthInfo, AuthToken, Event, EventData, EventId, NewSession, Order, OrderId, OrderType, Query,
-    Search, SearchId, Tag, TagId, Task, TaskId, Time, User, UserId, Uuid,
+    AuthInfo, AuthToken, Event, EventData, EventId, NewSession, NewUser, Order, OrderId, OrderType,
+    Query, Search, SearchId, Tag, TagId, Task, TaskId, Time, User, UserId, Uuid,
 };
 use sqlx::Connection;
 use std::pin::Pin;
@@ -679,6 +679,7 @@ pub async fn submit_event(db: &mut PostgresDb<'_>, e: Event) -> Result<(), Error
     .await
     .with_context(|| format!("inserting event {:?}", event_id))?;
 
+    // TODO: merge all the places where we have code like the below
     match res.rows_affected() {
         1 => Ok(()),
         0 => {
@@ -773,4 +774,31 @@ pub async fn submit_task(db: &mut PostgresDb<'_>, t: Task, top_comm: String) -> 
         .context("committing task creation transaction")?;
 
     Ok(())
+}
+
+pub async fn create_user(conn: &mut sqlx::PgConnection, user: NewUser) -> Result<(), Error> {
+    let user_id = user.id;
+    let res = sqlx::query!(
+        "INSERT INTO users VALUES ($1, $2, $3)",
+        user.id.0,
+        user.name,
+        user.initial_password
+    )
+    .execute(&mut *conn)
+    .await
+    .with_context(|| format!("inserting into database user {user:?}"))?;
+    match res.rows_affected() {
+        1 => Ok(()),
+        0 => {
+            let already_present = sqlx::query!("SELECT * FROM users WHERE id=$1", user.id.0)
+                .fetch_optional(&mut *conn)
+                .await
+                .context("sanity-checking the already-present user")?;
+            match already_present {
+                Some(p) if p.id == user.id.0 => Err(Error::UuidAlreadyUsed(p.id)),
+                _ => Err(Error::Anyhow(anyhow!("unknown user creation conflict: trying to insert {user:?}, already had {already_present:?}")))
+            }
+        }
+        rows => panic!("insertion of single user {user_id:?} affected multiple ({rows}) rows"),
+    }
 }

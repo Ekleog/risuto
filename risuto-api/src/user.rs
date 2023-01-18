@@ -26,3 +26,10 @@ pub struct User {
     pub id: UserId,
     pub name: String,
 }
+
+#[derive(Debug, serde::Deserialize, serde::Serialize)]
+pub struct NewUser {
+    pub id: UserId,
+    pub name: String,
+    pub initial_password: String,
+}
