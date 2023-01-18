@@ -2225,6 +2225,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "risuto-mock-server"
+version = "0.1.0"
+
+[[package]]
 name = "risuto-server"
 version = "0.1.0"
 dependencies = [

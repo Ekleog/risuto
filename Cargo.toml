@@ -2,6 +2,7 @@
 members = [
     "risuto-api",
     "risuto-client",
+    "risuto-mock-server",
     "risuto-server",
     "risuto-web",
     "tests",
