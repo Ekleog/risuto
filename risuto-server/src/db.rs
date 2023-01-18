@@ -680,6 +680,7 @@ pub async fn submit_event(db: &mut PostgresDb<'_>, e: Event) -> Result<(), Error
     .with_context(|| format!("inserting event {:?}", event_id))?;
 
     // TODO: merge all the places where we have code like the below
+    // TODO: this should actually be looking into PgDatabaseError::constraint() to know which constaint failed
     match res.rows_affected() {
         1 => Ok(()),
         0 => {
