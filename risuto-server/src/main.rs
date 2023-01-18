@@ -22,16 +22,28 @@ use tower_http::trace::TraceLayer;
 mod db;
 mod query;
 
+#[derive(Debug, structopt::StructOpt)]
+struct Opt {
+    /// Enable the admin interface. This will print the admin token to risuto-server's stdout.
+    ///
+    /// Note that the admin token changes on each server start.
+    #[structopt(long)]
+    enable_admin: bool,
+}
+
 #[derive(Clone, FromRef)]
 struct AppState {
     db: sqlx::PgPool,
     feeds: UserFeeds,
+    admin_token: Option<AuthToken>,
 }
 
 static MIGRATOR: sqlx::migrate::Migrator = sqlx::migrate!();
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    let opt = <Opt as structopt::StructOpt>::from_args();
+
     tracing_subscriber::fmt::init();
 
     let db_url = std::env::var("DATABASE_URL").context("DATABASE_URL must be set")?;
@@ -45,7 +57,17 @@ async fn main() -> anyhow::Result<()> {
         .await
         .context("running pending migrations")?;
 
-    let app = app(db).await;
+    let admin_token = match opt.enable_admin {
+        false => None,
+        true => {
+            let t = Uuid::new_v4();
+            // Do NOT go through tracing, as it could end up in various metrics collection things
+            println!("admin interface enabled; admin token is {t:?}");
+            Some(AuthToken(t))
+        }
+    };
+
+    let app = app(db, admin_token).await;
 
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
     tracing::info!("listening on {}", addr);
@@ -55,10 +77,10 @@ async fn main() -> anyhow::Result<()> {
         .context("serving axum webserver")
 }
 
-async fn app(db: sqlx::PgPool) -> Router {
+async fn app(db: sqlx::PgPool, admin_token: Option<AuthToken>) -> Router {
     let feeds = UserFeeds(Arc::new(RwLock::new(HashMap::new())));
 
-    let state = AppState { db, feeds };
+    let state = AppState { db, feeds, admin_token };
 
     Router::new()
         .route("/api/auth", post(auth))
@@ -118,6 +140,22 @@ impl FromRequestParts<AppState> for Auth {
             .await
             .context("getting connection to database")?;
         Ok(Auth(db::recover_session(&mut conn, token).await?))
+    }
+}
+
+struct AdminAuth;
+
+#[async_trait]
+impl FromRequestParts<AppState> for AdminAuth {
+    type Rejection = Error;
+
+    async fn from_request_parts(req: &mut request::Parts, state: &AppState) -> Result<AdminAuth, Error> {
+        let token = PreAuth::from_request_parts(req, state).await?.0;
+        if Some(token) == state.admin_token {
+            Ok(AdminAuth)
+        } else {
+            Err(Error::PermissionDenied)
+        }
     }
 }
 
