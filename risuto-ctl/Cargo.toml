@@ -1,0 +1,11 @@
+[package]
+name = "risuto-ctl"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow.workspace = true
+reqwest.workspace = true
+risuto-api.workspace = true
+structopt.workspace = true
+tokio.workspace = true

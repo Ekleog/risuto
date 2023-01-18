@@ -2278,6 +2278,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "risuto-ctl"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "reqwest",
+ "risuto-api",
+ "structopt",
+ "tokio",
+]
+
+[[package]]
 name = "risuto-mock-server"
 version = "0.1.0"
 
