@@ -574,14 +574,17 @@ mod tests {
         }
     });
 
+    // TODO: also allow generating invalid requests?
     #[derive(Clone, Debug, bolero::generator::TypeGenerator)]
     enum FuzzOp {
+        CreateUser {
+            id: UserId,
+            name: String,
+            pass: String,
+        },
         Auth {
             uid: usize,
             device: String,
-        },
-        AuthRaw {
-            info: NewSession,
         },
         Unauth {
             sid: usize,
