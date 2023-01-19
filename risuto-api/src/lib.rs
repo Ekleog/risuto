@@ -23,6 +23,10 @@ pub type Time = chrono::DateTime<chrono::Utc>;
 
 pub const STUB_UUID: Uuid = uuid!("ffffffff-ffff-ffff-ffff-ffffffffffff");
 
+// picked with a totally fair dice roll
+const UUID_TODAY: Uuid = uuid!("70DA1aaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+const UUID_UNTAGGED: Uuid = uuid!("07A66EDa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+
 #[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
 pub enum FeedMessage {
     Pong,

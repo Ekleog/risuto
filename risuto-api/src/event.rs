@@ -1,8 +1,8 @@
 use anyhow::Context;
 use chrono::Utc;
-use uuid::{uuid, Uuid};
+use uuid::Uuid;
 
-use crate::{Db, TagId, TaskId, Time, UserId};
+use crate::{Db, TagId, TaskId, Time, UserId, STUB_UUID, UUID_TODAY, UUID_UNTAGGED};
 
 #[derive(
     Clone,
@@ -17,14 +17,16 @@ use crate::{Db, TagId, TaskId, Time, UserId};
 pub struct OrderId(#[generator(bolero::generator::gen_arbitrary())] pub Uuid);
 
 impl OrderId {
+    pub fn stub() -> OrderId {
+        OrderId(STUB_UUID)
+    }
+
     pub fn today() -> OrderId {
-        // picked with a totally fair dice roll
-        OrderId(uuid!("70DA1aaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"))
+        OrderId(UUID_TODAY)
     }
 
     pub fn untagged() -> OrderId {
-        // picked with a totally fair dice roll
-        OrderId(uuid!("07A66EDa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"))
+        OrderId(UUID_UNTAGGED)
     }
 }
 

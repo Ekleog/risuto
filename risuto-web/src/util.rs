@@ -1,7 +1,7 @@
 use std::{str::FromStr, sync::Arc};
 
 use risuto_client::{
-    api::{Event, EventData, Order, Search, SearchId, Tag, TaskId, UserId},
+    api::{Event, EventData, Order, Search, SearchId, Tag, TaskId, UserId, Query},
     DbDump, Task,
 };
 use wasm_bindgen::prelude::*;
@@ -165,7 +165,13 @@ pub fn parse_tag_changes(db: &DbDump, task_id: TaskId, mut title: String) -> (St
         if let Some(i) = title.rfind(" +") {
             let tag_start = i + " +".len();
             if let Some(tag) = title.get(tag_start..).and_then(|t| db.tag(t)) {
-                let search = Search::for_tag_full(SearchId::stub(), &tag, false);
+                let search = Search::stub_for_query_order(
+                    Query::Tag {
+                        tag: tag.id,
+                        backlog: Some(false),
+                    },
+                    Order::Tag(tag.id),
+                );
                 let tasks = db.search(&search);
                 res.extend(compute_reordering_events(
                     db.owner, &search, task_id, 0, false, &tasks,

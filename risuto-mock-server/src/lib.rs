@@ -4,7 +4,9 @@ use std::{
 };
 
 use risuto_client::{
-    api::{self, AuthToken, NewSession, NewUser, UserId, Uuid},
+    api::{
+        self, AuthInfo, AuthToken, Event, NewSession, NewUser, Query, Search, Tag, UserId, Uuid,
+    },
     DbDump,
 };
 
@@ -113,5 +115,40 @@ impl MockServer {
                 name: u.name.clone(),
             })
             .collect())
+    }
+
+    pub fn fetch_tags(&self, tok: AuthToken) -> Result<Vec<(Tag, AuthInfo)>, Error> {
+        let u = self.resolve(tok)?;
+        Ok(u.db
+            .tags
+            .iter()
+            .map(|(id, t)| (t.clone(), *u.db.perms.get(id).unwrap()))
+            .collect())
+    }
+
+    pub fn fetch_searches(&self, tok: AuthToken) -> Result<Vec<Search>, Error> {
+        let u = self.resolve(tok)?;
+        Ok(u.db.searches.values().cloned().collect())
+    }
+
+    pub fn search_tasks(
+        &self,
+        tok: AuthToken,
+        q: Query,
+    ) -> Result<(Vec<api::Task>, Vec<Event>), Error> {
+        let u = self.resolve(tok)?;
+        let mut tasks = Vec::new();
+        let mut evts = Vec::new();
+        for t in u.db.search(&Search::stub_for_query(q)) {
+            tasks.push(api::Task {
+                id: t.id,
+                owner_id: t.owner_id,
+                date: t.date,
+                initial_title: t.initial_title.clone(),
+                top_comment_id: t.top_comment.creation_id,
+            });
+            evts.extend(t.events.values().flat_map(|e| e.iter()).cloned());
+        }
+        Ok((tasks, evts))
     }
 }

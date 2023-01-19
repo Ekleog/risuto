@@ -1,4 +1,4 @@
-use crate::{uuid, OrderId, Query, Tag, TagId, TimeQuery, Uuid, STUB_UUID};
+use crate::{OrderId, Query, Tag, TagId, TimeQuery, Uuid, STUB_UUID, UUID_UNTAGGED, UUID_TODAY};
 
 #[derive(
     Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, serde::Deserialize, serde::Serialize,
@@ -11,7 +11,11 @@ impl SearchId {
     }
 
     pub fn today() -> SearchId {
-        SearchId(uuid!("70DA1aaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")) // TODO: merge with risuto-api
+        SearchId(UUID_TODAY)
+    }
+
+    pub fn untagged() -> SearchId {
+        SearchId(UUID_UNTAGGED)
     }
 }
 
@@ -28,7 +32,7 @@ pub struct Search {
 impl Search {
     pub fn untagged() -> Search {
         Search {
-            id: SearchId(uuid!("07A66EDa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")), // TODO: merge with risuto-api
+            id: SearchId::untagged(),
             name: String::from("Untagged"),
             filter: Query::Untagged(true),
             order: Order::Custom(OrderId::untagged()),
@@ -59,19 +63,22 @@ impl Search {
         }
     }
 
-    pub fn for_tag_full(id: SearchId, tag: &Tag, backlog: bool) -> Search {
+    pub fn stub_for_query(filter: Query) -> Search {
         Search {
-            id,
-            name: format!(
-                "#{} ({})",
-                tag.name,
-                if backlog { "backlog" } else { "not-backlog " }
-            ),
-            filter: Query::Tag {
-                tag: tag.id,
-                backlog: Some(backlog),
-            },
-            order: Order::Tag(tag.id),
+            id: SearchId::stub(),
+            name: String::from("stub"),
+            filter,
+            order: Order::Custom(OrderId::stub()),
+            priority: 0,
+        }
+    }
+
+    pub fn stub_for_query_order(filter: Query, order: Order) -> Search {
+        Search {
+            id: SearchId::stub(),
+            name: String::from("stub"),
+            filter,
+            order,
             priority: 0,
         }
     }
