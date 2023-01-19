@@ -527,7 +527,6 @@ mod tests {
         };
     }
 
-    /*
     macro_rules! do_sqlx_test {
         ( $name:ident, $typ:ty, $fn:expr ) => {
             #[test]
@@ -589,7 +588,6 @@ mod tests {
             }
         };
     }
-    */
 
     do_tokio_test!(fuzz_preauth_extractor, String, |token| async move {
         if let Ok(req) = http::Request::builder()
@@ -648,8 +646,7 @@ mod tests {
         },
     }
 
-    /* TODO: actually introduce it after having added code for creating users, tags and tasks at least
     do_sqlx_test!(auth_extractor_no_500, Vec<FuzzOp>, |pool, test| async move {
         let app = app(pool).await;
-    }); */
+    });
 }

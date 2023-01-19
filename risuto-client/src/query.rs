@@ -353,6 +353,7 @@ mod tests {
             users: Arc::new(HashMap::new()),
             tags: Arc::new(tags),
             perms: Arc::new(perms),
+            searches: Arc::new(HashMap::new()),
             tasks: Arc::new(HashMap::new()),
         }
     }
