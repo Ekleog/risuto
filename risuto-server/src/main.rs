@@ -426,6 +426,7 @@ impl UserFeeds {
                             }
                             send_message!(FeedMessage::Pong);
                         }
+                        Some(Ok(Message::Close(_))) => remove_self!(),
                         Some(msg) => {
                             tracing::warn!("received unexpected message from client: {msg:?}");
                             remove_self!();
