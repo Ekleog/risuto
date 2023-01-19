@@ -1,10 +1,7 @@
 use anyhow::Context;
 use axum::{
     async_trait,
-    extract::{
-        ws::{Message, WebSocket},
-        FromRef, FromRequestParts, State, WebSocketUpgrade,
-    },
+    extract::{ws::Message, FromRef, FromRequestParts, State, WebSocketUpgrade},
     http::{request, StatusCode},
     routing::{get, post},
     Json, Router,
@@ -354,35 +351,50 @@ async fn action_feed(
     State(db): State<sqlx::PgPool>,
     State(feeds): State<UserFeeds>,
 ) -> Result<axum::response::Response, Error> {
-    Ok(ws.on_upgrade(move |mut sock| async move {
-        // TODO: handle errors more gracefully
-        // TODO: also log ip of other websocket end
-        tracing::debug!("event feed websocket connected");
-        if let Some(Ok(Message::Text(token))) = sock.recv().await {
-            if let Ok(token) = Uuid::try_from(&token as &str) {
-                if let Ok(mut conn) = db.acquire().await {
-                    if let Ok(user) = db::recover_session(&mut conn, AuthToken(token)).await {
-                        if let Ok(_) = sock.send(Message::Text(String::from("ok"))).await {
-                            tracing::debug!(?user, "event feed websocket auth success");
-                            feeds.add_for_user(user, sock).await;
-                            return;
-                        }
+    Ok(ws.on_upgrade(move |sock| {
+        let (write, read) = sock.split();
+        action_feed_impl(write, read, db, feeds)
+    }))
+}
+
+async fn action_feed_impl<W, R>(mut write: W, mut read: R, db: sqlx::PgPool, feeds: UserFeeds)
+where
+    W: 'static + Send + Unpin + futures::Sink<Message>,
+    <W as futures::Sink<Message>>::Error: Send,
+    R: 'static + Send + Unpin + futures::Stream<Item = Result<Message, axum::Error>>,
+{
+    // TODO: handle errors more gracefully
+    // TODO: also log ip of other websocket end
+    tracing::debug!("event feed websocket connected");
+    if let Some(Ok(Message::Text(token))) = read.next().await {
+        if let Ok(token) = Uuid::try_from(&token as &str) {
+            if let Ok(mut conn) = db.acquire().await {
+                if let Ok(user) = db::recover_session(&mut conn, AuthToken(token)).await {
+                    if let Ok(_) = write.send(Message::Text(String::from("ok"))).await {
+                        tracing::debug!(?user, "event feed websocket auth success");
+                        feeds.add_for_user(user, write, read).await;
+                        return;
                     }
                 }
             }
-            tracing::debug!(?token, "event feed websocket auth failure");
-            let _ = sock
-                .send(Message::Text(String::from("permission denied")))
-                .await;
         }
-    }))
+        tracing::debug!(?token, "event feed websocket auth failure");
+        let _ = write
+            .send(Message::Text(String::from("permission denied")))
+            .await;
+    }
 }
 
 #[derive(Clone, Debug)]
 struct UserFeeds(Arc<RwLock<HashMap<UserId, HashMap<Uuid, mpsc::UnboundedSender<FeedMessage>>>>>);
 
 impl UserFeeds {
-    async fn add_for_user(self, user: UserId, sock: WebSocket) {
+    async fn add_for_user<W, R>(self, user: UserId, mut write: W, read: R)
+    where
+        W: 'static + Send + Unpin + futures::Sink<Message>,
+        <W as futures::Sink<Message>>::Error: Send,
+        R: 'static + Send + Unpin + futures::Stream<Item = Result<Message, axum::Error>>,
+    {
         // Create relayer channel
         // Note: if this were bounded, there would be a deadlock between the write-lock to remove a channel and the read-lock to send an event to all interested sockets
         let (sender, mut receiver) = mpsc::unbounded();
@@ -400,7 +412,7 @@ impl UserFeeds {
         // Start relayer queue
         let this = self.clone();
         let user = user.clone();
-        let mut sock = sock.fuse();
+        let mut read = read.fuse();
         tokio::spawn(async move {
             macro_rules! remove_self {
                 () => {{
@@ -423,7 +435,7 @@ impl UserFeeds {
                             continue;
                         }
                     };
-                    if let Err(_) = sock.send(Message::Binary(json)).await {
+                    if let Err(_) = write.send(Message::Binary(json)).await {
                         // TODO: check error details, using axum-tungstenite, to confirm we need to remove this socket
                         remove_self!();
                     }
@@ -435,7 +447,7 @@ impl UserFeeds {
                         None => remove_self!(),
                         Some(msg) => send_message!(msg),
                     },
-                    msg = sock.next() => match msg {
+                    msg = read.next() => match msg {
                         None => remove_self!(),
                         Some(Ok(Message::Text(msg))) => {
                             if msg != "ping" {
