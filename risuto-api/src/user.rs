@@ -1,4 +1,4 @@
-use crate::{STUB_UUID, auth::BCRYPT_POW_COST};
+use crate::{auth::BCRYPT_POW_COST, STUB_UUID};
 
 use uuid::Uuid;
 

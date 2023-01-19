@@ -2333,6 +2333,10 @@ dependencies = [
 [[package]]
 name = "risuto-mock-server"
 version = "0.1.0"
+dependencies = [
+ "bcrypt",
+ "risuto-client",
+]
 
 [[package]]
 name = "risuto-server"
@@ -2347,6 +2351,7 @@ dependencies = [
  "chrono",
  "futures",
  "risuto-api",
+ "risuto-mock-server",
  "serde_json",
  "sqlx",
  "structopt",

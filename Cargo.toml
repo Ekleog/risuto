@@ -12,6 +12,7 @@ members = [
 [workspace.dependencies]
 risuto-api = { path = "./risuto-api" }
 risuto-client = { path = "./risuto-client" }
+risuto-mock-server = { path = "./risuto-mock-server" }
 
 anyhow = "1.0"
 arrayvec = "0.7.2"

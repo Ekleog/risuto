@@ -33,14 +33,15 @@ impl NewSession {
             Ok(parts) => parts,
             Err(_) => return false,
         };
-        if parts.get_cost() != BCRYPT_POW_COST || parts.get_salt() != "......................" { // this string matches the all-0 salt
+        if parts.get_cost() != BCRYPT_POW_COST || parts.get_salt() != "......................" {
+            // this string matches the all-0 salt
             return false;
         }
         bcrypt::verify(&self.password, &self.pow).unwrap_or(false)
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct AuthToken(pub Uuid);
 
 impl AuthToken {
