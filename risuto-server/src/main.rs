@@ -218,12 +218,23 @@ impl axum::response::IntoResponse for Error {
 }
 
 async fn admin_create_user(
-    State(db): State<sqlx::PgPool>,
     AdminAuth: AdminAuth,
+    State(db): State<sqlx::PgPool>,
+    State(feeds): State<UserFeeds>,
     Json(data): Json<NewUser>,
 ) -> Result<(), Error> {
     let mut conn = db.acquire().await.context("acquiring db connection")?;
-    db::create_user(&mut conn, data).await
+    db::create_user(&mut conn, data.clone()).await?;
+    feeds
+        .relay_action(
+            &mut conn,
+            Action::NewUser(User {
+                id: data.id,
+                name: data.name,
+            }),
+        )
+        .await;
+    Ok(())
 }
 
 async fn auth(
@@ -320,6 +331,7 @@ async fn submit_action(
         user,
     };
     match &a {
+        Action::NewUser(_) => return Err(Error::PermissionDenied),
         Action::NewTask(t, top_comm) => {
             if user != t.owner_id {
                 return Err(Error::PermissionDenied);
@@ -333,7 +345,7 @@ async fn submit_action(
             db::submit_event(&mut db, e.clone()).await?;
         }
     }
-    feeds.relay_action(db, a).await;
+    feeds.relay_action(&mut db.conn, a).await;
     Ok(())
 }
 
@@ -443,11 +455,15 @@ impl UserFeeds {
         });
     }
 
-    async fn relay_action(&self, mut db: db::PostgresDb<'_>, a: Action) {
+    async fn relay_action(&self, conn: &mut sqlx::PgConnection, a: Action) {
         match &a {
-            Action::NewTask(t, _) => Box::pin(stream::iter(iter::once(Ok(t.owner_id))))
-                as Pin<Box<dyn Send + Stream<Item = anyhow::Result<UserId>>>>,
-            Action::NewEvent(e) => Box::pin(db::users_interested_by(&mut db.conn, &[e.task_id.0])),
+            Action::NewUser(_) => match db::fetch_users(conn).await {
+                Err(e) => Box::pin(stream::iter(iter::once(Err(e))))
+                    as Pin<Box<dyn Send + Stream<Item = anyhow::Result<UserId>>>>,
+                Ok(u) => Box::pin(stream::iter(u.into_iter().map(|u| Ok(u.id)))),
+            },
+            Action::NewTask(t, _) => Box::pin(stream::iter(iter::once(Ok(t.owner_id)))),
+            Action::NewEvent(e) => Box::pin(db::users_interested_by(conn, &[e.task_id.0])),
             // TODO: make sure we actually send the whole task if a user gets access to this task it didn't have before
         }
         // TODO: magic numbers below should be at least explained

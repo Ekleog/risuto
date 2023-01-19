@@ -61,6 +61,9 @@ impl App {
     fn locally_insert_new_action(&mut self, a: Action) {
         let db = Rc::make_mut(&mut self.db);
         match a {
+            Action::NewUser(u) => {
+                db.add_users(vec![u]);
+            }
             Action::NewTask(t, top_comm) => {
                 let mut task = Task::from(t.clone());
                 task.add_event(Event {

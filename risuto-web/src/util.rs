@@ -1,7 +1,7 @@
 use std::{str::FromStr, sync::Arc};
 
 use risuto_client::{
-    api::{Event, EventData, Order, Query, Search, SearchId, Tag, TaskId, UserId},
+    api::{Event, EventData, Order, Query, Search, Tag, TaskId, UserId},
     DbDump, Task,
 };
 use wasm_bindgen::prelude::*;

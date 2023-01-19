@@ -21,13 +21,21 @@ impl UserId {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
+#[derive(
+    Clone,
+    Debug,
+    Eq,
+    PartialEq,
+    bolero::generator::TypeGenerator,
+    serde::Deserialize,
+    serde::Serialize,
+)]
 pub struct User {
     pub id: UserId,
     pub name: String,
 }
 
-#[derive(Debug, serde::Deserialize, serde::Serialize)]
+#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
 pub struct NewUser {
     pub id: UserId,
     pub name: String,

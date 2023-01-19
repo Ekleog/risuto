@@ -166,6 +166,7 @@ impl MockServer {
     pub async fn submit_action(&mut self, tok: AuthToken, a: Action) -> Result<(), Error> {
         self.resolve(tok)?;
         match a {
+            Action::NewUser(_) => return Err(Error::PermissionDenied),
             Action::NewTask(t, top_comm) => {
                 let u = self.resolve_mut(tok)?;
                 u.db.add_tasks(vec![t.clone()]);
