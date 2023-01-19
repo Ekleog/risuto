@@ -230,6 +230,12 @@ async fn auth(
     State(db): State<sqlx::PgPool>,
     Json(data): Json<NewSession>,
 ) -> Result<Json<AuthToken>, Error> {
+    // in test setup, also allow the "empty" pow to work
+    #[cfg(test)]
+    if !data.verify_pow() && !data.pow.is_empty() {
+        return Err(Error::InvalidPow);
+    }
+    #[cfg(not(test))]
     if !data.verify_pow() {
         return Err(Error::InvalidPow);
     }
