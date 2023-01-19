@@ -7,7 +7,6 @@ CREATE TABLE tasks (
     top_comment_id UUID NOT NULL, -- see down this file for the fkey constraint
 
     FOREIGN KEY (owner_id) REFERENCES users (id)
-        ON DELETE CASCADE
 );
 
 CREATE TYPE event_type AS ENUM (
@@ -42,16 +41,14 @@ CREATE TABLE events (
     d_order_id UUID,
 
     -- foreign keys
-    FOREIGN KEY (owner_id) REFERENCES users (id)
-        ON DELETE CASCADE,
+    FOREIGN KEY (owner_id) REFERENCES users (id),
     FOREIGN KEY (task_id) REFERENCES tasks (id)
         ON DELETE CASCADE,
     FOREIGN KEY (d_tag_id) REFERENCES tags (id)
         ON DELETE CASCADE,
     UNIQUE (id, task_id), -- needed for foreign key below, id is pkey anyway
     UNIQUE (id, owner_id, date), -- needed for foreign key at the bottom of the file, id is pkey anyway
-    FOREIGN KEY (d_parent_id, task_id) REFERENCES events (id, task_id)
-        ON DELETE CASCADE,
+    FOREIGN KEY (d_parent_id, task_id) REFERENCES events (id, task_id),
 
     -- the big constraint
     CONSTRAINT event_is_valid CHECK (

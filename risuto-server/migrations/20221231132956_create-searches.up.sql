@@ -23,7 +23,8 @@ CREATE TABLE searches (
     -- optional part
     tag_id UUID,
 
-    FOREIGN KEY (owner_id) REFERENCES users (id),
+    FOREIGN KEY (owner_id) REFERENCES users (id)
+        ON DELETE CASCADE,
     FOREIGN KEY (tag_id) REFERENCES tags (id), -- TODO: ON DELETE set to creation_date_asc?
 
     CONSTRAINT search_is_valid CHECK (
