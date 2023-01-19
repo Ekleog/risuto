@@ -57,11 +57,7 @@ impl Component for Login {
             LoginMsg::PassChanged(p) => self.pass = p,
             LoginMsg::SubmitClicked => {
                 let device = get_device().unwrap_or_else(|_| String::from("Unknown device"));
-                let session = NewSession {
-                    user: self.user.clone(),
-                    password: self.pass.clone(),
-                    device,
-                };
+                let session = NewSession::new(self.user.clone(), self.pass.clone(), device);
                 let host = self.host.clone();
                 let user = self.user.clone();
                 ctx.link().send_future(

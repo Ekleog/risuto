@@ -1,14 +1,43 @@
-use std::ops::BitOr;
+use std::{ops::BitOr, str::FromStr};
 
 use uuid::Uuid;
 
 use crate::STUB_UUID;
+
+pub const BCRYPT_POW_COST: u32 = 10;
 
 #[derive(Clone, Debug, bolero::generator::TypeGenerator, serde::Deserialize, serde::Serialize)]
 pub struct NewSession {
     pub user: String,
     pub password: String,
     pub device: String,
+
+    /// Proof of work, to avoid the user spamming password attempts
+    pub pow: String,
+}
+
+impl NewSession {
+    pub fn new(user: String, password: String, device: String) -> NewSession {
+        NewSession {
+            pow: bcrypt::hash_with_salt(&password, BCRYPT_POW_COST, [0; 16])
+                .expect("failed hashing password")
+                .to_string(),
+            user,
+            password,
+            device,
+        }
+    }
+
+    pub fn verify_pow(&self) -> bool {
+        let parts = match bcrypt::HashParts::from_str(&self.pow) {
+            Ok(parts) => parts,
+            Err(_) => return false,
+        };
+        if parts.get_cost() != BCRYPT_POW_COST || parts.get_salt() != "......................" { // this string matches the all-0 salt
+            return false;
+        }
+        bcrypt::verify(&self.password, &self.pow).unwrap_or(false)
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, serde::Deserialize, serde::Serialize)]

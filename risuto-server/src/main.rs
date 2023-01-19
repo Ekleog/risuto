@@ -177,6 +177,9 @@ pub enum Error {
 
     #[error("Uuid already used {0}")]
     UuidAlreadyUsed(Uuid),
+
+    #[error("Invalid Proof of Work")]
+    InvalidPow,
 }
 
 impl axum::response::IntoResponse for Error {
@@ -194,11 +197,22 @@ impl axum::response::IntoResponse for Error {
                 tracing::info!("returning permission denied to client");
                 (StatusCode::FORBIDDEN, "Permission denied").into_response()
             }
-            Error::UuidAlreadyUsed(id) => (
-                StatusCode::CONFLICT,
-                Json(json!({ "error": "uuid already used", "uuid": id })),
-            )
-                .into_response(),
+            Error::UuidAlreadyUsed(id) => {
+                tracing::info!("Conflicting uuid sent by client");
+                (
+                    StatusCode::CONFLICT,
+                    Json(json!({ "error": "uuid already used", "uuid": id })),
+                )
+                    .into_response()
+            }
+            Error::InvalidPow => {
+                tracing::info!("client sent an invalid proof of work");
+                (
+                    StatusCode::BAD_REQUEST,
+                    Json(json!({ "error": "invalid proof of work" })),
+                )
+                    .into_response()
+            }
         }
     }
 }
@@ -216,6 +230,9 @@ async fn auth(
     State(db): State<sqlx::PgPool>,
     Json(data): Json<NewSession>,
 ) -> Result<Json<AuthToken>, Error> {
+    if !data.verify_pow() {
+        return Err(Error::InvalidPow);
+    }
     let mut conn = db.acquire().await.context("acquiring db connection")?;
     Ok(Json(
         db::login_user(&mut conn, &data)

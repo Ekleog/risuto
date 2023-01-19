@@ -1,4 +1,4 @@
-use crate::STUB_UUID;
+use crate::{STUB_UUID, auth::BCRYPT_POW_COST};
 
 use uuid::Uuid;
 
@@ -31,5 +31,16 @@ pub struct User {
 pub struct NewUser {
     pub id: UserId,
     pub name: String,
-    pub initial_password: String,
+    pub initial_password_hash: String,
+}
+
+impl NewUser {
+    pub fn new(id: UserId, name: String, initial_password: String) -> NewUser {
+        NewUser {
+            id,
+            name,
+            initial_password_hash: bcrypt::hash(initial_password, BCRYPT_POW_COST)
+                .expect("failed bcrypt hashing password"),
+        }
+    }
 }

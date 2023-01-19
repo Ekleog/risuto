@@ -346,24 +346,29 @@ pub async fn login_user(
     db: &mut sqlx::PgConnection,
     s: &NewSession,
 ) -> anyhow::Result<Option<AuthToken>> {
+    let user = sqlx::query!("SELECT id, password FROM users WHERE name = $1", s.user)
+        .fetch_optional(&mut *db)
+        .await
+        .with_context(|| format!("authenticating user {:?}", s.user))?;
+    let user = match user {
+        Some(user) => user,
+        None => return Ok(None),
+    };
+    if !bcrypt::verify(&s.password, &user.password).context("verifying password hash")? {
+        return Ok(None);
+    }
     let session_id = Uuid::new_v4();
     let now = Utc::now();
     let rows_inserted = sqlx::query!(
-        "
-            INSERT INTO sessions
-            SELECT $1, id, $2, $3, $3
-            FROM users
-            WHERE name = $4 AND password = $5
-        ",
+        "INSERT INTO sessions VALUES ($1, $2, $3, $4, $4)",
         session_id,
+        user.id,
         s.device,
         now.naive_utc(),
-        s.user,
-        s.password, // TODO: password should be salted (eg. user + "risuto" + password)
     )
     .execute(db)
     .await
-    .with_context(|| format!("authenticating user {:?}", s.user))?
+    .with_context(|| format!("creating session for user {:?}", s.user))?
     .rows_affected();
     assert!(
         rows_inserted <= 1,
@@ -783,7 +788,7 @@ pub async fn create_user(conn: &mut sqlx::PgConnection, user: NewUser) -> Result
         "INSERT INTO users VALUES ($1, $2, $3)",
         user.id.0,
         user.name,
-        user.initial_password
+        user.initial_password_hash
     )
     .execute(&mut *conn)
     .await

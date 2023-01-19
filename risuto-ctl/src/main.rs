@@ -1,5 +1,5 @@
 use anyhow::Context;
-use risuto_api::{UserId, Uuid, AuthToken};
+use risuto_api::{AuthToken, UserId, Uuid};
 
 #[derive(structopt::StructOpt)]
 struct Opt {
@@ -23,7 +23,8 @@ enum Command {
 }
 
 fn admin_token() -> anyhow::Result<AuthToken> {
-    let tok = std::env::var("ADMIN_TOKEN").context("retrieving ADMIN_TOKEN environment variable")?;
+    let tok =
+        std::env::var("ADMIN_TOKEN").context("retrieving ADMIN_TOKEN environment variable")?;
     let tok = Uuid::try_parse(&tok).context("parsing ADMIN_TOKEN as an auth token")?;
     Ok(AuthToken(tok))
 }
@@ -41,11 +42,11 @@ async fn main() -> anyhow::Result<()> {
         } => {
             client
                 .post(format!("{}/api/admin/create-user", opt.host))
-                .json(&risuto_api::NewUser {
-                    id: UserId(Uuid::new_v4()),
+                .json(&risuto_api::NewUser::new(
+                    UserId(Uuid::new_v4()),
                     name,
                     initial_password,
-                })
+                ))
                 .bearer_auth(admin_token()?.0)
                 .send()
                 .await?

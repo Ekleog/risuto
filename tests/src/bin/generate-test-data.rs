@@ -114,16 +114,23 @@ fn main() {
 
     // Generate users
     let mut users = Vec::new();
+    let mut passwords = Vec::new();
     gen_n_items("users", NUM_USERS, |_| {
         let uuid = gen_uuid(&mut rng);
         users.push(uuid.clone());
+        let name = gen_username(&mut rng);
+        let pass = gen_password(&mut rng);
+        passwords.push((name.clone(), pass.clone()));
         format!(
             "('{}', '{}', '{}')",
             uuid,
-            gen_username(&mut rng),
-            gen_password(&mut rng),
+            name,
+            bcrypt::hash(&pass, 10).unwrap(), // cost is whatever for tests, in practice see the cost defined in risuto_api::NewUser::new
         )
     });
+    for (name, pass) in passwords {
+        println!("-- Password for {:?} is {:?}", name, pass);
+    }
     let gen_user = |rng: &mut StdRng| -> String { users.choose(rng).unwrap().clone() };
 
     // Generate tags

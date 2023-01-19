@@ -5,6 +5,7 @@ edition = "2021"
 publish = false
 
 [dependencies]
+bcrypt.workspace = true
 bolero.workspace = true
 chrono.workspace = true
 lipsum.workspace = true
