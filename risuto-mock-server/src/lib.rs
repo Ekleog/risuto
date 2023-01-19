@@ -39,6 +39,10 @@ impl DbUser {
 struct Device(String);
 
 impl MockServer {
+    pub fn new() -> MockServer {
+        MockServer(HashMap::new())
+    }
+
     pub fn admin_create_user(&mut self, u: NewUser) -> Result<(), Error> {
         if self.0.values().any(|db| db.name == u.name) {
             return Err(Error::NameAlreadyUsed);

@@ -18,6 +18,7 @@ sqlx.workspace = true
 structopt.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
+tower.workspace = true
 tower-http.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true

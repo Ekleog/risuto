@@ -2,7 +2,7 @@ use anyhow::Context;
 use axum::{
     async_trait,
     extract::{ws::Message, FromRef, FromRequestParts, State, WebSocketUpgrade},
-    http::{request, StatusCode},
+    http::{self, request, StatusCode},
     routing::{get, post},
     Json, Router,
 };
@@ -105,7 +105,7 @@ impl<S: Sync> FromRequestParts<S> for PreAuth {
     type Rejection = Error;
 
     async fn from_request_parts(req: &mut request::Parts, _state: &S) -> Result<PreAuth, Error> {
-        match req.headers.get(axum::http::header::AUTHORIZATION) {
+        match req.headers.get(http::header::AUTHORIZATION) {
             None => Err(Error::PermissionDenied),
             Some(auth) => {
                 let auth = auth.to_str().map_err(|_| Error::PermissionDenied)?;
@@ -504,8 +504,9 @@ impl UserFeeds {
 mod tests {
     use super::*;
     use axum::http;
-    //use sqlx::testing::TestSupport;
+    use sqlx::testing::TestSupport;
     use std::panic::AssertUnwindSafe;
+    use tower::{Service, ServiceExt};
 
     macro_rules! do_tokio_test {
         ( $name:ident, $typ:ty, $fn:expr ) => {
@@ -630,6 +631,9 @@ mod tests {
         FetchTags {
             sid: usize,
         },
+        FetchSearches {
+            sid: usize,
+        },
         SearchTasks {
             sid: usize,
             query: risuto_api::Query,
@@ -646,7 +650,47 @@ mod tests {
         },
     }
 
-    do_sqlx_test!(auth_extractor_no_500, Vec<FuzzOp>, |pool, test| async move {
-        let app = app(pool).await;
-    });
+    do_sqlx_test!(
+        auth_extractor_no_500,
+        Vec<FuzzOp>,
+        |pool, test| async move {
+            let admin_token = Uuid::new_v4();
+            let app = app(pool, Some(AuthToken(admin_token))).await;
+            let mock = risuto_mock_server::MockServer::new();
+            for op in test {
+                match op {
+                    FuzzOp::CreateUser { id, name, pass } => {
+                        let new_user = NewUser {
+                            id,
+                            name,
+                            initial_password_hash: pass,
+                        };
+                        app.ready().await;
+                        let app_res = app
+                            .call(
+                                request::Builder::new()
+                                    .method("POST")
+                                    .uri("/api/admin/create-user")
+                                    .header(
+                                        http::header::AUTHORIZATION,
+                                        format!("bearer {admin_token}"),
+                                    )
+                                    .body(axum::body::Body::from(
+                                        serde_json::to_vec(&new_user)
+                                            .expect("serializing request to json"),
+                                    ))
+                                    .expect("building test request"),
+                            )
+                            .await
+                            .expect("running request");
+                        let mock_res = mock.admin_create_user(new_user);
+                        assert_eq!(
+                            app_res, mock_res,
+                            "app and mock did not return the same result for CreateUser"
+                        );
+                    }
+                }
+            }
+        }
+    );
 }
