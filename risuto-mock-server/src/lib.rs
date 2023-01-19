@@ -10,6 +10,7 @@ use risuto_client::{
     },
     DbDump,
 };
+use tokio::sync::mpsc;
 
 pub enum Error {
     NameAlreadyUsed,
@@ -24,7 +25,15 @@ struct DbUser {
     name: String,
     pass_hash: String,
     sessions: HashMap<AuthToken, Device>,
+    feeds: Vec<mpsc::UnboundedSender<Action>>,
     db: DbDump,
+}
+
+impl DbUser {
+    async fn relay_action(&mut self, a: Action) {
+        self.feeds
+            .retain_mut(|f| matches!(f.send(a.clone()), Ok(())));
+    }
 }
 
 struct Device(String);
@@ -42,6 +51,7 @@ impl MockServer {
                     name: u.name.clone(),
                     pass_hash: u.initial_password_hash,
                     sessions: HashMap::new(),
+                    feeds: Vec::new(),
                     db: DbDump {
                         owner: u.id,
                         users: Arc::new(HashMap::new()),
@@ -153,7 +163,7 @@ impl MockServer {
         Ok((tasks, evts))
     }
 
-    pub fn submit_action(&mut self, tok: AuthToken, a: Action) -> Result<(), Error> {
+    pub async fn submit_action(&mut self, tok: AuthToken, a: Action) -> Result<(), Error> {
         self.resolve(tok)?;
         match a {
             Action::NewTask(t, top_comm) => {
@@ -165,19 +175,31 @@ impl MockServer {
                     date: t.date,
                     task_id: t.id,
                     data: api::EventData::AddComment {
-                        text: top_comm,
+                        text: top_comm.clone(),
                         parent_id: None,
                     },
                 }]);
+                u.relay_action(Action::NewTask(t, top_comm)).await;
             }
             Action::NewEvent(e) => {
                 for u in self.0.values_mut() {
                     if u.db.tasks.contains_key(&e.task_id) {
                         u.db.add_events_and_refresh_all(vec![e.clone()]);
                     }
+                    u.relay_action(Action::NewEvent(e.clone())).await;
                 }
             }
         }
         Ok(())
+    }
+
+    pub async fn action_feed(
+        &mut self,
+        tok: AuthToken,
+    ) -> Result<mpsc::UnboundedReceiver<Action>, Error> {
+        let u = self.resolve_mut(tok)?;
+        let (sender, receiver) = mpsc::unbounded_channel();
+        u.feeds.push(sender);
+        Ok(receiver)
     }
 }

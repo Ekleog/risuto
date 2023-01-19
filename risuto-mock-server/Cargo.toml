@@ -6,3 +6,4 @@ edition = "2021"
 [dependencies]
 bcrypt.workspace = true
 risuto-client.workspace = true
+tokio.workspace = true
