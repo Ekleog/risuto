@@ -1,4 +1,4 @@
-use crate::{OrderId, Query, Tag, TagId, TimeQuery, Uuid, STUB_UUID, UUID_UNTAGGED, UUID_TODAY};
+use crate::{OrderId, Query, Tag, TagId, TimeQuery, Uuid, STUB_UUID, UUID_TODAY, UUID_UNTAGGED};
 
 #[derive(
     Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, serde::Deserialize, serde::Serialize,

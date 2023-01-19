@@ -5,7 +5,8 @@ use std::{
 
 use risuto_client::{
     api::{
-        self, AuthInfo, AuthToken, Event, NewSession, NewUser, Query, Search, Tag, UserId, Uuid,
+        self, Action, AuthInfo, AuthToken, Event, NewSession, NewUser, Query, Search, Tag, UserId,
+        Uuid,
     },
     DbDump,
 };
@@ -150,5 +151,33 @@ impl MockServer {
             evts.extend(t.events.values().flat_map(|e| e.iter()).cloned());
         }
         Ok((tasks, evts))
+    }
+
+    pub fn submit_action(&mut self, tok: AuthToken, a: Action) -> Result<(), Error> {
+        self.resolve(tok)?;
+        match a {
+            Action::NewTask(t, top_comm) => {
+                let u = self.resolve_mut(tok)?;
+                u.db.add_tasks(vec![t.clone()]);
+                u.db.add_events_and_refresh_all(vec![api::Event {
+                    id: t.top_comment_id,
+                    owner_id: t.owner_id,
+                    date: t.date,
+                    task_id: t.id,
+                    data: api::EventData::AddComment {
+                        text: top_comm,
+                        parent_id: None,
+                    },
+                }]);
+            }
+            Action::NewEvent(e) => {
+                for u in self.0.values_mut() {
+                    if u.db.tasks.contains_key(&e.task_id) {
+                        u.db.add_events_and_refresh_all(vec![e.clone()]);
+                    }
+                }
+            }
+        }
+        Ok(())
     }
 }
