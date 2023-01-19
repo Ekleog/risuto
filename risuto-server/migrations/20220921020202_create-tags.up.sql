@@ -21,6 +21,7 @@ CREATE TABLE perms (
     can_triage BOOLEAN NOT NULL,
     can_relabel_to_any BOOLEAN NOT NULL,
     can_comment BOOLEAN NOT NULL,
+    can_archive BOOLEAN NOT NULL,
 
     PRIMARY KEY (tag_id, user_id),
     FOREIGN KEY (tag_id) REFERENCES tags (id)

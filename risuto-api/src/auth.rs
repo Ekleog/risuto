@@ -56,6 +56,7 @@ pub struct AuthInfo {
     pub can_triage: bool,
     pub can_relabel_to_any: bool, // TODO: rename into can_admin?
     pub can_comment: bool,
+    pub can_archive: bool,
 }
 
 impl AuthInfo {
@@ -78,6 +79,7 @@ impl AuthInfo {
             can_triage: all,
             can_relabel_to_any: all,
             can_comment: all,
+            can_archive: all,
         }
     }
 }
@@ -93,6 +95,7 @@ impl BitOr for AuthInfo {
             can_triage: self.can_triage || rhs.can_triage,
             can_relabel_to_any: self.can_relabel_to_any || rhs.can_relabel_to_any,
             can_comment: self.can_comment || rhs.can_comment,
+            can_archive: self.can_archive || rhs.can_archive,
         }
     }
 }

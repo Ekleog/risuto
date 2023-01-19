@@ -88,7 +88,8 @@ SELECT
     BOOL_OR(can_edit) AS can_edit,
     BOOL_OR(can_triage) AS can_triage,
     BOOL_OR(can_relabel_to_any) AS can_relabel_to_any,
-    BOOL_OR(can_comment) AS can_comment
+    BOOL_OR(can_comment) AS can_comment,
+    BOOL_OR(can_archive) AS can_archive
 FROM (
     (
         SELECT
@@ -97,7 +98,8 @@ FROM (
             true as can_edit,
             true as can_triage,
             true as can_relabel_to_any,
-            true as can_comment
+            true as can_comment,
+            true as can_archive
         FROM
             tags
     )
@@ -109,7 +111,8 @@ FROM (
             p.can_edit,
             p.can_triage,
             p.can_relabel_to_any,
-            p.can_comment
+            p.can_comment,
+            p.can_archive
         FROM
             tags t
         INNER JOIN perms p
@@ -125,7 +128,8 @@ SELECT
     BOOL_OR(can_edit) AS can_edit,
     BOOL_OR(can_triage) AS can_triage,
     BOOL_OR(can_relabel_to_any) AS can_relabel_to_any,
-    BOOL_OR(can_comment) AS can_comment
+    BOOL_OR(can_comment) AS can_comment,
+    BOOL_OR(can_archive) AS can_archive
 FROM (
     (
         SELECT
@@ -134,7 +138,8 @@ FROM (
             true as can_edit,
             true as can_triage,
             true as can_relabel_to_any,
-            true as can_comment
+            true as can_comment,
+            true as can_archive
         FROM
             tasks
     )
@@ -146,7 +151,8 @@ FROM (
             vtu.can_edit,
             vtu.can_triage,
             vtu.can_relabel_to_any,
-            vtu.can_comment
+            vtu.can_comment,
+            vtu.can_archive
         FROM
             tasks t
         INNER JOIN v_tasks_tags vtt

@@ -266,7 +266,8 @@ impl<'a> risuto_api::Db for PostgresDb<'a> {
                     can_edit AS "can_edit!",
                     can_triage AS "can_triage!",
                     can_relabel_to_any AS "can_relabel_to_any!",
-                    can_comment AS "can_comment!"
+                    can_comment AS "can_comment!",
+                    can_archive AS "can_archive!"
                 FROM v_tasks_users
                 WHERE task_id = $1
                 AND user_id = $2
@@ -283,19 +284,14 @@ impl<'a> risuto_api::Db for PostgresDb<'a> {
             )
         })?;
         let auth = match &auth[..] {
-            [] => Ok(AuthInfo {
-                can_read: false,
-                can_edit: false,
-                can_triage: false,
-                can_relabel_to_any: false,
-                can_comment: false,
-            }),
+            [] => Ok(AuthInfo::none()),
             [r] => Ok(AuthInfo {
                 can_read: true,
                 can_edit: r.can_edit,
                 can_triage: r.can_triage,
                 can_relabel_to_any: r.can_relabel_to_any,
                 can_comment: r.can_comment,
+                can_archive: r.can_archive,
             }),
             _ => Err(anyhow::anyhow!(
                 "v_tasks_users had multiple lines for task {:?} and user {:?}",
@@ -495,7 +491,8 @@ pub async fn fetch_tags_for_user(
                 vtu.can_edit AS "can_edit!",
                 vtu.can_triage AS "can_triage!",
                 vtu.can_relabel_to_any AS "can_relabel_to_any!",
-                vtu.can_comment AS "can_comment!"
+                vtu.can_comment AS "can_comment!",
+                vtu.can_archive AS "can_archive!"
             FROM tags t
             INNER JOIN v_tags_users vtu
                 ON vtu.tag_id = t.id
@@ -524,6 +521,7 @@ pub async fn fetch_tags_for_user(
                 can_triage: t.can_triage,
                 can_relabel_to_any: t.can_relabel_to_any,
                 can_comment: t.can_comment,
+                can_archive: t.can_archive,
             },
         )
     })

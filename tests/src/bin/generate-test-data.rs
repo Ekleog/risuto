@@ -148,9 +148,10 @@ fn main() {
     // Generate permissions
     gen_n_items("perms", NUM_PERMS, |_| {
         format!(
-            "('{}', '{}', {}, {}, {}, {})",
+            "('{}', '{}', {}, {}, {}, {}, {})",
             gen_tag(&mut rng),
             gen_user(&mut rng),
+            rng.gen::<bool>(),
             rng.gen::<bool>(),
             rng.gen::<bool>(),
             rng.gen::<bool>(),

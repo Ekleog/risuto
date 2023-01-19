@@ -136,9 +136,10 @@ impl Event {
         }
         Ok(match self.data {
             EventData::SetTitle { .. } => auth!(self.task_id).can_edit,
-            EventData::SetDone { .. }
-            | EventData::SetArchived { .. }
-            | EventData::BlockedUntil { .. } => auth!(self.task_id).can_triage,
+            EventData::SetDone { .. } | EventData::BlockedUntil { .. } => {
+                auth!(self.task_id).can_triage
+            }
+            EventData::SetArchived { .. } => auth!(self.task_id).can_archive,
             EventData::ScheduleFor { .. } | EventData::SetOrder { .. } => {
                 auth!(self.task_id).can_read
             }
