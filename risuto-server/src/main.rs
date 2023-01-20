@@ -1,8 +1,6 @@
 use anyhow::Context;
 use axum::{
-    async_trait,
-    extract::{ws::Message, FromRef, FromRequestParts, State, WebSocketUpgrade},
-    http::{self, request},
+    extract::{ws::Message, State, WebSocketUpgrade},
     routing::{get, post},
     Json, Router,
 };
@@ -12,19 +10,15 @@ use risuto_api::{
     Action, AuthInfo, AuthToken, Event, FeedMessage, NewSession, NewUser, Search, Tag, Task, User,
     UserId, Uuid,
 };
-use std::{
-    collections::HashMap,
-    iter,
-    net::SocketAddr,
-    ops::{Deref, DerefMut},
-    pin::Pin,
-    sync::Arc,
-};
+use std::{collections::HashMap, iter, net::SocketAddr, pin::Pin, sync::Arc};
 use tokio::sync::RwLock;
 use tower_http::trace::TraceLayer;
 
 mod db;
+mod extractors;
 mod query;
+
+use extractors::*;
 
 #[derive(Debug, structopt::StructOpt)]
 struct Opt {
@@ -33,13 +27,6 @@ struct Opt {
     /// Note that the admin token changes on each server start.
     #[structopt(long)]
     enable_admin: bool,
-}
-
-#[derive(Clone, FromRef)]
-struct AppState {
-    db: PgPool,
-    feeds: UserFeeds,
-    admin_token: Option<AuthToken>,
 }
 
 static MIGRATOR: sqlx::migrate::Migrator = sqlx::migrate!();
@@ -51,7 +38,7 @@ async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt::init();
 
     let db_url = std::env::var("DATABASE_URL").context("DATABASE_URL must be set")?;
-    let db = PgPool(
+    let db = PgPool::new(
         sqlx::postgres::PgPoolOptions::new()
             .max_connections(8)
             .connect(&db_url)
@@ -110,111 +97,6 @@ async fn app(db: PgPool, admin_token: Option<AuthToken>) -> Router {
         .route("/api/submit-action", post(submit_action))
         .layer(TraceLayer::new_for_http())
         .with_state(state)
-}
-
-struct PreAuth(AuthToken);
-
-#[async_trait]
-impl<S: Sync> FromRequestParts<S> for PreAuth {
-    type Rejection = Error;
-
-    async fn from_request_parts(req: &mut request::Parts, _state: &S) -> Result<PreAuth, Error> {
-        match req.headers.get(http::header::AUTHORIZATION) {
-            None => Err(Error::permission_denied()),
-            Some(auth) => {
-                let auth = auth.to_str().map_err(|_| Error::permission_denied())?;
-                let mut auth = auth.split(' ');
-                if !auth
-                    .next()
-                    .ok_or(Error::permission_denied())?
-                    .eq_ignore_ascii_case("bearer")
-                {
-                    return Err(Error::permission_denied());
-                }
-                let token = auth.next().ok_or(Error::permission_denied())?;
-                if !auth.next().is_none() {
-                    return Err(Error::permission_denied());
-                }
-                let token = Uuid::try_from(token).map_err(|_| Error::permission_denied())?;
-                Ok(PreAuth(AuthToken(token)))
-            }
-        }
-    }
-}
-
-#[derive(Clone)]
-struct PgPool(sqlx::PgPool);
-
-impl PgPool {
-    async fn acquire(&self) -> Result<PgConn, Error> {
-        Ok(PgConn(
-            self.0.acquire().await.context("acquiring db connection")?,
-        ))
-    }
-
-    fn num_idle(&self) -> usize {
-        self.0.num_idle()
-    }
-}
-
-struct PgConn(sqlx::pool::PoolConnection<sqlx::Postgres>);
-
-#[async_trait]
-impl FromRequestParts<AppState> for PgConn {
-    type Rejection = Error;
-
-    async fn from_request_parts(
-        _req: &mut request::Parts,
-        state: &AppState,
-    ) -> Result<PgConn, Error> {
-        state.db.acquire().await
-    }
-}
-
-impl Deref for PgConn {
-    type Target = sqlx::PgConnection;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl DerefMut for PgConn {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
-struct Auth(UserId);
-
-#[async_trait]
-impl FromRequestParts<AppState> for Auth {
-    type Rejection = Error;
-
-    async fn from_request_parts(req: &mut request::Parts, state: &AppState) -> Result<Auth, Error> {
-        let token = PreAuth::from_request_parts(req, state).await?.0;
-        let mut conn = PgConn::from_request_parts(req, state).await?;
-        Ok(Auth(db::recover_session(&mut *conn, token).await?))
-    }
-}
-
-struct AdminAuth;
-
-#[async_trait]
-impl FromRequestParts<AppState> for AdminAuth {
-    type Rejection = Error;
-
-    async fn from_request_parts(
-        req: &mut request::Parts,
-        state: &AppState,
-    ) -> Result<AdminAuth, Error> {
-        let token = PreAuth::from_request_parts(req, state).await?.0;
-        if Some(token) == state.admin_token {
-            Ok(AdminAuth)
-        } else {
-            Err(Error::permission_denied())
-        }
-    }
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -417,7 +299,9 @@ where
 }
 
 #[derive(Clone, Debug)]
-struct UserFeeds(Arc<RwLock<HashMap<UserId, HashMap<Uuid, mpsc::UnboundedSender<FeedMessage>>>>>);
+pub struct UserFeeds(
+    Arc<RwLock<HashMap<UserId, HashMap<Uuid, mpsc::UnboundedSender<FeedMessage>>>>>,
+);
 
 impl UserFeeds {
     async fn add_for_user<W, R>(self, user: UserId, mut write: W, read: R)
@@ -535,7 +419,10 @@ impl UserFeeds {
 mod tests {
     use super::*;
     use async_recursion::async_recursion;
-    use axum::http;
+    use axum::{
+        extract::FromRequestParts,
+        http::{self, request},
+    };
     use risuto_mock_server::MockServer;
     use sqlx::testing::TestSupport;
     use std::{fmt::Debug, panic::AssertUnwindSafe};
@@ -590,7 +477,7 @@ mod tests {
                         .run(&mut pool.acquire().await.expect("getting migrator connection"))
                         .await
                         .expect("failed applying migrations");
-                    PgPool(pool)
+                    PgPool::new(pool)
                 }));
                 let cleanup_queries = include_str!("../reset-test-db.sql")
                     .split(";")
