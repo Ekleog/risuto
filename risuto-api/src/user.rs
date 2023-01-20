@@ -8,7 +8,9 @@ use uuid::Uuid;
     Debug,
     Eq,
     Hash,
+    Ord,
     PartialEq,
+    PartialOrd,
     bolero::generator::TypeGenerator,
     serde::Deserialize,
     serde::Serialize,
@@ -40,6 +42,7 @@ pub struct NewUser {
     pub id: UserId,
     #[generator(bolero::generator::gen_with::<String>().len(1..100usize))]
     pub name: String,
+    #[generator(bolero::generator::gen_with::<String>().len(1..100usize))]
     pub initial_password_hash: String,
 }
 

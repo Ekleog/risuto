@@ -1,5 +1,5 @@
 use std::{
-    collections::{hash_map, HashMap},
+    collections::{btree_map, BTreeMap, HashMap},
     sync::Arc,
 };
 
@@ -12,11 +12,12 @@ use risuto_client::{
 };
 use tokio::sync::mpsc;
 
-pub struct MockServer(HashMap<UserId, DbUser>);
+pub struct MockServer(BTreeMap<UserId, DbUser>);
 
 struct DbUser {
     // uid is in db.owner
     name: String,
+    pass: String,
     pass_hash: String,
     sessions: HashMap<AuthToken, Device>,
     feeds: Vec<mpsc::UnboundedSender<Action>>,
@@ -34,10 +35,17 @@ struct Device(String);
 
 impl MockServer {
     pub fn new() -> MockServer {
-        MockServer(HashMap::new())
+        MockServer(BTreeMap::new())
     }
 
-    pub fn admin_create_user(&mut self, u: NewUser) -> Result<(), Error> {
+    /// Return name & pass for user number `id`
+    pub fn test_get_user_info(&self, id: usize) -> (&str, &str) {
+        let num = id % self.0.len();
+        let u = self.0.values().skip(num).next().unwrap();
+        (&u.name, &u.pass)
+    }
+
+    pub fn admin_create_user(&mut self, u: NewUser, password: String) -> Result<(), Error> {
         u.validate()?;
 
         if self.0.values().any(|db| db.name == u.name) {
@@ -45,10 +53,11 @@ impl MockServer {
         }
 
         match self.0.entry(u.id) {
-            hash_map::Entry::Occupied(_) => Err(Error::UuidAlreadyUsed(u.id.0)),
-            hash_map::Entry::Vacant(entry) => {
+            btree_map::Entry::Occupied(_) => Err(Error::UuidAlreadyUsed(u.id.0)),
+            btree_map::Entry::Vacant(entry) => {
                 entry.insert(DbUser {
                     name: u.name.clone(),
+                    pass: password,
                     pass_hash: u.initial_password_hash,
                     sessions: HashMap::new(),
                     feeds: Vec::new(),

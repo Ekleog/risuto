@@ -607,13 +607,15 @@ mod tests {
 
     // TODO: also allow generating invalid requests?
     #[derive(Clone, Debug, bolero::generator::TypeGenerator)]
+    // TODO: re-enable all
     enum FuzzOp {
         CreateUser(NewUser),
-        /* TODO:
         Auth {
             uid: usize,
+            #[generator(bolero::generator::gen_with::<String>().len(1..100usize))]
             device: String,
         },
+        /* TODO:
         Unauth {
             sid: usize,
         },
@@ -738,18 +740,36 @@ mod tests {
         mock: &mut MockServer,
     ) {
         match op {
-            FuzzOp::CreateUser(new_user) => compare(
-                "CreateUser",
-                run_on_app(
-                    app,
-                    "POST",
-                    "/api/admin/create-user",
-                    Some(*admin_token),
-                    &new_user,
+            FuzzOp::CreateUser(mut new_user) => {
+                let pass = new_user.initial_password_hash;
+                new_user.initial_password_hash = bcrypt::hash(&pass, 4).expect("hashing password");
+                compare(
+                    "CreateUser",
+                    run_on_app(
+                        app,
+                        "POST",
+                        "/api/admin/create-user",
+                        Some(*admin_token),
+                        &new_user,
+                    )
+                    .await,
+                    mock.admin_create_user(new_user, pass),
                 )
-                .await,
-                mock.admin_create_user(new_user),
-            ),
+            }
+            FuzzOp::Auth { uid, device } => {
+                let (user, password) = mock.test_get_user_info(uid);
+                let session = NewSession {
+                    user: String::from(user),
+                    password: String::from(password),
+                    device,
+                    pow: String::new(),
+                };
+                compare(
+                    "Auth",
+                    run_on_app(app, "POST", "/api/auth", None, &session).await,
+                    mock.auth(session),
+                )
+            }
         }
     }
 
