@@ -653,6 +653,7 @@ mod tests {
     where
         T: for<'a> serde::Deserialize<'a>,
     {
+        app.ready().await.expect("waiting for app to be ready");
         let resp = app.call(req).await.expect("running request");
         let status = resp.status();
         let body = hyper::body::to_bytes(resp.into_body())
@@ -673,7 +674,6 @@ mod tests {
     ) {
         match op {
             FuzzOp::CreateUser(new_user) => {
-                app.ready().await.expect("waiting for app to be ready");
                 let app_res = call::<()>(
                     app,
                     request::Builder::new()
