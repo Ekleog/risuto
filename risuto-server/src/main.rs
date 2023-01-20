@@ -643,13 +643,31 @@ mod tests {
         },
     }
 
+    async fn call<T>(
+        app: &mut Router,
+        req: request::Request<axum::body::Body>,
+    ) -> Result<T, ApiError>
+    where
+        T: for<'a> serde::Deserialize<'a>,
+    {
+        let resp = app.call(req).await.expect("running request");
+        let status = resp.status();
+        let body = hyper::body::to_bytes(resp.into_body())
+            .await
+            .expect("recovering resp bytes");
+        if status == http::StatusCode::OK {
+            return Ok(serde_json::from_slice(&body).expect("parsing resp body"));
+        }
+        Err(ApiError::parse(&body).expect("parsing error response body"))
+    }
+
     do_sqlx_test!(
         auth_extractor_no_500,
         Vec<FuzzOp>,
         |pool, test| async move {
             let admin_token = Uuid::new_v4();
-            let app = app(pool, Some(AuthToken(admin_token))).await;
-            let mock = risuto_mock_server::MockServer::new();
+            let mut app = app(pool, Some(AuthToken(admin_token))).await;
+            let mut mock = risuto_mock_server::MockServer::new();
             for op in test {
                 match op {
                     FuzzOp::CreateUser { id, name, pass } => {
@@ -658,24 +676,23 @@ mod tests {
                             name,
                             initial_password_hash: pass,
                         };
-                        app.ready().await;
-                        let app_res = app
-                            .call(
-                                request::Builder::new()
-                                    .method("POST")
-                                    .uri("/api/admin/create-user")
-                                    .header(
-                                        http::header::AUTHORIZATION,
-                                        format!("bearer {admin_token}"),
-                                    )
-                                    .body(axum::body::Body::from(
-                                        serde_json::to_vec(&new_user)
-                                            .expect("serializing request to json"),
-                                    ))
-                                    .expect("building test request"),
-                            )
-                            .await
-                            .expect("running request");
+                        app.ready().await.expect("waiting for app to be ready");
+                        let app_res = call::<()>(
+                            &mut app,
+                            request::Builder::new()
+                                .method("POST")
+                                .uri("/api/admin/create-user")
+                                .header(
+                                    http::header::AUTHORIZATION,
+                                    format!("bearer {admin_token}"),
+                                )
+                                .body(axum::body::Body::from(
+                                    serde_json::to_vec(&new_user)
+                                        .expect("serializing request to json"),
+                                ))
+                                .expect("building request"),
+                        )
+                        .await;
                         let mock_res = mock.admin_create_user(new_user);
                         assert_eq!(
                             app_res, mock_res,

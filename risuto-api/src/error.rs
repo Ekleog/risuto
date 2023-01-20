@@ -4,7 +4,7 @@ use anyhow::{anyhow, Context};
 use serde_json::json;
 use uuid::Uuid;
 
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, Eq, PartialEq, thiserror::Error)]
 pub enum Error {
     #[error("Unknown error: {0}")]
     Unknown(String),
