@@ -189,6 +189,14 @@ impl Error {
     fn invalid_pow() -> Error {
         Error::Api(ApiError::InvalidPow)
     }
+
+    fn check_string(s: &str) -> Result<(), Error> {
+        if s.chars().any(|c| c == '\0') {
+            Err(Error::Api(ApiError::NullByteInString(String::from(s))))
+        } else {
+            Ok(())
+        }
+    }
 }
 
 impl axum::response::IntoResponse for Error {
@@ -213,6 +221,8 @@ async fn admin_create_user(
     State(feeds): State<UserFeeds>,
     Json(data): Json<NewUser>,
 ) -> Result<(), Error> {
+    Error::check_string(&data.name)?;
+    Error::check_string(&data.initial_password_hash)?;
     let mut conn = db.acquire().await.context("acquiring db connection")?;
     db::create_user(&mut conn, data.clone()).await?;
     feeds
