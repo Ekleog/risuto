@@ -23,6 +23,9 @@ pub enum Error {
 
     #[error("Null byte in string is not allowed {0:?}")]
     NullByteInString(String),
+
+    #[error("Invalid character in name {0:?}")]
+    InvalidName(String),
 }
 
 impl Error {
@@ -35,6 +38,7 @@ impl Error {
             Error::InvalidPow => StatusCode::BAD_REQUEST,
             Error::NameAlreadyUsed(_) => StatusCode::CONFLICT,
             Error::NullByteInString(_) => StatusCode::BAD_REQUEST,
+            Error::InvalidName(_) => StatusCode::BAD_GATEWAY,
         }
     }
 
@@ -66,6 +70,11 @@ impl Error {
                 "message": "there was a null byte in argument string",
                 "type": "null-byte",
                 "string": s,
+            }),
+            Error::InvalidName(n) => json!({
+                "message": "there was an invalid character in a user name",
+                "type": "invalid-name",
+                "name": n,
             }),
         })
         .expect("serializing conflict")
@@ -101,6 +110,11 @@ impl Error {
                 "null-byte" => Error::NullByteInString(String::from(
                     data.get("string").and_then(|s| s.as_str()).ok_or_else(|| {
                         anyhow!("error is a null-byte-in-string without a string")
+                    })?,
+                )),
+                "invalid-name" => Error::InvalidName(String::from(
+                    data.get("name").and_then(|s| s.as_str()).ok_or_else(|| {
+                        anyhow!("error is about an invalid name but no name was provided")
                     })?,
                 )),
                 _ => return Err(anyhow!("error contents has unknown type")),

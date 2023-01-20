@@ -32,22 +32,13 @@ impl DbUser {
 
 struct Device(String);
 
-fn check_string(s: &str) -> Result<(), Error> {
-    if s.chars().any(|c| c == '\0') {
-        Err(Error::NullByteInString(String::from(s)))
-    } else {
-        Ok(())
-    }
-}
-
 impl MockServer {
     pub fn new() -> MockServer {
         MockServer(HashMap::new())
     }
 
     pub fn admin_create_user(&mut self, u: NewUser) -> Result<(), Error> {
-        check_string(&u.name)?;
-        check_string(&u.initial_password_hash)?;
+        u.validate()?;
 
         if self.0.values().any(|db| db.name == u.name) {
             return Err(Error::NameAlreadyUsed(u.name));

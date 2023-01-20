@@ -1,4 +1,4 @@
-use crate::{auth::BCRYPT_POW_COST, STUB_UUID};
+use crate::{auth::BCRYPT_POW_COST, Error, STUB_UUID};
 
 use uuid::Uuid;
 
@@ -51,5 +51,24 @@ impl NewUser {
             initial_password_hash: bcrypt::hash(initial_password, BCRYPT_POW_COST)
                 .expect("failed bcrypt hashing password"),
         }
+    }
+
+    /// Helper function to check whether the user name is valid.
+    ///
+    /// Note that you should not rely on the fact that a NewUser struct is "valid" according
+    /// to this in order to ensure safety of your code. (parsing is better than validation)
+    pub fn validate(&self) -> Result<(), Error> {
+        crate::validate_string(&self.name)?;
+        crate::validate_string(&self.initial_password_hash)?;
+        if self.name.chars().any(|c| {
+            !((c >= 'a' && c <= 'z')
+                || (c >= 'A' && c <= 'Z')
+                || (c >= '0' && c <= '9')
+                || c == '_'
+                || c == '-')
+        }) {
+            return Err(Error::InvalidName(self.name.clone()));
+        }
+        Ok(())
     }
 }

@@ -34,3 +34,12 @@ pub enum FeedMessage {
     Pong,
     Action(Action),
 }
+
+/// Helper function to easily know whether a string is valid to send to the API
+pub fn validate_string(s: &str) -> Result<(), Error> {
+    if s.chars().any(|c| c == '\0') {
+        Err(Error::NullByteInString(String::from(s)))
+    } else {
+        Ok(())
+    }
+}
