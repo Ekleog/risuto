@@ -567,6 +567,7 @@ mod tests {
                         let pool = pool.clone();
                         // run the test
                         let idle_before = pool.num_idle();
+                        let v_str = format!("{v:?}");
                         let res: Result<(), _> = std::panic::catch_unwind(AssertUnwindSafe(|| {
                             runtime.block_on($fn(pool.clone(), v))
                         }));
@@ -589,7 +590,7 @@ mod tests {
                         assert_eq!(
                             idle_after,
                             idle_before,
-                            "test {} held onto pool after exiting",
+                            "test {} held onto pool after exiting test with value {v_str}",
                             stringify!($name)
                         );
                     });
