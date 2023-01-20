@@ -35,9 +35,10 @@ pub struct User {
     pub name: String,
 }
 
-#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
+#[derive(Clone, Debug, bolero::generator::TypeGenerator, serde::Deserialize, serde::Serialize)]
 pub struct NewUser {
     pub id: UserId,
+    #[generator(bolero::generator::gen_with::<String>().len(1..100usize))]
     pub name: String,
     pub initial_password_hash: String,
 }

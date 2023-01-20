@@ -196,7 +196,7 @@ impl axum::response::IntoResponse for Error {
         let err = match self {
             Error::Anyhow(err) => {
                 tracing::error!(?err, "internal server error");
-                ApiError::Unknown(String::from("Internal server error, see lgos for details"))
+                ApiError::Unknown(String::from("Internal server error, see logs for details"))
             }
             Error::Api(err) => {
                 tracing::info!("returning error to client: {err}");
@@ -522,9 +522,10 @@ mod tests {
     }
 
     macro_rules! do_sqlx_test {
-        ( $name:ident, $typ:ty, $fn:expr ) => {
+        ( $name:ident, $gen:expr, $fn:expr ) => {
             #[test]
             fn $name() {
+                tracing_subscriber::fmt::init();
                 let runtime = AssertUnwindSafe(
                     tokio::runtime::Builder::new_current_thread()
                         .enable_all()
@@ -554,7 +555,7 @@ mod tests {
                     .collect::<Vec<_>>();
                 let cleanup_queries: &[&str] = &cleanup_queries;
                 bolero::check!()
-                    .with_type::<$typ>()
+                    .with_generator($gen)
                     .cloned()
                     .for_each(move |v| {
                         let pool = pool.clone();
@@ -603,11 +604,8 @@ mod tests {
     // TODO: also allow generating invalid requests?
     #[derive(Clone, Debug, bolero::generator::TypeGenerator)]
     enum FuzzOp {
-        CreateUser {
-            id: UserId,
-            name: String,
-            pass: String,
-        },
+        CreateUser(NewUser),
+        /* TODO:
         Auth {
             uid: usize,
             device: String,
@@ -641,6 +639,7 @@ mod tests {
         CloseActionFeed {
             feed_id: usize,
         },
+        */
     }
 
     async fn call<T>(
@@ -658,24 +657,20 @@ mod tests {
         if status == http::StatusCode::OK {
             return Ok(serde_json::from_slice(&body).expect("parsing resp body"));
         }
-        Err(ApiError::parse(&body).expect("parsing error response body"))
+        Err(ApiError::parse(&body)
+            .unwrap_or_else(|err| panic!("parsing error response body {err}, body is {body:?}")))
     }
 
     do_sqlx_test!(
-        auth_extractor_no_500,
-        Vec<FuzzOp>,
-        |pool, test| async move {
+        compare_with_mock,
+        bolero::generator::gen_with::<Vec<FuzzOp>>().len(1..100usize),
+        |pool, test: Vec<FuzzOp>| async move {
             let admin_token = Uuid::new_v4();
             let mut app = app(pool, Some(AuthToken(admin_token))).await;
             let mut mock = risuto_mock_server::MockServer::new();
             for op in test {
                 match op {
-                    FuzzOp::CreateUser { id, name, pass } => {
-                        let new_user = NewUser {
-                            id,
-                            name,
-                            initial_password_hash: pass,
-                        };
+                    FuzzOp::CreateUser(new_user) => {
                         app.ready().await.expect("waiting for app to be ready");
                         let app_res = call::<()>(
                             &mut app,
@@ -686,6 +681,7 @@ mod tests {
                                     http::header::AUTHORIZATION,
                                     format!("bearer {admin_token}"),
                                 )
+                                .header(http::header::CONTENT_TYPE, "application/json")
                                 .body(axum::body::Body::from(
                                     serde_json::to_vec(&new_user)
                                         .expect("serializing request to json"),
