@@ -498,6 +498,7 @@ impl UserFeeds {
 mod tests {
     use super::*;
     use axum::http;
+    use risuto_mock_server::MockServer;
     use sqlx::testing::TestSupport;
     use std::panic::AssertUnwindSafe;
     use tower::{Service, ServiceExt};
@@ -664,41 +665,46 @@ mod tests {
             .unwrap_or_else(|err| panic!("parsing error response body {err}, body is {body:?}")))
     }
 
+    async fn execute_fuzz_op(
+        op: FuzzOp,
+        admin_token: &Uuid,
+        app: &mut Router,
+        mock: &mut MockServer,
+    ) {
+        match op {
+            FuzzOp::CreateUser(new_user) => {
+                app.ready().await.expect("waiting for app to be ready");
+                let app_res = call::<()>(
+                    app,
+                    request::Builder::new()
+                        .method("POST")
+                        .uri("/api/admin/create-user")
+                        .header(http::header::AUTHORIZATION, format!("bearer {admin_token}"))
+                        .header(http::header::CONTENT_TYPE, "application/json")
+                        .body(axum::body::Body::from(
+                            serde_json::to_vec(&new_user).expect("serializing request to json"),
+                        ))
+                        .expect("building request"),
+                )
+                .await;
+                let mock_res = mock.admin_create_user(new_user);
+                assert_eq!(
+                    app_res, mock_res,
+                    "app and mock did not return the same result for CreateUser"
+                );
+            }
+        }
+    }
+
     do_sqlx_test!(
         compare_with_mock,
         bolero::generator::gen_with::<Vec<FuzzOp>>().len(1..100usize),
         |pool, test: Vec<FuzzOp>| async move {
             let admin_token = Uuid::new_v4();
             let mut app = app(pool, Some(AuthToken(admin_token))).await;
-            let mut mock = risuto_mock_server::MockServer::new();
+            let mut mock = MockServer::new();
             for op in test {
-                match op {
-                    FuzzOp::CreateUser(new_user) => {
-                        app.ready().await.expect("waiting for app to be ready");
-                        let app_res = call::<()>(
-                            &mut app,
-                            request::Builder::new()
-                                .method("POST")
-                                .uri("/api/admin/create-user")
-                                .header(
-                                    http::header::AUTHORIZATION,
-                                    format!("bearer {admin_token}"),
-                                )
-                                .header(http::header::CONTENT_TYPE, "application/json")
-                                .body(axum::body::Body::from(
-                                    serde_json::to_vec(&new_user)
-                                        .expect("serializing request to json"),
-                                ))
-                                .expect("building request"),
-                        )
-                        .await;
-                        let mock_res = mock.admin_create_user(new_user);
-                        assert_eq!(
-                            app_res, mock_res,
-                            "app and mock did not return the same result for CreateUser"
-                        );
-                    }
-                }
+                execute_fuzz_op(op, &admin_token, &mut app, &mut mock).await;
             }
         }
     );
