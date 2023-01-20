@@ -6,6 +6,7 @@ use axum::{
     extract::FromRequestParts,
     http::{self, request},
 };
+use risuto_api::Error as ApiError;
 use risuto_mock_server::MockServer;
 use sqlx::testing::TestSupport;
 use std::{fmt::Debug, panic::AssertUnwindSafe};

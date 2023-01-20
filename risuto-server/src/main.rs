@@ -5,7 +5,6 @@ use axum::{
     Json, Router,
 };
 use futures::{SinkExt, StreamExt};
-use risuto_api::Error as ApiError;
 use risuto_api::{
     Action, AuthInfo, AuthToken, Event, NewSession, NewUser, Search, Tag, Task, User, UserId, Uuid,
 };
@@ -13,11 +12,13 @@ use std::net::SocketAddr;
 use tower_http::trace::TraceLayer;
 
 mod db;
+mod error;
 mod extractors;
 mod feeds;
 mod fuzz;
 mod query;
 
+use error::Error;
 use extractors::*;
 use feeds::UserFeeds;
 
@@ -98,49 +99,6 @@ async fn app(db: PgPool, admin_token: Option<AuthToken>) -> Router {
         .route("/api/submit-action", post(submit_action))
         .layer(TraceLayer::new_for_http())
         .with_state(state)
-}
-
-#[derive(Debug, thiserror::Error)]
-pub enum Error {
-    #[error(transparent)]
-    Anyhow(#[from] anyhow::Error),
-
-    #[error(transparent)]
-    Api(#[from] ApiError),
-}
-
-impl Error {
-    fn permission_denied() -> Error {
-        Error::Api(ApiError::PermissionDenied)
-    }
-
-    fn uuid_already_used(uuid: Uuid) -> Error {
-        Error::Api(ApiError::UuidAlreadyUsed(uuid))
-    }
-
-    fn name_already_used(name: String) -> Error {
-        Error::Api(ApiError::NameAlreadyUsed(name))
-    }
-
-    fn invalid_pow() -> Error {
-        Error::Api(ApiError::InvalidPow)
-    }
-}
-
-impl axum::response::IntoResponse for Error {
-    fn into_response(self) -> axum::response::Response {
-        let err = match self {
-            Error::Anyhow(err) => {
-                tracing::error!(?err, "internal server error");
-                ApiError::Unknown(String::from("Internal server error, see logs for details"))
-            }
-            Error::Api(err) => {
-                tracing::info!("returning error to client: {err}");
-                err
-            }
-        };
-        (err.status_code(), err.contents()).into_response()
-    }
 }
 
 async fn admin_create_user(
