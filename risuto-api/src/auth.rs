@@ -2,7 +2,7 @@ use std::{ops::BitOr, str::FromStr};
 
 use uuid::Uuid;
 
-use crate::STUB_UUID;
+use crate::{Error, STUB_UUID};
 
 pub const BCRYPT_POW_COST: u32 = 10;
 
@@ -26,6 +26,14 @@ impl NewSession {
             password,
             device,
         }
+    }
+
+    pub fn validate_except_pow(&self) -> Result<(), Error> {
+        crate::validate_string(&self.user)?;
+        crate::validate_string(&self.password)?;
+        crate::validate_string(&self.device)?;
+        crate::validate_string(&self.pow)?;
+        Ok(())
     }
 
     pub fn verify_pow(&self) -> bool {

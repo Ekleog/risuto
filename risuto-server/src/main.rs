@@ -232,6 +232,7 @@ async fn auth(
     State(db): State<sqlx::PgPool>,
     Json(data): Json<NewSession>,
 ) -> Result<Json<AuthToken>, Error> {
+    data.validate_except_pow()?;
     // in test setup, also allow the "empty" pow to work
     #[cfg(test)]
     if !data.verify_pow() && !data.pow.is_empty() {
@@ -497,6 +498,7 @@ impl UserFeeds {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use async_recursion::async_recursion;
     use axum::http;
     use risuto_mock_server::MockServer;
     use sqlx::testing::TestSupport;
@@ -563,17 +565,14 @@ mod tests {
                     .cloned()
                     .for_each(move |v| {
                         let pool = pool.clone();
+                        // run the test
+                        let idle_before = pool.num_idle();
+                        let res: Result<(), _> = std::panic::catch_unwind(AssertUnwindSafe(|| {
+                            runtime.block_on($fn(pool.clone(), v))
+                        }));
+                        let idle_after = pool.num_idle();
                         runtime.block_on(async move {
-                            // run the test
-                            let idle_before = pool.num_idle();
-                            let () = $fn(pool.clone(), v).await;
                             // cleanup
-                            assert_eq!(
-                                pool.num_idle(),
-                                idle_before,
-                                "test {} held onto pool after exiting",
-                                stringify!($name)
-                            );
                             let mut conn =
                                 pool.acquire().await.expect("getting db cleanup connection");
                             for q in cleanup_queries {
@@ -583,6 +582,16 @@ mod tests {
                                     .expect("failed cleaning up database");
                             }
                         });
+                        // resume the panics
+                        if let Err(e) = res {
+                            std::panic::resume_unwind(e);
+                        }
+                        assert_eq!(
+                            idle_after,
+                            idle_before,
+                            "test {} held onto pool after exiting",
+                            stringify!($name)
+                        );
                     });
             }
         };
@@ -733,6 +742,7 @@ mod tests {
         );
     }
 
+    #[async_recursion]
     async fn execute_fuzz_op(
         op: FuzzOp,
         admin_token: &Uuid,
@@ -769,6 +779,25 @@ mod tests {
                         run_on_app(app, "POST", "/api/auth", None, &session).await,
                         mock.auth(session),
                     )
+                } else {
+                    execute_fuzz_op(
+                        FuzzOp::CreateUser(NewUser {
+                            id: UserId::stub(),
+                            name: String::from("user"),
+                            initial_password_hash: String::from("password"),
+                        }),
+                        admin_token,
+                        &mut *app,
+                        &mut *mock,
+                    )
+                    .await;
+                    execute_fuzz_op(
+                        FuzzOp::Auth { uid, device },
+                        admin_token,
+                        &mut *app,
+                        &mut *mock,
+                    )
+                    .await;
                 }
             }
         }

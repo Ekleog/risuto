@@ -16,6 +16,7 @@ risuto-mock-server = { path = "./risuto-mock-server" }
 
 anyhow = "1.0"
 arrayvec = "0.7.2"
+async-recursion = "1.0"
 async-trait = "0.1.58"
 axum = { version = "0.6.1", features = ["macros", "ws"] }
 base64 = "0.13.0"

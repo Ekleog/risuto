@@ -14,6 +14,7 @@ use tokio::sync::mpsc;
 
 pub struct MockServer(BTreeMap<UserId, DbUser>);
 
+#[derive(Debug)]
 struct DbUser {
     // uid is in db.owner
     name: String,
@@ -31,6 +32,7 @@ impl DbUser {
     }
 }
 
+#[derive(Debug)]
 struct Device(String);
 
 impl MockServer {
@@ -85,6 +87,7 @@ impl MockServer {
     }
 
     pub fn auth(&mut self, s: NewSession) -> Result<AuthToken, Error> {
+        s.validate_except_pow()?;
         for u in self.0.values_mut() {
             if u.name == s.user {
                 if !matches!(bcrypt::verify(&s.password, &u.pass_hash), Ok(true)) {

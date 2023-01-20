@@ -24,6 +24,7 @@ tracing.workspace = true
 tracing-subscriber.workspace = true
 
 [dev-dependencies]
+async-recursion.workspace = true
 hyper.workspace = true
 risuto-mock-server.workspace = true
 serde.workspace = true
