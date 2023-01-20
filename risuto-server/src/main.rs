@@ -651,7 +651,7 @@ mod tests {
         req: request::Request<axum::body::Body>,
     ) -> Result<T, ApiError>
     where
-        T: for<'a> serde::Deserialize<'a>,
+        T: for<'de> serde::Deserialize<'de>,
     {
         app.ready().await.expect("waiting for app to be ready");
         let resp = app.call(req).await.expect("running request");
@@ -666,6 +666,33 @@ mod tests {
             .unwrap_or_else(|err| panic!("parsing error response body {err}, body is {body:?}")))
     }
 
+    async fn run_on_app<Req, Resp>(
+        app: &mut Router,
+        method: &str,
+        uri: &str,
+        token: Option<Uuid>,
+        body: &Req,
+    ) -> Result<Resp, ApiError>
+    where
+        Req: serde::Serialize,
+        Resp: for<'de> serde::Deserialize<'de>,
+    {
+        let req = request::Builder::new()
+            .method(method)
+            .uri(uri)
+            .header(http::header::CONTENT_TYPE, "application/json");
+        let req = match token {
+            Some(token) => req.header(http::header::AUTHORIZATION, format!("bearer {token}")),
+            None => req,
+        };
+        let req = req
+            .body(axum::body::Body::from(
+                serde_json::to_vec(body).expect("serializing request body to json"),
+            ))
+            .expect("building request");
+        call(app, req).await
+    }
+
     async fn execute_fuzz_op(
         op: FuzzOp,
         admin_token: &Uuid,
@@ -674,17 +701,12 @@ mod tests {
     ) {
         match op {
             FuzzOp::CreateUser(new_user) => {
-                let app_res = call::<()>(
+                let app_res = run_on_app(
                     app,
-                    request::Builder::new()
-                        .method("POST")
-                        .uri("/api/admin/create-user")
-                        .header(http::header::AUTHORIZATION, format!("bearer {admin_token}"))
-                        .header(http::header::CONTENT_TYPE, "application/json")
-                        .body(axum::body::Body::from(
-                            serde_json::to_vec(&new_user).expect("serializing request to json"),
-                        ))
-                        .expect("building request"),
+                    "POST",
+                    "/api/admin/create-user",
+                    Some(*admin_token),
+                    &new_user,
                 )
                 .await;
                 let mock_res = mock.admin_create_user(new_user);
