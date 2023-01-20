@@ -3,3 +3,4 @@ target-*
 db.sqlite*
 risuto-app/www
 risuto-web/dist
+**/__fuzz__/*/corpus
