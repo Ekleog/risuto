@@ -2,16 +2,16 @@ use anyhow::Context;
 use axum::{
     async_trait,
     extract::{ws::Message, FromRef, FromRequestParts, State, WebSocketUpgrade},
-    http::{self, request, StatusCode},
+    http::{self, request},
     routing::{get, post},
     Json, Router,
 };
 use futures::{channel::mpsc, select, stream, SinkExt, Stream, StreamExt};
+use risuto_api::Error as ApiError;
 use risuto_api::{
     Action, AuthInfo, AuthToken, Event, FeedMessage, NewSession, NewUser, Search, Tag, Task, User,
     UserId, Uuid,
 };
-use serde_json::json;
 use std::{collections::HashMap, iter, net::SocketAddr, pin::Pin, sync::Arc};
 use tokio::sync::RwLock;
 use tower_http::trace::TraceLayer;
@@ -106,22 +106,22 @@ impl<S: Sync> FromRequestParts<S> for PreAuth {
 
     async fn from_request_parts(req: &mut request::Parts, _state: &S) -> Result<PreAuth, Error> {
         match req.headers.get(http::header::AUTHORIZATION) {
-            None => Err(Error::PermissionDenied),
+            None => Err(Error::permission_denied()),
             Some(auth) => {
-                let auth = auth.to_str().map_err(|_| Error::PermissionDenied)?;
+                let auth = auth.to_str().map_err(|_| Error::permission_denied())?;
                 let mut auth = auth.split(' ');
                 if !auth
                     .next()
-                    .ok_or(Error::PermissionDenied)?
+                    .ok_or(Error::permission_denied())?
                     .eq_ignore_ascii_case("bearer")
                 {
-                    return Err(Error::PermissionDenied);
+                    return Err(Error::permission_denied());
                 }
-                let token = auth.next().ok_or(Error::PermissionDenied)?;
+                let token = auth.next().ok_or(Error::permission_denied())?;
                 if !auth.next().is_none() {
-                    return Err(Error::PermissionDenied);
+                    return Err(Error::permission_denied());
                 }
-                let token = Uuid::try_from(token).map_err(|_| Error::PermissionDenied)?;
+                let token = Uuid::try_from(token).map_err(|_| Error::permission_denied())?;
                 Ok(PreAuth(AuthToken(token)))
             }
         }
@@ -159,7 +159,7 @@ impl FromRequestParts<AppState> for AdminAuth {
         if Some(token) == state.admin_token {
             Ok(AdminAuth)
         } else {
-            Err(Error::PermissionDenied)
+            Err(Error::permission_denied())
         }
     }
 }
@@ -169,48 +169,41 @@ pub enum Error {
     #[error(transparent)]
     Anyhow(#[from] anyhow::Error),
 
-    #[error("Permission denied")]
-    PermissionDenied,
+    #[error(transparent)]
+    Api(#[from] ApiError),
+}
 
-    #[error("Uuid already used {0}")]
-    UuidAlreadyUsed(Uuid),
+impl Error {
+    fn permission_denied() -> Error {
+        Error::Api(ApiError::PermissionDenied)
+    }
 
-    #[error("Invalid Proof of Work")]
-    InvalidPow,
+    fn uuid_already_used(uuid: Uuid) -> Error {
+        Error::Api(ApiError::UuidAlreadyUsed(uuid))
+    }
+
+    fn name_already_used(name: String) -> Error {
+        Error::Api(ApiError::NameAlreadyUsed(name))
+    }
+
+    fn invalid_pow() -> Error {
+        Error::Api(ApiError::InvalidPow)
+    }
 }
 
 impl axum::response::IntoResponse for Error {
     fn into_response(self) -> axum::response::Response {
-        match self {
+        let err = match self {
             Error::Anyhow(err) => {
-                tracing::error!(?err, "got an error");
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    "Internal server error, see logs for details",
-                )
-                    .into_response()
+                tracing::error!(?err, "internal server error");
+                ApiError::Unknown(String::from("Internal server error, see lgos for details"))
             }
-            Error::PermissionDenied => {
-                tracing::info!("returning permission denied to client");
-                (StatusCode::FORBIDDEN, "Permission denied").into_response()
+            Error::Api(err) => {
+                tracing::info!("returning error to client: {err}");
+                err
             }
-            Error::UuidAlreadyUsed(id) => {
-                tracing::info!("Conflicting uuid sent by client");
-                (
-                    StatusCode::CONFLICT,
-                    Json(json!({ "error": "uuid already used", "uuid": id })),
-                )
-                    .into_response()
-            }
-            Error::InvalidPow => {
-                tracing::info!("client sent an invalid proof of work");
-                (
-                    StatusCode::BAD_REQUEST,
-                    Json(json!({ "error": "invalid proof of work" })),
-                )
-                    .into_response()
-            }
-        }
+        };
+        (err.status_code(), err.contents()).into_response()
     }
 }
 
@@ -241,18 +234,18 @@ async fn auth(
     // in test setup, also allow the "empty" pow to work
     #[cfg(test)]
     if !data.verify_pow() && !data.pow.is_empty() {
-        return Err(Error::InvalidPow);
+        return Err(Error::invalid_pow());
     }
     #[cfg(not(test))]
     if !data.verify_pow() {
-        return Err(Error::InvalidPow);
+        return Err(Error::invalid_pow());
     }
     let mut conn = db.acquire().await.context("acquiring db connection")?;
     Ok(Json(
         db::login_user(&mut conn, &data)
             .await
             .context("logging user in")?
-            .ok_or(Error::PermissionDenied)?,
+            .ok_or(Error::permission_denied())?,
     ))
 }
 
@@ -260,7 +253,7 @@ async fn unauth(user: PreAuth, State(db): State<sqlx::PgPool>) -> Result<(), Err
     let mut conn = db.acquire().await.context("acquiring db connection")?;
     match db::logout_user(&mut conn, &user.0).await {
         Ok(true) => Ok(()),
-        Ok(false) => Err(Error::PermissionDenied),
+        Ok(false) => Err(Error::permission_denied()),
         Err(e) => Err(Error::Anyhow(e)),
     }
 }
@@ -328,16 +321,16 @@ async fn submit_action(
         user,
     };
     match &a {
-        Action::NewUser(_) => return Err(Error::PermissionDenied),
+        Action::NewUser(_) => return Err(Error::permission_denied()),
         Action::NewTask(t, top_comm) => {
             if user != t.owner_id {
-                return Err(Error::PermissionDenied);
+                return Err(Error::permission_denied());
             }
             db::submit_task(&mut db, t.clone(), top_comm.clone()).await?;
         }
         Action::NewEvent(e) => {
             if user != e.owner_id {
-                return Err(Error::PermissionDenied);
+                return Err(Error::permission_denied());
             }
             db::submit_event(&mut db, e.clone()).await?;
         }
@@ -601,7 +594,7 @@ mod tests {
             let res = PreAuth::from_request_parts(&mut req, &()).await;
             match res {
                 Ok(_) => (),
-                Err(Error::PermissionDenied) => (),
+                Err(Error::Api(ApiError::PermissionDenied)) => (),
                 Err(e) => panic!("got unexpected error: {e}"),
             }
         }

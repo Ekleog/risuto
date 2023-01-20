@@ -2297,7 +2297,10 @@ dependencies = [
  "bolero",
  "chrono",
  "chrono-tz",
+ "http",
  "serde",
+ "serde_json",
+ "thiserror",
  "uuid",
 ]
 

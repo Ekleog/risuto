@@ -5,18 +5,12 @@ use std::{
 
 use risuto_client::{
     api::{
-        self, Action, AuthInfo, AuthToken, Event, NewSession, NewUser, Query, Search, Tag, UserId,
-        Uuid,
+        self, Action, AuthInfo, AuthToken, Error, Event, NewSession, NewUser, Query, Search, Tag,
+        UserId, Uuid,
     },
     DbDump,
 };
 use tokio::sync::mpsc;
-
-pub enum Error {
-    NameAlreadyUsed,
-    PermissionDenied,
-    UuidAlreadyUsed,
-}
 
 pub struct MockServer(HashMap<UserId, DbUser>);
 
@@ -45,11 +39,11 @@ impl MockServer {
 
     pub fn admin_create_user(&mut self, u: NewUser) -> Result<(), Error> {
         if self.0.values().any(|db| db.name == u.name) {
-            return Err(Error::NameAlreadyUsed);
+            return Err(Error::NameAlreadyUsed(u.name));
         }
 
         match self.0.entry(u.id) {
-            hash_map::Entry::Occupied(_) => Err(Error::UuidAlreadyUsed),
+            hash_map::Entry::Occupied(_) => Err(Error::UuidAlreadyUsed(u.id.0)),
             hash_map::Entry::Vacant(entry) => {
                 entry.insert(DbUser {
                     name: u.name.clone(),

@@ -1,9 +1,10 @@
 use futures::FutureExt;
+use risuto_client::api::Error as ApiError;
 use risuto_client::api::{AuthToken, NewSession};
 use yew::prelude::*;
 
 use crate::{
-    api::{self, ApiError},
+    api::{self, Error},
     LoginInfo,
 };
 
@@ -25,7 +26,7 @@ pub enum LoginMsg {
     UserChanged(String),
     PassChanged(String),
     SubmitClicked,
-    Authed(String, String, Result<AuthToken, ApiError>),
+    Authed(String, String, Result<AuthToken, Error>),
 }
 
 fn get_device() -> anyhow::Result<String> {
@@ -73,20 +74,32 @@ impl Component for Login {
                 ctx.props().on_authed.emit(LoginInfo { host, user, token });
                 return false;
             }
-            LoginMsg::Authed(_, _, Err(ApiError::SendingRequest(err))) => {
+            LoginMsg::Authed(_, _, Err(Error::SendingRequest(err))) => {
                 tracing::error!(?err, "login failed sending request");
                 self.error = Some("Failed connecting to server. Maybe the URL is mistyped?");
             }
-            LoginMsg::Authed(_, _, Err(ApiError::ParsingResponse(err))) => {
+            LoginMsg::Authed(_, _, Err(Error::ParsingResponse(err))) => {
                 tracing::error!(?err, "login failed parsing response");
                 self.error = Some(
                     "The server seems to not be a valid risuto server. Maybe the URL is mistyped?",
                 );
             }
-            LoginMsg::Authed(_, _, Err(ApiError::PermissionDenied)) => {
+            LoginMsg::Authed(_, _, Err(Error::ParsingError(err))) => {
+                tracing::error!(?err, "login failed parsing error response");
+                self.error = Some(
+                    "The server seems to not be a valid risuto server. Maybe the URL is mistyped?",
+                );
+            }
+            LoginMsg::Authed(_, _, Err(Error::Api(ApiError::PermissionDenied))) => {
                 tracing::error!("login failed due to permission denied");
                 self.error =
                     Some("Failed to authenticate. Please check your username and password.");
+            }
+            LoginMsg::Authed(_, _, Err(Error::Api(err))) => {
+                tracing::error!(?err, "login failed due to unexpected API error");
+                self.error = Some(
+                    "The server seems to not be a valid risuto server. Maybe the URL is mistyped?",
+                );
             }
         }
         true

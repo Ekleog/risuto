@@ -417,7 +417,7 @@ pub async fn recover_session(
         "got multiple results for primary key request"
     );
     if res.is_empty() {
-        Err(Error::PermissionDenied)
+        Err(Error::permission_denied())
     } else {
         Ok(UserId(res[0].user_id))
     }
@@ -660,7 +660,7 @@ pub async fn submit_event(db: &mut PostgresDb<'_>, e: Event) -> Result<(), Error
         .with_context(|| format!("checking if user is authorized to add event {:?}", event_id))?;
     if !auth {
         tracing::info!("rejected permission for event {:?}", e);
-        return Err(Error::PermissionDenied);
+        return Err(Error::permission_denied());
     }
 
     let e = DbEvent::from(e);
@@ -694,7 +694,7 @@ pub async fn submit_event(db: &mut PostgresDb<'_>, e: Event) -> Result<(), Error
                 .context("sanity-checking the already-present event")?;
             match already_present {
                 Some(p) if p == e => Ok(()),
-                Some(p) if p.id == e.id => Err(Error::UuidAlreadyUsed(e.id)),
+                Some(p) if p.id == e.id => Err(Error::uuid_already_used(e.id)),
                 _ => Err(Error::Anyhow(anyhow!("unknown event insertion conflict: trying to insert {e:?}, already had {already_present:?}")))
             }
         }
@@ -706,7 +706,7 @@ pub async fn submit_task(db: &mut PostgresDb<'_>, t: Task, top_comm: String) -> 
     let task_id = t.id.0;
 
     if t.owner_id != db.user {
-        return Err(Error::PermissionDenied);
+        return Err(Error::permission_denied());
     }
 
     let mut transaction = db
@@ -736,7 +736,7 @@ pub async fn submit_task(db: &mut PostgresDb<'_>, t: Task, top_comm: String) -> 
                 .context("sanity-checking the already-present event")?;
             match already_present {
                 Some(p) if p.id == t.id.0 && p.owner_id == t.owner_id.0 && p.date == t.date.naive_utc() && p.initial_title == t.initial_title => Ok(()),
-                Some(p) if p.id == t.id.0 => Err(Error::UuidAlreadyUsed(p.id)),
+                Some(p) if p.id == t.id.0 => Err(Error::uuid_already_used(p.id)),
                 _ => Err(Error::Anyhow(anyhow!("unknown event insertion conflict: trying to insert {t:?}, already had {already_present:?}")))
             }
         }
@@ -765,7 +765,7 @@ pub async fn submit_task(db: &mut PostgresDb<'_>, t: Task, top_comm: String) -> 
                 .context("sanity-checking the already-present top-comment event")?;
             match already_present {
                 Some(p) if p.id == t.top_comment_id.0 && p.owner_id == t.owner_id.0 && p.date == t.date.naive_utc() && p.task_id == t.id.0 && p.d_type == DbType::AddComment && p.d_text.as_ref() == Some(&top_comm) => Ok(()),
-                Some(p) if p.id == t.top_comment_id.0 => Err(Error::UuidAlreadyUsed(p.id)),
+                Some(p) if p.id == t.top_comment_id.0 => Err(Error::uuid_already_used(p.id)),
                 _ => Err(Error::Anyhow(anyhow!("unknown event insertion conflict: trying to insert top-comment for task {t:?} with text {top_comm:?}, already had {already_present:?}")))
             }
         }
@@ -799,7 +799,7 @@ pub async fn create_user(conn: &mut sqlx::PgConnection, user: NewUser) -> Result
                 .await
                 .context("sanity-checking the already-present user")?;
             match already_present {
-                Some(p) if p.id == user.id.0 => Err(Error::UuidAlreadyUsed(p.id)),
+                Some(p) if p.id == user.id.0 => Err(Error::uuid_already_used(p.id)),
                 _ => Err(Error::Anyhow(anyhow!("unknown user creation conflict: trying to insert {user:?}, already had {already_present:?}")))
             }
         }

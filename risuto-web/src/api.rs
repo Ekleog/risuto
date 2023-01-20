@@ -19,31 +19,38 @@ const DISCONNECT_INTERVAL_SECS: i64 = 20;
 const ATTEMPT_SPACING_SECS: i64 = 1;
 
 #[derive(Debug, thiserror::Error)]
-pub enum ApiError {
+pub enum Error {
     #[error("sending http request")]
     SendingRequest(#[source] reqwest_middleware::Error),
 
-    #[error("permission denied")]
-    PermissionDenied,
+    #[error("API returned an error")]
+    Api(#[source] api::Error),
 
     #[error("parsing http response")]
     ParsingResponse(#[source] reqwest::Error),
+
+    #[error("parsing error message")]
+    ParsingError(#[source] anyhow::Error),
 }
 
 async fn submit<T: for<'de> serde::Deserialize<'de>>(
     req: reqwest_middleware::RequestBuilder,
-) -> Result<T, ApiError> {
-    let resp = req.send().await.map_err(ApiError::SendingRequest)?;
-    match resp.status() {
-        reqwest::StatusCode::FORBIDDEN => Err(ApiError::PermissionDenied),
-        reqwest::StatusCode::OK => resp.json().await.map_err(ApiError::ParsingResponse),
-        _ => Err(ApiError::ParsingResponse(
-            resp.error_for_status().unwrap_err(),
-        )),
+) -> Result<T, Error> {
+    let resp = req.send().await.map_err(Error::SendingRequest)?;
+    if resp.status() == reqwest::StatusCode::OK {
+        return resp.json().await.map_err(Error::ParsingResponse);
+    }
+    let resp = match resp.bytes().await {
+        Ok(resp) => resp,
+        Err(e) => return Err(Error::ParsingResponse(e)),
+    };
+    match api::Error::parse(&resp) {
+        Ok(err) => Err(Error::Api(err)),
+        Err(err) => Err(Error::ParsingError(err)),
     }
 }
 
-pub async fn auth(host: String, session: api::NewSession) -> Result<api::AuthToken, ApiError> {
+pub async fn auth(host: String, session: api::NewSession) -> Result<api::AuthToken, Error> {
     submit(
         crate::CLIENT
             .post(format!("{}/api/auth", host))

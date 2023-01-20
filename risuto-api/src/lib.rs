@@ -1,6 +1,7 @@
 mod action;
 mod auth;
 mod db;
+mod error;
 mod event;
 mod query;
 mod search;
@@ -11,6 +12,7 @@ mod user;
 pub use action::Action;
 pub use auth::{AuthInfo, AuthToken, NewSession};
 pub use db::Db;
+pub use error::Error;
 pub use event::{Event, EventData, EventId, OrderId};
 pub use query::{Query, TimeQuery};
 pub use search::{Order, OrderType, Search, SearchId};

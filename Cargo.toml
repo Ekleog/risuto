@@ -26,6 +26,7 @@ chrono = { version = "0.4.22", features = ["arbitrary", "serde"] }
 # TODO: remove once this PR lands https://github.com/chronotope/chrono-tz/pull/124
 chrono-tz = { git = "https://github.com/Ekleog/chrono-tz", rev = "d9be1348755f9b6300d363babd0862f20d4ae54d", features = ["arbitrary", "serde"] }
 futures = "0.3.25"
+http = "0.2.8"
 getrandom = "0.2"
 gloo-storage = "0.2.2"
 js-sys = "0.3.60"
