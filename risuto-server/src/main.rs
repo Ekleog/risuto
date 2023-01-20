@@ -657,6 +657,18 @@ mod tests {
         */
     }
 
+    struct Sessions(Vec<(AuthToken, AuthToken)>);
+
+    impl Sessions {
+        fn new() -> Sessions {
+            Sessions(Vec::new())
+        }
+
+        fn login(&mut self, app: AuthToken, mock: AuthToken) {
+            self.0.push((app, mock));
+        }
+    }
+
     async fn call<Req, Resp>(
         app: &mut Router,
         req: request::Request<axum::body::Body>,
@@ -748,11 +760,12 @@ mod tests {
         admin_token: &Uuid,
         app: &mut Router,
         mock: &mut MockServer,
+        sessions: &mut Sessions,
     ) {
         match op {
-            FuzzOp::CreateUser(mut new_user) => {
-                let pass = new_user.initial_password_hash;
-                new_user.initial_password_hash = bcrypt::hash(&pass, 4).expect("hashing password");
+            FuzzOp::CreateUser(new_user) => {
+                // no hashing for tests
+                let pass = new_user.initial_password_hash.clone();
                 compare(
                     "CreateUser",
                     run_on_app(
@@ -774,11 +787,12 @@ mod tests {
                         device,
                         pow: String::new(),
                     };
-                    compare(
-                        "Auth",
-                        run_on_app(app, "POST", "/api/auth", None, &session).await,
-                        mock.auth(session),
-                    )
+                    let app_tok = run_on_app(app, "POST", "/api/auth", None, &session).await;
+                    let mock_tok = mock.auth(session);
+                    if let (Ok(app), Ok(mock)) = (&app_tok, &mock_tok) {
+                        sessions.login(*app, *mock);
+                    }
+                    compare("Auth", app_tok.map(|_| ()), mock_tok.map(|_| ()));
                 } else {
                     execute_fuzz_op(
                         FuzzOp::CreateUser(NewUser {
@@ -789,6 +803,7 @@ mod tests {
                         admin_token,
                         &mut *app,
                         &mut *mock,
+                        &mut *sessions,
                     )
                     .await;
                     execute_fuzz_op(
@@ -796,6 +811,7 @@ mod tests {
                         admin_token,
                         &mut *app,
                         &mut *mock,
+                        &mut *sessions,
                     )
                     .await;
                 }
@@ -810,8 +826,9 @@ mod tests {
             let admin_token = Uuid::new_v4();
             let mut app = app(pool, Some(AuthToken(admin_token))).await;
             let mut mock = MockServer::new();
+            let mut sessions = Sessions::new();
             for op in test {
-                execute_fuzz_op(op, &admin_token, &mut app, &mut mock).await;
+                execute_fuzz_op(op, &admin_token, &mut app, &mut mock, &mut sessions).await;
             }
         }
     );

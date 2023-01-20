@@ -90,7 +90,8 @@ impl MockServer {
         s.validate_except_pow()?;
         for u in self.0.values_mut() {
             if u.name == s.user {
-                if !matches!(bcrypt::verify(&s.password, &u.pass_hash), Ok(true)) {
+                // tests (of which mock-server is a part of) don't actually use bcrypt
+                if s.password != u.pass_hash {
                     return Err(Error::PermissionDenied);
                 } else {
                     let tok = AuthToken(Uuid::new_v4());
