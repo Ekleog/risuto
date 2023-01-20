@@ -568,10 +568,24 @@ mod tests {
                         // run the test
                         let idle_before = pool.num_idle();
                         let v_str = format!("{v:?}");
-                        let res: Result<(), _> = std::panic::catch_unwind(AssertUnwindSafe(|| {
-                            runtime.block_on($fn(pool.clone(), v))
-                        }));
-                        let idle_after = pool.num_idle();
+                        let idle_after_res: Result<usize, _> = {
+                            let pool = pool.clone();
+                            std::panic::catch_unwind(AssertUnwindSafe(|| {
+                                runtime.block_on(async move {
+                                    let () = $fn(pool.clone(), v).await;
+                                    let mut idle_after = pool.num_idle();
+                                    let wait_release_since = std::time::Instant::now();
+                                    while idle_after < idle_before
+                                        && wait_release_since.elapsed()
+                                            <= std::time::Duration::from_secs(1)
+                                    {
+                                        tokio::task::yield_now().await;
+                                        idle_after = pool.num_idle();
+                                    }
+                                    idle_after
+                                })
+                            }))
+                        };
                         runtime.block_on(async move {
                             // cleanup
                             let mut conn =
@@ -584,15 +598,14 @@ mod tests {
                             }
                         });
                         // resume the panics
-                        if let Err(e) = res {
-                            std::panic::resume_unwind(e);
+                        match idle_after_res {
+                            Err(e) => std::panic::resume_unwind(e),
+                            Ok(idle_after) => assert!(
+                                idle_after >= idle_before,
+                                "test {} held onto pool after exiting test: before there were {idle_before} connections, and after there were {idle_after} with value {v_str}",
+                                stringify!($name)
+                            ),
                         }
-                        assert_eq!(
-                            idle_after,
-                            idle_before,
-                            "test {} held onto pool after exiting test with value {v_str}",
-                            stringify!($name)
-                        );
                     });
             }
         };
