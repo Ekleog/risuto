@@ -646,12 +646,14 @@ mod tests {
         */
     }
 
-    async fn call<T>(
+    async fn call<Req, Resp>(
         app: &mut Router,
         req: request::Request<axum::body::Body>,
-    ) -> Result<T, ApiError>
+        req_body: &Req,
+    ) -> Result<Resp, ApiError>
     where
-        T: for<'de> serde::Deserialize<'de>,
+        Req: Debug,
+        Resp: 'static + for<'de> serde::Deserialize<'de>,
     {
         app.ready().await.expect("waiting for app to be ready");
         let resp = app.call(req).await.expect("running request");
@@ -660,7 +662,33 @@ mod tests {
             .await
             .expect("recovering resp bytes");
         if status == http::StatusCode::OK {
-            return Ok(serde_json::from_slice(&body).expect("parsing resp body"));
+            if std::any::TypeId::of::<Resp>() == std::any::TypeId::of::<()>() {
+                // the server returns an empty string in this situation, which does not parse properly with serde_json
+                return Ok(serde_json::from_slice(b"null").unwrap());
+            } else {
+                return Ok(serde_json::from_slice(&body).unwrap_or_else(|err| {
+                    panic!(
+                        r#"
+                        Failed parsing resp body!
+
+                        The error is the following:
+                        ---
+                        {err}
+                        ---
+
+                        Response body is:
+                        ---
+                        {body:?}
+                        ---
+
+                        Request was:
+                        ---
+                        {req_body:?}
+                        ---
+                    "#
+                    )
+                }));
+            }
         }
         Err(ApiError::parse(&body)
             .unwrap_or_else(|err| panic!("parsing error response body {err}, body is {body:?}")))
@@ -674,8 +702,8 @@ mod tests {
         body: &Req,
     ) -> Result<Resp, ApiError>
     where
-        Req: serde::Serialize,
-        Resp: for<'de> serde::Deserialize<'de>,
+        Req: Debug + serde::Serialize,
+        Resp: 'static + for<'de> serde::Deserialize<'de>,
     {
         let req = request::Builder::new()
             .method(method)
@@ -690,7 +718,7 @@ mod tests {
                 serde_json::to_vec(body).expect("serializing request body to json"),
             ))
             .expect("building request");
-        call(app, req).await
+        call(app, req, body).await
     }
 
     fn compare<T>(name: &str, app_res: Result<T, ApiError>, mock_res: Result<T, ApiError>)
