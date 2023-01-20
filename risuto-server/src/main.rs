@@ -12,7 +12,14 @@ use risuto_api::{
     Action, AuthInfo, AuthToken, Event, FeedMessage, NewSession, NewUser, Search, Tag, Task, User,
     UserId, Uuid,
 };
-use std::{collections::HashMap, iter, net::SocketAddr, pin::Pin, sync::Arc};
+use std::{
+    collections::HashMap,
+    iter,
+    net::SocketAddr,
+    ops::{Deref, DerefMut},
+    pin::Pin,
+    sync::Arc,
+};
 use tokio::sync::RwLock;
 use tower_http::trace::TraceLayer;
 
@@ -30,7 +37,7 @@ struct Opt {
 
 #[derive(Clone, FromRef)]
 struct AppState {
-    db: sqlx::PgPool,
+    db: PgPool,
     feeds: UserFeeds,
     admin_token: Option<AuthToken>,
 }
@@ -44,13 +51,20 @@ async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt::init();
 
     let db_url = std::env::var("DATABASE_URL").context("DATABASE_URL must be set")?;
-    let db = sqlx::postgres::PgPoolOptions::new()
-        .max_connections(8)
-        .connect(&db_url)
-        .await
-        .with_context(|| format!("Error opening database {:?}", db_url))?;
+    let db = PgPool(
+        sqlx::postgres::PgPoolOptions::new()
+            .max_connections(8)
+            .connect(&db_url)
+            .await
+            .with_context(|| format!("Error opening database {:?}", db_url))?,
+    );
     MIGRATOR
-        .run(&db)
+        .run(
+            &mut *db
+                .acquire()
+                .await
+                .context("acquiring conn for migration running")?,
+        )
         .await
         .context("running pending migrations")?;
 
@@ -74,7 +88,7 @@ async fn main() -> anyhow::Result<()> {
         .context("serving axum webserver")
 }
 
-async fn app(db: sqlx::PgPool, admin_token: Option<AuthToken>) -> Router {
+async fn app(db: PgPool, admin_token: Option<AuthToken>) -> Router {
     let feeds = UserFeeds(Arc::new(RwLock::new(HashMap::new())));
 
     let state = AppState {
@@ -128,6 +142,49 @@ impl<S: Sync> FromRequestParts<S> for PreAuth {
     }
 }
 
+#[derive(Clone)]
+struct PgPool(sqlx::PgPool);
+
+impl PgPool {
+    async fn acquire(&self) -> Result<PgConn, Error> {
+        Ok(PgConn(
+            self.0.acquire().await.context("acquiring db connection")?,
+        ))
+    }
+
+    fn num_idle(&self) -> usize {
+        self.0.num_idle()
+    }
+}
+
+struct PgConn(sqlx::pool::PoolConnection<sqlx::Postgres>);
+
+#[async_trait]
+impl FromRequestParts<AppState> for PgConn {
+    type Rejection = Error;
+
+    async fn from_request_parts(
+        _req: &mut request::Parts,
+        state: &AppState,
+    ) -> Result<PgConn, Error> {
+        state.db.acquire().await
+    }
+}
+
+impl Deref for PgConn {
+    type Target = sqlx::PgConnection;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for PgConn {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
 struct Auth(UserId);
 
 #[async_trait]
@@ -136,12 +193,8 @@ impl FromRequestParts<AppState> for Auth {
 
     async fn from_request_parts(req: &mut request::Parts, state: &AppState) -> Result<Auth, Error> {
         let token = PreAuth::from_request_parts(req, state).await?.0;
-        let mut conn = state
-            .db
-            .acquire()
-            .await
-            .context("getting connection to database")?;
-        Ok(Auth(db::recover_session(&mut conn, token).await?))
+        let mut conn = PgConn::from_request_parts(req, state).await?;
+        Ok(Auth(db::recover_session(&mut *conn, token).await?))
     }
 }
 
@@ -209,16 +262,15 @@ impl axum::response::IntoResponse for Error {
 
 async fn admin_create_user(
     AdminAuth: AdminAuth,
-    State(db): State<sqlx::PgPool>,
     State(feeds): State<UserFeeds>,
+    mut conn: PgConn,
     Json(data): Json<NewUser>,
 ) -> Result<(), Error> {
     data.validate()?;
-    let mut conn = db.acquire().await.context("acquiring db connection")?;
-    db::create_user(&mut conn, data.clone()).await?;
+    db::create_user(&mut *conn, data.clone()).await?;
     feeds
         .relay_action(
-            &mut conn,
+            &mut *conn,
             Action::NewUser(User {
                 id: data.id,
                 name: data.name,
@@ -228,10 +280,7 @@ async fn admin_create_user(
     Ok(())
 }
 
-async fn auth(
-    State(db): State<sqlx::PgPool>,
-    Json(data): Json<NewSession>,
-) -> Result<Json<AuthToken>, Error> {
+async fn auth(mut conn: PgConn, Json(data): Json<NewSession>) -> Result<Json<AuthToken>, Error> {
     data.validate_except_pow()?;
     // in test setup, also allow the "empty" pow to work
     #[cfg(test)]
@@ -242,18 +291,16 @@ async fn auth(
     if !data.verify_pow() {
         return Err(Error::invalid_pow());
     }
-    let mut conn = db.acquire().await.context("acquiring db connection")?;
     Ok(Json(
-        db::login_user(&mut conn, &data)
+        db::login_user(&mut *conn, &data)
             .await
             .context("logging user in")?
             .ok_or(Error::permission_denied())?,
     ))
 }
 
-async fn unauth(user: PreAuth, State(db): State<sqlx::PgPool>) -> Result<(), Error> {
-    let mut conn = db.acquire().await.context("acquiring db connection")?;
-    match db::logout_user(&mut conn, &user.0).await {
+async fn unauth(user: PreAuth, mut conn: PgConn) -> Result<(), Error> {
+    match db::logout_user(&mut *conn, &user.0).await {
         Ok(true) => Ok(()),
         Ok(false) => Err(Error::permission_denied()),
         Err(e) => Err(Error::Anyhow(e)),
@@ -264,35 +311,26 @@ async fn whoami(Auth(user): Auth) -> Json<UserId> {
     Json(user)
 }
 
-async fn fetch_users(
-    Auth(user): Auth,
-    State(db): State<sqlx::PgPool>,
-) -> Result<Json<Vec<User>>, Error> {
-    let mut conn = db.acquire().await.context("acquiring db connection")?;
-    Ok(Json(db::fetch_users(&mut conn).await.with_context(
+async fn fetch_users(Auth(user): Auth, mut conn: PgConn) -> Result<Json<Vec<User>>, Error> {
+    Ok(Json(db::fetch_users(&mut *conn).await.with_context(
         || format!("fetching user list for {:?}", user),
     )?))
 }
 
 async fn fetch_tags(
     Auth(user): Auth,
-    State(db): State<sqlx::PgPool>,
+    mut conn: PgConn,
 ) -> Result<Json<Vec<(Tag, AuthInfo)>>, Error> {
-    let mut conn = db.acquire().await.context("acquiring db connection")?;
     Ok(Json(
-        db::fetch_tags_for_user(&mut conn, &user)
+        db::fetch_tags_for_user(&mut *conn, &user)
             .await
             .with_context(|| format!("fetching tag list for {:?}", user))?,
     ))
 }
 
-async fn fetch_searches(
-    Auth(user): Auth,
-    State(db): State<sqlx::PgPool>,
-) -> Result<Json<Vec<Search>>, Error> {
-    let mut conn = db.acquire().await.context("acquiring db connection")?;
+async fn fetch_searches(Auth(user): Auth, mut conn: PgConn) -> Result<Json<Vec<Search>>, Error> {
     Ok(Json(
-        db::fetch_searches_for_user(&mut conn, &user)
+        db::fetch_searches_for_user(&mut *conn, &user)
             .await
             .with_context(|| format!("fetching saved search list for {:?}", user))?,
     ))
@@ -300,12 +338,11 @@ async fn fetch_searches(
 
 async fn search_tasks(
     Auth(user): Auth,
-    State(db): State<sqlx::PgPool>,
+    mut conn: PgConn,
     Json(q): Json<risuto_api::Query>,
 ) -> Result<Json<(Vec<Task>, Vec<Event>)>, Error> {
-    let mut conn = db.acquire().await.context("acquiring db connection")?;
     Ok(Json(
-        db::search_tasks_for_user(&mut conn, user, &q)
+        db::search_tasks_for_user(&mut *conn, user, &q)
             .await
             .with_context(|| format!("fetching task list for {:?}", user))?,
     ))
@@ -313,13 +350,12 @@ async fn search_tasks(
 
 async fn submit_action(
     Auth(user): Auth,
-    State(db): State<sqlx::PgPool>,
     State(feeds): State<UserFeeds>,
+    mut conn: PgConn,
     Json(a): Json<Action>,
 ) -> Result<(), Error> {
-    let mut conn = db.acquire().await.context("acquiring db connection")?;
     let mut db = db::PostgresDb {
-        conn: &mut conn,
+        conn: &mut *conn,
         user,
     };
     match &a {
@@ -343,7 +379,7 @@ async fn submit_action(
 
 async fn action_feed(
     ws: WebSocketUpgrade,
-    State(db): State<sqlx::PgPool>,
+    State(db): State<PgPool>,
     State(feeds): State<UserFeeds>,
 ) -> Result<axum::response::Response, Error> {
     Ok(ws.on_upgrade(move |sock| {
@@ -352,7 +388,7 @@ async fn action_feed(
     }))
 }
 
-async fn action_feed_impl<W, R>(mut write: W, mut read: R, db: sqlx::PgPool, feeds: UserFeeds)
+async fn action_feed_impl<W, R>(mut write: W, mut read: R, db: PgPool, feeds: UserFeeds)
 where
     W: 'static + Send + Unpin + futures::Sink<Message>,
     <W as futures::Sink<Message>>::Error: Send,
@@ -364,7 +400,7 @@ where
     if let Some(Ok(Message::Text(token))) = read.next().await {
         if let Ok(token) = Uuid::try_from(&token as &str) {
             if let Ok(mut conn) = db.acquire().await {
-                if let Ok(user) = db::recover_session(&mut conn, AuthToken(token)).await {
+                if let Ok(user) = db::recover_session(&mut *conn, AuthToken(token)).await {
                     if let Ok(_) = write.send(Message::Text(String::from("ok"))).await {
                         tracing::debug!(?user, "event feed websocket auth success");
                         feeds.add_for_user(user, write, read).await;
@@ -554,7 +590,7 @@ mod tests {
                         .run(&mut pool.acquire().await.expect("getting migrator connection"))
                         .await
                         .expect("failed applying migrations");
-                    pool
+                    PgPool(pool)
                 }));
                 let cleanup_queries = include_str!("../reset-test-db.sql")
                     .split(";")
@@ -592,7 +628,7 @@ mod tests {
                                 pool.acquire().await.expect("getting db cleanup connection");
                             for q in cleanup_queries {
                                 sqlx::query(&q)
-                                    .execute(&mut conn)
+                                    .execute(&mut *conn)
                                     .await
                                     .expect("failed cleaning up database");
                             }
