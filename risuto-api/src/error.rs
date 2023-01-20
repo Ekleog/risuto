@@ -38,7 +38,7 @@ impl Error {
             Error::InvalidPow => StatusCode::BAD_REQUEST,
             Error::NameAlreadyUsed(_) => StatusCode::CONFLICT,
             Error::NullByteInString(_) => StatusCode::BAD_REQUEST,
-            Error::InvalidName(_) => StatusCode::BAD_GATEWAY,
+            Error::InvalidName(_) => StatusCode::BAD_REQUEST,
         }
     }
 
