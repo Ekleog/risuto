@@ -500,7 +500,7 @@ mod tests {
     use axum::http;
     use risuto_mock_server::MockServer;
     use sqlx::testing::TestSupport;
-    use std::panic::AssertUnwindSafe;
+    use std::{fmt::Debug, panic::AssertUnwindSafe};
     use tower::{Service, ServiceExt};
 
     macro_rules! do_tokio_test {
@@ -693,6 +693,16 @@ mod tests {
         call(app, req).await
     }
 
+    fn compare<T>(name: &str, app_res: Result<T, ApiError>, mock_res: Result<T, ApiError>)
+    where
+        T: Debug + PartialEq,
+    {
+        assert_eq!(
+            app_res, mock_res,
+            "app and mock did not return the same result for {name}"
+        );
+    }
+
     async fn execute_fuzz_op(
         op: FuzzOp,
         admin_token: &Uuid,
@@ -700,21 +710,18 @@ mod tests {
         mock: &mut MockServer,
     ) {
         match op {
-            FuzzOp::CreateUser(new_user) => {
-                let app_res = run_on_app(
+            FuzzOp::CreateUser(new_user) => compare(
+                "CreateUser",
+                run_on_app(
                     app,
                     "POST",
                     "/api/admin/create-user",
                     Some(*admin_token),
                     &new_user,
                 )
-                .await;
-                let mock_res = mock.admin_create_user(new_user);
-                assert_eq!(
-                    app_res, mock_res,
-                    "app and mock did not return the same result for CreateUser"
-                );
-            }
+                .await,
+                mock.admin_create_user(new_user),
+            ),
         }
     }
 
