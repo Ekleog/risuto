@@ -757,18 +757,19 @@ mod tests {
                 )
             }
             FuzzOp::Auth { uid, device } => {
-                let (user, password) = mock.test_get_user_info(uid);
-                let session = NewSession {
-                    user: String::from(user),
-                    password: String::from(password),
-                    device,
-                    pow: String::new(),
-                };
-                compare(
-                    "Auth",
-                    run_on_app(app, "POST", "/api/auth", None, &session).await,
-                    mock.auth(session),
-                )
+                if let Some((user, password)) = mock.test_get_user_info(uid) {
+                    let session = NewSession {
+                        user: String::from(user),
+                        password: String::from(password),
+                        device,
+                        pow: String::new(),
+                    };
+                    compare(
+                        "Auth",
+                        run_on_app(app, "POST", "/api/auth", None, &session).await,
+                        mock.auth(session),
+                    )
+                }
             }
         }
     }

@@ -39,10 +39,13 @@ impl MockServer {
     }
 
     /// Return name & pass for user number `id`
-    pub fn test_get_user_info(&self, id: usize) -> (&str, &str) {
+    pub fn test_get_user_info(&self, id: usize) -> Option<(&str, &str)> {
+        if self.0.len() == 0 {
+            return None;
+        }
         let num = id % self.0.len();
         let u = self.0.values().skip(num).next().unwrap();
-        (&u.name, &u.pass)
+        Some((&u.name, &u.pass))
     }
 
     pub fn admin_create_user(&mut self, u: NewUser, password: String) -> Result<(), Error> {
