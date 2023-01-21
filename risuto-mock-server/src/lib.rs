@@ -41,13 +41,19 @@ impl MockServer {
     }
 
     /// Return name & pass for user number `id`
-    pub fn test_get_user_info(&self, id: usize) -> Option<(&str, &str)> {
-        if self.0.len() == 0 {
-            return None;
-        }
-        let num = id % self.0.len();
-        let u = self.0.values().skip(num).next().unwrap();
-        Some((&u.name, &u.pass))
+    pub fn test_get_user_info(&self, id: usize) -> (&str, &str) {
+        let u = self
+            .0
+            .values()
+            .skip(id)
+            .next()
+            .unwrap_or_else(|| panic!("getting user {id} among {}", self.0.len()));
+        (&u.name, &u.pass)
+    }
+
+    /// Return the current number of users
+    pub fn test_num_users(&self) -> usize {
+        self.0.len()
     }
 
     pub fn admin_create_user(&mut self, u: NewUser, password: String) -> Result<(), Error> {

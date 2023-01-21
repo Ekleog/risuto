@@ -8,7 +8,7 @@ use axum::{
 use risuto_api::{Error as ApiError, NewSession, NewUser, UserId};
 use risuto_mock_server::MockServer;
 use sqlx::testing::TestSupport;
-use std::{fmt::Debug, panic::AssertUnwindSafe};
+use std::{cmp, fmt::Debug, ops::RangeTo, panic::AssertUnwindSafe};
 use tower::{Service, ServiceExt};
 
 use crate::{extractors::*, *};
@@ -264,11 +264,25 @@ where
     );
 }
 
+fn resize_int(fuzz_id: usize, RangeTo { end }: RangeTo<usize>) -> Option<usize> {
+    if end == 0 {
+        return None;
+    }
+    let bucket_size = cmp::max(1, usize::MAX / end); // in case we rounded to 0
+    let id = fuzz_id / bucket_size;
+    Some(cmp::min(id, end - 1)) // in case id was actually over end - 1 due to rounding
+}
+
+struct Session {
+    app: AuthToken,
+    mock: AuthToken,
+}
+
 struct ComparativeFuzzer {
     admin_token: Uuid,
     app: Router,
     mock: MockServer,
-    sessions: Vec<(AuthToken, AuthToken)>,
+    sessions: Vec<Session>,
 }
 
 impl ComparativeFuzzer {
@@ -305,7 +319,8 @@ impl ComparativeFuzzer {
                 )
             }
             FuzzOp::Auth { uid, device } => {
-                if let Some((user, password)) = self.mock.test_get_user_info(uid) {
+                if let Some(uid) = resize_int(uid, ..self.mock.test_num_users()) {
+                    let (user, password) = self.mock.test_get_user_info(uid);
                     let session = NewSession {
                         user: String::from(user),
                         password: String::from(password),
@@ -315,8 +330,8 @@ impl ComparativeFuzzer {
                     let app_tok =
                         run_on_app(&mut self.app, "POST", "/api/auth", None, &session).await;
                     let mock_tok = self.mock.auth(session);
-                    if let (Ok(app), Ok(mock)) = (&app_tok, &mock_tok) {
-                        self.sessions.push((*app, *mock));
+                    if let (&Ok(app), &Ok(mock)) = (&app_tok, &mock_tok) {
+                        self.sessions.push(Session { app, mock });
                     }
                     compare("Auth", app_tok.map(|_| ()), mock_tok.map(|_| ()));
                 } else {
