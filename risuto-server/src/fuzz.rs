@@ -168,7 +168,6 @@ enum FuzzOp {
     Unauth {
         sid: usize,
     },
-    /* TODO:
     Whoami {
         sid: usize,
     },
@@ -181,6 +180,7 @@ enum FuzzOp {
     FetchSearches {
         sid: usize,
     },
+    /* TODO:
     SearchTasks {
         sid: usize,
         query: risuto_api::Query,
@@ -384,6 +384,59 @@ impl ComparativeFuzzer {
                     "Unauth",
                     run_on_app(&mut self.app, "POST", "/api/unauth", Some(sess.app.0), &()).await,
                     self.mock.unauth(sess.mock),
+                );
+            }
+            FuzzOp::Whoami { sid } => {
+                let sess = self.get_session(sid).await;
+                compare(
+                    "Whoami",
+                    run_on_app(&mut self.app, "GET", "/api/whoami", Some(sess.app.0), &()).await,
+                    self.mock.whoami(sess.mock),
+                );
+            }
+            FuzzOp::FetchUsers { sid } => {
+                let sess = self.get_session(sid).await;
+                compare(
+                    "FetchUsers",
+                    run_on_app(
+                        &mut self.app,
+                        "GET",
+                        "/api/fetch-users",
+                        Some(sess.app.0),
+                        &(),
+                    )
+                    .await,
+                    self.mock.fetch_users(sess.mock),
+                );
+            }
+            FuzzOp::FetchTags { sid } => {
+                let sess = self.get_session(sid).await;
+                compare(
+                    "FetchTags",
+                    run_on_app(
+                        &mut self.app,
+                        "GET",
+                        "/api/fetch-tags",
+                        Some(sess.app.0),
+                        &(),
+                    )
+                    .await,
+                    self.mock.fetch_tags(sess.mock),
+                );
+            }
+            FuzzOp::FetchSearches { sid } => {
+                let sess = self.get_session(sid).await;
+                compare(
+                    "FetchSearches",
+                    run_on_app(
+                        &mut self.app,
+                        "GET",
+                        "/api/fetch-searches",
+                        Some(sess.app.0),
+                        &(),
+                    )
+                    .await,
+                    self.mock.fetch_searches(sess.mock),
                 );
             }
         }
