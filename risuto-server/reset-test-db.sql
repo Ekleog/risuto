@@ -1,7 +1,1 @@
-DELETE FROM searches;
-DELETE FROM tasks;
-DELETE FROM events;
-DELETE FROM tags;
-DELETE FROM perms;
-DELETE FROM sessions;
-DELETE FROM users;
+TRUNCATE users, sessions, perms, tags, events, tasks, searches

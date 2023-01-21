@@ -87,10 +87,6 @@ macro_rules! do_sqlx_test {
                         .expect("failed applying migrations");
                     pool
                 }));
-                let cleanup_queries = include_str!("../reset-test-db.sql")
-                    .split(";")
-                    .collect::<Vec<_>>();
-                let cleanup_queries: &[&str] = &cleanup_queries;
                 bolero::check!()
                     .with_generator($gen)
                     .cloned()
@@ -121,12 +117,10 @@ macro_rules! do_sqlx_test {
                             // cleanup
                             let mut conn =
                                 pool.acquire().await.expect("getting db cleanup connection");
-                            for q in cleanup_queries {
-                                sqlx::query(&q)
-                                    .execute(&mut *conn)
-                                    .await
-                                    .expect("failed cleaning up database");
-                            }
+                            sqlx::query(include_str!("../reset-test-db.sql"))
+                                .execute(&mut *conn)
+                                .await
+                                .expect("failed cleaning up database");
                         });
                         // resume the panics
                         match idle_after_res {
