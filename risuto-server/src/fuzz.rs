@@ -179,18 +179,6 @@ enum FuzzOp {
     */
 }
 
-struct Sessions(Vec<(AuthToken, AuthToken)>);
-
-impl Sessions {
-    fn new() -> Sessions {
-        Sessions(Vec::new())
-    }
-
-    fn login(&mut self, app: AuthToken, mock: AuthToken) {
-        self.0.push((app, mock));
-    }
-}
-
 async fn call<Req, Resp>(
     app: &mut Router,
     req: request::Request<axum::body::Body>,
@@ -276,66 +264,70 @@ where
     );
 }
 
-#[async_recursion]
-async fn execute_fuzz_op(
-    op: FuzzOp,
-    admin_token: &Uuid,
-    app: &mut Router,
-    mock: &mut MockServer,
-    sessions: &mut Sessions,
-) {
-    match op {
-        FuzzOp::CreateUser(new_user) => {
-            // no hashing for tests
-            let pass = new_user.initial_password_hash.clone();
-            compare(
-                "CreateUser",
-                run_on_app(
-                    app,
-                    "POST",
-                    "/api/admin/create-user",
-                    Some(*admin_token),
-                    &new_user,
-                )
-                .await,
-                mock.admin_create_user(new_user, pass),
-            )
+struct ComparativeFuzzer {
+    admin_token: Uuid,
+    app: Router,
+    mock: MockServer,
+    sessions: Vec<(AuthToken, AuthToken)>,
+}
+
+impl ComparativeFuzzer {
+    async fn new(pool: PgPool) -> ComparativeFuzzer {
+        let admin_token = Uuid::new_v4();
+        let app = app(pool, Some(AuthToken(admin_token))).await;
+        let mock = MockServer::new();
+        let sessions = Vec::new();
+        ComparativeFuzzer {
+            admin_token,
+            app,
+            mock,
+            sessions,
         }
-        FuzzOp::Auth { uid, device } => {
-            if let Some((user, password)) = mock.test_get_user_info(uid) {
-                let session = NewSession {
-                    user: String::from(user),
-                    password: String::from(password),
-                    device,
-                    pow: String::new(),
-                };
-                let app_tok = run_on_app(app, "POST", "/api/auth", None, &session).await;
-                let mock_tok = mock.auth(session);
-                if let (Ok(app), Ok(mock)) = (&app_tok, &mock_tok) {
-                    sessions.login(*app, *mock);
-                }
-                compare("Auth", app_tok.map(|_| ()), mock_tok.map(|_| ()));
-            } else {
-                execute_fuzz_op(
-                    FuzzOp::CreateUser(NewUser {
+    }
+
+    #[async_recursion]
+    async fn execute_fuzz_op(&mut self, op: FuzzOp) {
+        match op {
+            FuzzOp::CreateUser(new_user) => {
+                // no hashing for tests
+                let pass = new_user.initial_password_hash.clone();
+                compare(
+                    "CreateUser",
+                    run_on_app(
+                        &mut self.app,
+                        "POST",
+                        "/api/admin/create-user",
+                        Some(self.admin_token),
+                        &new_user,
+                    )
+                    .await,
+                    self.mock.admin_create_user(new_user, pass),
+                )
+            }
+            FuzzOp::Auth { uid, device } => {
+                if let Some((user, password)) = self.mock.test_get_user_info(uid) {
+                    let session = NewSession {
+                        user: String::from(user),
+                        password: String::from(password),
+                        device,
+                        pow: String::new(),
+                    };
+                    let app_tok =
+                        run_on_app(&mut self.app, "POST", "/api/auth", None, &session).await;
+                    let mock_tok = self.mock.auth(session);
+                    if let (Ok(app), Ok(mock)) = (&app_tok, &mock_tok) {
+                        self.sessions.push((*app, *mock));
+                    }
+                    compare("Auth", app_tok.map(|_| ()), mock_tok.map(|_| ()));
+                } else {
+                    self.execute_fuzz_op(FuzzOp::CreateUser(NewUser {
                         id: UserId::stub(),
                         name: String::from("user"),
                         initial_password_hash: String::from("password"),
-                    }),
-                    admin_token,
-                    &mut *app,
-                    &mut *mock,
-                    &mut *sessions,
-                )
-                .await;
-                execute_fuzz_op(
-                    FuzzOp::Auth { uid, device },
-                    admin_token,
-                    &mut *app,
-                    &mut *mock,
-                    &mut *sessions,
-                )
-                .await;
+                    }))
+                    .await;
+                    self.execute_fuzz_op(FuzzOp::Auth { uid, device }).await;
+                }
             }
         }
     }
@@ -345,12 +337,9 @@ do_sqlx_test!(
     compare_with_mock,
     bolero::generator::gen_with::<Vec<FuzzOp>>().len(1..100usize),
     |pool, test: Vec<FuzzOp>| async move {
-        let admin_token = Uuid::new_v4();
-        let mut app = app(pool, Some(AuthToken(admin_token))).await;
-        let mut mock = MockServer::new();
-        let mut sessions = Sessions::new();
+        let mut fuzzer = ComparativeFuzzer::new(pool).await;
         for op in test {
-            execute_fuzz_op(op, &admin_token, &mut app, &mut mock, &mut sessions).await;
+            fuzzer.execute_fuzz_op(op).await;
         }
     }
 );
