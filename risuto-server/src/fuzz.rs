@@ -165,10 +165,10 @@ enum FuzzOp {
         #[generator(bolero::generator::gen_with::<String>().len(1..100usize))]
         device: String,
     },
-    /* TODO:
     Unauth {
         sid: usize,
     },
+    /* TODO:
     Whoami {
         sid: usize,
     },
@@ -292,6 +292,7 @@ fn resize_int(fuzz_id: usize, RangeTo { end }: RangeTo<usize>) -> Option<usize> 
     Some(cmp::min(id, end - 1)) // in case id was actually over end - 1 due to rounding
 }
 
+#[derive(Clone, Copy)]
 struct Session {
     app: AuthToken,
     mock: AuthToken,
@@ -315,6 +316,20 @@ impl ComparativeFuzzer {
             app,
             mock,
             sessions,
+        }
+    }
+
+    async fn get_session(&mut self, sid: usize) -> Session {
+        match resize_int(sid, ..self.sessions.len()) {
+            Some(sid) => self.sessions[sid],
+            None => {
+                self.execute_fuzz_op(FuzzOp::Auth {
+                    uid: sid,
+                    device: String::from("device"),
+                })
+                .await;
+                self.sessions[0]
+            }
         }
     }
 
@@ -362,6 +377,14 @@ impl ComparativeFuzzer {
                     .await;
                     self.execute_fuzz_op(FuzzOp::Auth { uid, device }).await;
                 }
+            }
+            FuzzOp::Unauth { sid } => {
+                let sess = self.get_session(sid).await;
+                compare(
+                    "Unauth",
+                    run_on_app(&mut self.app, "POST", "/api/unauth", Some(sess.app.0), &()).await,
+                    self.mock.unauth(sess.mock),
+                );
             }
         }
     }
