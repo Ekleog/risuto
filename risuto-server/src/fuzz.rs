@@ -34,90 +34,90 @@ macro_rules! do_tokio_test {
 }
 
 macro_rules! do_sqlx_test {
-        ( $name:ident, $gen:expr, $fn:expr ) => {
-            #[test]
-            fn $name() {
-                if std::env::var("RUST_LOG").is_ok() {
-                    tracing_subscriber::fmt::init();
-                }
-                let runtime = AssertUnwindSafe(
-                    tokio::runtime::Builder::new_current_thread()
-                        .enable_all()
-                        .build()
-                        .expect("failed initializing tokio runtime"),
-                );
-                // create test db
-                let pool = AssertUnwindSafe(runtime.block_on(async move {
-                    let test_context = sqlx::Postgres::test_context(&sqlx::testing::TestArgs::new(
-                        concat!(module_path!(), "::", stringify!($name)),
-                    ))
+    ( $name:ident, $gen:expr, $fn:expr ) => {
+        #[test]
+        fn $name() {
+            if std::env::var("RUST_LOG").is_ok() {
+                tracing_subscriber::fmt::init();
+            }
+            let runtime = AssertUnwindSafe(
+                tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                    .expect("failed initializing tokio runtime"),
+            );
+            // create test db
+            let pool = AssertUnwindSafe(runtime.block_on(async move {
+                let test_context = sqlx::Postgres::test_context(&sqlx::testing::TestArgs::new(
+                    concat!(module_path!(), "::", stringify!($name)),
+                ))
+                .await
+                .expect("failed connecting to setup test db");
+                let pool = test_context
+                    .pool_opts
+                    .connect_with(test_context.connect_opts)
                     .await
-                    .expect("failed connecting to setup test db");
-                    let pool = test_context
-                        .pool_opts
-                        .connect_with(test_context.connect_opts)
-                        .await
-                        .expect("failed connecting test pool");
-                    MIGRATOR
-                        .run(&mut pool.acquire().await.expect("getting migrator connection"))
-                        .await
-                        .expect("failed applying migrations");
-                    PgPool::new(pool)
-                }));
-                let cleanup_queries = include_str!("../reset-test-db.sql")
-                    .split(";")
-                    .collect::<Vec<_>>();
-                let cleanup_queries: &[&str] = &cleanup_queries;
-                bolero::check!()
-                    .with_generator($gen)
-                    .cloned()
-                    .for_each(move |v| {
+                    .expect("failed connecting test pool");
+                MIGRATOR
+                    .run(&mut pool.acquire().await.expect("getting migrator connection"))
+                    .await
+                    .expect("failed applying migrations");
+                PgPool::new(pool)
+            }));
+            let cleanup_queries = include_str!("../reset-test-db.sql")
+                .split(";")
+                .collect::<Vec<_>>();
+            let cleanup_queries: &[&str] = &cleanup_queries;
+            bolero::check!()
+                .with_generator($gen)
+                .cloned()
+                .for_each(move |v| {
+                    let pool = pool.clone();
+                    // run the test
+                    let idle_before = pool.num_idle();
+                    let v_str = format!("{v:?}");
+                    let idle_after_res: Result<usize, _> = {
                         let pool = pool.clone();
-                        // run the test
-                        let idle_before = pool.num_idle();
-                        let v_str = format!("{v:?}");
-                        let idle_after_res: Result<usize, _> = {
-                            let pool = pool.clone();
-                            std::panic::catch_unwind(AssertUnwindSafe(|| {
-                                runtime.block_on(async move {
-                                    let () = $fn(pool.clone(), v).await;
-                                    let mut idle_after = pool.num_idle();
-                                    let wait_release_since = std::time::Instant::now();
-                                    while idle_after < idle_before
-                                        && wait_release_since.elapsed()
-                                            <= std::time::Duration::from_secs(1)
-                                    {
-                                        tokio::task::yield_now().await;
-                                        idle_after = pool.num_idle();
-                                    }
-                                    idle_after
-                                })
-                            }))
-                        };
-                        runtime.block_on(async move {
-                            // cleanup
-                            let mut conn =
-                                pool.acquire().await.expect("getting db cleanup connection");
-                            for q in cleanup_queries {
-                                sqlx::query(&q)
-                                    .execute(&mut *conn)
-                                    .await
-                                    .expect("failed cleaning up database");
-                            }
-                        });
-                        // resume the panics
-                        match idle_after_res {
-                            Err(e) => std::panic::resume_unwind(e),
-                            Ok(idle_after) => assert!(
-                                idle_after >= idle_before,
-                                "test {} held onto pool after exiting test: before there were {idle_before} connections, and after there were {idle_after} with value {v_str}",
-                                stringify!($name)
-                            ),
+                        std::panic::catch_unwind(AssertUnwindSafe(|| {
+                            runtime.block_on(async move {
+                                let () = $fn(pool.clone(), v).await;
+                                let mut idle_after = pool.num_idle();
+                                let wait_release_since = std::time::Instant::now();
+                                while idle_after < idle_before
+                                    && wait_release_since.elapsed()
+                                        <= std::time::Duration::from_secs(1)
+                                {
+                                    tokio::task::yield_now().await;
+                                    idle_after = pool.num_idle();
+                                }
+                                idle_after
+                            })
+                        }))
+                    };
+                    runtime.block_on(async move {
+                        // cleanup
+                        let mut conn =
+                            pool.acquire().await.expect("getting db cleanup connection");
+                        for q in cleanup_queries {
+                            sqlx::query(&q)
+                                .execute(&mut *conn)
+                                .await
+                                .expect("failed cleaning up database");
                         }
                     });
-            }
-        };
-    }
+                    // resume the panics
+                    match idle_after_res {
+                        Err(e) => std::panic::resume_unwind(e),
+                        Ok(idle_after) => assert!(
+                            idle_after >= idle_before,
+                            "test {} held onto pool after exiting test: before there were {idle_before} connections, and after there were {idle_after} with value {v_str}",
+                            stringify!($name)
+                        ),
+                    }
+                });
+        }
+    };
+}
 
 do_tokio_test!(fuzz_preauth_extractor, String, |token| async move {
     if let Ok(req) = http::Request::builder()
