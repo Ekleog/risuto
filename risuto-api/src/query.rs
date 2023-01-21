@@ -64,7 +64,7 @@ pub enum Query {
     ScheduledForAfter(TimeQuery),
     BlockedUntilAtMost(TimeQuery),
     BlockedUntilAtLeast(TimeQuery),
-    Phrase(String), // full-text search of one contiguous word vec
+    Phrase(#[generator(bolero::generator::gen_with::<String>().len(0..15usize))] String), // full-text search of one contiguous word vec
 }
 
 impl Query {

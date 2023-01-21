@@ -180,11 +180,11 @@ enum FuzzOp {
     FetchSearches {
         sid: usize,
     },
-    /* TODO:
     SearchTasks {
         sid: usize,
         query: risuto_api::Query,
     },
+    /* TODO:
     SubmitAction {
         sid: usize,
         evt: risuto_api::Action,
@@ -437,6 +437,22 @@ impl ComparativeFuzzer {
                     )
                     .await,
                     self.mock.fetch_searches(sess.mock),
+                );
+            }
+            FuzzOp::SearchTasks { sid, query } => {
+                let sess = self.get_session(sid).await;
+                // TODO: make Query::Tag.tag be likely to actually be a valid tag (once CreateTag will be implemented)
+                compare(
+                    "SearchTasks",
+                    run_on_app(
+                        &mut self.app,
+                        "POST",
+                        "/api/search-tasks",
+                        Some(sess.app.0),
+                        &query,
+                    )
+                    .await,
+                    self.mock.search_tasks(sess.mock, query),
                 );
             }
         }
