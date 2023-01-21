@@ -65,11 +65,11 @@ macro_rules! do_sqlx_test {
             if std::env::var("RUST_LOG").is_ok() {
                 tracing_subscriber::fmt::init();
             }
-            let lockfile = tempfile::tempfile().expect("creating tempfile");
-            let datadir = tempfile::tempdir().expect("creating tempdir");
-            let datadir_path: &Path = datadir.as_ref();
-            let cluster = build_pg_cluster(datadir_path);
-            let datadir_path: &str = datadir_path.to_str().expect("tempdir is not valid utf8");
+            let tmpdir = tempfile::Builder::new().prefix("risuto-fuzz-db").tempdir().expect("creating tempdir");
+            let lockfile = std::fs::File::create(tmpdir.path().join("lockfile")).expect("creating lockfile");
+            let datadir = tmpdir.path().join("db");
+            let cluster = build_pg_cluster(&datadir);
+            let datadir_path: &str = datadir.to_str().expect("tempdir is not valid utf8");
             postgresfixture::coordinate::run_and_destroy(&cluster, lockfile.into(), || {
                 cluster.createdb("test_db").expect("creating test_db database");
                 let runtime = AssertUnwindSafe(
