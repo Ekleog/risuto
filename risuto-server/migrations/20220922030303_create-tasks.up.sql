@@ -92,4 +92,4 @@ ADD CONSTRAINT task_has_top_comment
     FOREIGN KEY (top_comment_id, owner_id, date)
     REFERENCES events (id, owner_id, date) -- TODO: find a way to have as constraint that the event referenced is an add_comment event with no parent
     DEFERRABLE
-    INITIALLY DEFERRED;
+    INITIALLY IMMEDIATE;

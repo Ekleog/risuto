@@ -720,6 +720,11 @@ pub async fn submit_task(db: &mut PostgresDb<'_>, t: Task, top_comm: String) -> 
         .await
         .context("creating task submission transaction")?;
 
+    sqlx::query!("SET CONSTRAINTS task_has_top_comment DEFERRED")
+        .execute(&mut transaction)
+        .await
+        .context("deferring task_has_top_comment constraint")?;
+
     let res = sqlx::query!(
         "INSERT INTO tasks VALUES ($1, $2, $3, $4, $5)",
         &t.id.0,
@@ -776,6 +781,11 @@ pub async fn submit_task(db: &mut PostgresDb<'_>, t: Task, top_comm: String) -> 
         }
         rows => panic!("insertion of single event {task_id:?} affected multiple ({rows}) rows"),
     }?;
+
+    sqlx::query!("SET CONSTRAINTS task_has_top_comment IMMEDIATE")
+        .execute(&mut transaction)
+        .await
+        .with_context(|| format!("applying task_has_top_comment constraint after creating the new task {t:?} and top-comment"))?;
 
     transaction
         .commit()
