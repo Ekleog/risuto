@@ -77,6 +77,7 @@ impl UserFeeds {
                     },
                     msg = read.next() => match msg {
                         None => remove_self!(),
+                        Some(Ok(Message::Close(_))) => remove_self!(),
                         Some(Ok(Message::Text(msg))) => {
                             if msg != "ping" {
                                 tracing::warn!("received unexpected message from client: {msg:?}");
@@ -84,7 +85,6 @@ impl UserFeeds {
                             }
                             send_message!(FeedMessage::Pong);
                         }
-                        Some(Ok(Message::Close(_))) => remove_self!(),
                         Some(msg) => {
                             tracing::warn!("received unexpected message from client: {msg:?}");
                             remove_self!();
