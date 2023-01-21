@@ -38,6 +38,7 @@ num = "0.4.0"
 parking_lot = { version = "0.11.2", features = ["wasm-bindgen"] } # work around https://github.com/tomaka/wasm-timer/issues/14
 pest = "2.5"
 pest_derive = "2.5"
+postgresfixture = "0.3.1"
 rand = "0.8.5"
 reqwest = { version = "0.11.12", features = ["json"] }
 # These need to be from git until this lands: https://github.com/TrueLayer/reqwest-middleware/pull/79
@@ -49,6 +50,7 @@ sortable-js = "0.1.5"
 sqlx = { version = "0.6.2", features = ["chrono", "json", "postgres", "runtime-tokio-rustls", "uuid"] }
 structopt = "0.3.26"
 tantivy = { version = "0.19.0", default-features = false, features = ["stopwords"] }
+tempfile = "3.3"
 thiserror = "1.0"
 tokio = { version = "1.21", features = ["full"] }
 tower = "0.4.13"

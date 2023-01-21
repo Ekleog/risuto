@@ -37,13 +37,7 @@ async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt::init();
 
     let db_url = std::env::var("DATABASE_URL").context("DATABASE_URL must be set")?;
-    let db = PgPool::new(
-        sqlx::postgres::PgPoolOptions::new()
-            .max_connections(8)
-            .connect(&db_url)
-            .await
-            .with_context(|| format!("Error opening database {:?}", db_url))?,
-    );
+    let db = create_sqlx_pool(&db_url).await?;
     MIGRATOR
         .run(
             &mut *db
@@ -72,6 +66,16 @@ async fn main() -> anyhow::Result<()> {
         .serve(app.into_make_service())
         .await
         .context("serving axum webserver")
+}
+
+async fn create_sqlx_pool(db_url: &str) -> anyhow::Result<PgPool> {
+    Ok(PgPool::new(
+        sqlx::postgres::PgPoolOptions::new()
+            .max_connections(8)
+            .connect(&db_url)
+            .await
+            .with_context(|| format!("Error opening database {:?}", db_url))?,
+    ))
 }
 
 async fn app(db: PgPool, admin_token: Option<AuthToken>) -> Router {
