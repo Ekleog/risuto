@@ -71,7 +71,7 @@ pub struct Event {
     serde::Serialize,
 )]
 pub enum EventData {
-    SetTitle(String),
+    SetTitle(#[generator(bolero::generator::gen_with::<String>().len(0..100usize))] String),
     SetDone(bool),
     SetArchived(bool),
     BlockedUntil(#[generator(bolero::generator::gen_arbitrary())] Option<Time>),
@@ -87,10 +87,12 @@ pub enum EventData {
     },
     RmTag(TagId),
     AddComment {
+        #[generator(bolero::generator::gen_with::<String>().len(0..100usize))]
         text: String,
         parent_id: Option<EventId>,
     },
     EditComment {
+        #[generator(bolero::generator::gen_with::<String>().len(0..100usize))]
         text: String,
         comment_id: EventId,
     },

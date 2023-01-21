@@ -38,6 +38,7 @@ pub struct Task {
     #[generator(bolero::generator::gen_arbitrary())]
     pub date: Time,
 
+    #[generator(bolero::generator::gen_with::<String>().len(0..100usize))]
     pub initial_title: String,
     pub top_comment_id: EventId,
 }

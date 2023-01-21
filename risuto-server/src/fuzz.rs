@@ -184,11 +184,11 @@ enum FuzzOp {
         sid: usize,
         query: risuto_api::Query,
     },
-    /* TODO:
     SubmitAction {
         sid: usize,
         evt: risuto_api::Action,
     },
+    /* TODO:
     OpenActionFeed {
         sid: usize,
     },
@@ -454,6 +454,22 @@ impl ComparativeFuzzer {
                     .await,
                     self.mock.search_tasks(sess.mock, query),
                 );
+            }
+            FuzzOp::SubmitAction { sid, evt } => {
+                let sess = self.get_session(sid).await;
+                // TODO: make Action::*Id likely to actually be valid IDs
+                compare(
+                    "SubmitAction",
+                    run_on_app(
+                        &mut self.app,
+                        "POST",
+                        "/api/submit-action",
+                        Some(sess.app.0),
+                        &evt,
+                    )
+                    .await,
+                    self.mock.submit_action(sess.mock, evt).await,
+                )
             }
         }
     }

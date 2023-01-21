@@ -11,7 +11,10 @@ use crate::{Db, Event, Task, User};
 )]
 pub enum Action {
     NewUser(User),
-    NewTask(Task, String), // task, initial top-comment
+    NewTask(
+        Task,
+        #[generator(bolero::generator::gen_with::<String>().len(0..100usize))] String,
+    ), // task, initial top-comment
     NewEvent(Event),
 }
 
