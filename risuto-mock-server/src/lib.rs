@@ -191,6 +191,9 @@ impl MockServer {
             Action::NewUser(_) => return Err(Error::PermissionDenied),
             Action::NewTask(t, top_comm) => {
                 let u = self.resolve_mut(tok)?;
+                if u.db.owner != t.owner_id {
+                    return Err(Error::PermissionDenied);
+                }
                 u.db.add_tasks(vec![t.clone()]);
                 u.db.add_events_and_refresh_all(vec![api::Event {
                     id: t.top_comment_id,
