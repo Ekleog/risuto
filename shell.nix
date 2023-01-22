@@ -25,6 +25,7 @@ pkgs.stdenv.mkDerivation {
       androidPkgs.androidsdk
       cacert
       cargo-bolero
+      cargo-nextest
       gradle
       jdk8_headless
       mdbook
