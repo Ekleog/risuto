@@ -31,6 +31,9 @@ pub enum Error {
 
     #[error("Invalid time")]
     InvalidTime(Time),
+
+    #[error("Integer is out of expected range")]
+    IntegerOutOfRange(i64),
 }
 
 impl Error {
@@ -45,6 +48,7 @@ impl Error {
             Error::NullByteInString(_) => StatusCode::BAD_REQUEST,
             Error::InvalidName(_) => StatusCode::BAD_REQUEST,
             Error::InvalidTime(_) => StatusCode::BAD_REQUEST,
+            Error::IntegerOutOfRange(_) => StatusCode::BAD_REQUEST,
         }
     }
 
@@ -86,6 +90,11 @@ impl Error {
                 "message": "passed time is not acceptable",
                 "type": "invalid-time",
                 "time": t,
+            }),
+            Error::IntegerOutOfRange(i) => json!({
+                "message": "integer is outside of acceptable range",
+                "type": "integer-out-of-range",
+                "int": i,
             }),
         })
         .expect("serializing conflict")
@@ -134,6 +143,13 @@ impl Error {
                         .ok_or_else(|| {
                             anyhow!("error is about an invalid time but no time was provided")
                         })?,
+                ),
+                "integer-out-of-range" => Error::IntegerOutOfRange(
+                    data.get("int").and_then(|s| s.as_i64()).ok_or_else(|| {
+                        anyhow!(
+                            "error is about an integer out of range but no integer was provided"
+                        )
+                    })?,
                 ),
                 _ => return Err(anyhow!("error contents has unknown type")),
             },

@@ -1,5 +1,7 @@
 use risuto_api::{Query, Time, TimeQuery, Uuid};
 
+use crate::error::Error;
+
 pub enum Bind {
     Bool(bool),
     Uuid(Uuid),
@@ -25,19 +27,19 @@ impl Sql {
 /// Assumes tables vta (v_tasks_archived), vtd(v_tasks_done), vtt (v_tasks_tags),
 /// vtit (v_tasks_is_tagged), vts (v_tasks_scheduled), vtb (v_tasks_blocked)
 /// and vtx (v_tasks_text) are available
-pub fn to_postgres(q: &Query, first_bind_idx: usize) -> Sql {
+pub fn to_postgres(q: &Query, first_bind_idx: usize) -> Result<Sql, Error> {
     let mut res = Default::default();
-    add_to_postgres(q, first_bind_idx, &mut res);
-    res
+    add_to_postgres(q, first_bind_idx, &mut res)?;
+    Ok(res)
 }
 
-fn add_to_postgres(q: &Query, first_bind_idx: usize, res: &mut Sql) {
+fn add_to_postgres(q: &Query, first_bind_idx: usize, res: &mut Sql) -> Result<(), Error> {
     match q {
         Query::Any(queries) => {
             res.where_clause.push_str("(false");
             for q in queries {
                 res.where_clause.push_str(" OR ");
-                add_to_postgres(q, first_bind_idx, &mut *res);
+                add_to_postgres(q, first_bind_idx, &mut *res)?;
             }
             res.where_clause.push(')');
         }
@@ -45,13 +47,13 @@ fn add_to_postgres(q: &Query, first_bind_idx: usize, res: &mut Sql) {
             res.where_clause.push_str("(true");
             for q in queries {
                 res.where_clause.push_str(" AND ");
-                add_to_postgres(q, first_bind_idx, &mut *res);
+                add_to_postgres(q, first_bind_idx, &mut *res)?;
             }
             res.where_clause.push(')');
         }
         Query::Not(q) => {
             res.where_clause.push_str("NOT ");
-            add_to_postgres(q, first_bind_idx, &mut *res);
+            add_to_postgres(q, first_bind_idx, &mut *res)?;
         }
         Query::Archived(true) => {
             res.where_clause.push_str("vta.archived = true");
@@ -86,19 +88,19 @@ fn add_to_postgres(q: &Query, first_bind_idx: usize, res: &mut Sql) {
                 .push_str("(vtit.has_tag = false OR vtit.has_tag IS NULL)");
         }
         Query::ScheduledForBefore(date) => {
-            let idx = res.add_bind(first_bind_idx, timeq_to_bind(date));
+            let idx = res.add_bind(first_bind_idx, timeq_to_bind(date)?);
             res.where_clause.push_str(&format!("(vts.time <= ${idx})"));
         }
         Query::ScheduledForAfter(date) => {
-            let idx = res.add_bind(first_bind_idx, timeq_to_bind(date));
+            let idx = res.add_bind(first_bind_idx, timeq_to_bind(date)?);
             res.where_clause.push_str(&format!("(vts.time >= ${idx})"));
         }
         Query::BlockedUntilAtMost(date) => {
-            let idx = res.add_bind(first_bind_idx, timeq_to_bind(date));
+            let idx = res.add_bind(first_bind_idx, timeq_to_bind(date)?);
             res.where_clause.push_str(&format!("(vtb.time <= ${idx})"));
         }
         Query::BlockedUntilAtLeast(date) => {
-            let idx = res.add_bind(first_bind_idx, timeq_to_bind(date));
+            let idx = res.add_bind(first_bind_idx, timeq_to_bind(date)?);
             res.where_clause.push_str(&format!("(vtb.time >= ${idx})"));
         }
         Query::Phrase(t) => {
@@ -107,10 +109,11 @@ fn add_to_postgres(q: &Query, first_bind_idx: usize, res: &mut Sql) {
                 .push_str(&format!("(vtx.text @@ phraseto_tsquery(${idx}))"));
         }
     }
+    Ok(())
 }
 
-fn timeq_to_bind(q: &TimeQuery) -> Bind {
-    Bind::Time(match q {
+fn timeq_to_bind(q: &TimeQuery) -> Result<Bind, Error> {
+    Ok(Bind::Time(match q {
         TimeQuery::Absolute(t) => *t,
         TimeQuery::DayRelative {
             timezone,
@@ -121,10 +124,10 @@ fn timeq_to_bind(q: &TimeQuery) -> Bind {
             let date = match *day_offset > 0 {
                 true => date
                     .checked_add_days(chrono::naive::Days::new(*day_offset as u64))
-                    .expect("failed adding days"),
+                    .ok_or_else(|| Error::integer_out_of_range(*day_offset))?,
                 false => date
                     .checked_sub_days(chrono::naive::Days::new((-day_offset) as u64))
-                    .expect("failed subtracting days"),
+                    .ok_or_else(|| Error::integer_out_of_range(*day_offset))?,
             };
             date.and_hms_opt(0, 0, 0)
                 .expect("naive_date and hms 000 failed")
@@ -132,5 +135,5 @@ fn timeq_to_bind(q: &TimeQuery) -> Bind {
                 .unwrap()
                 .with_timezone(&chrono::Utc)
         }
-    })
+    }))
 }

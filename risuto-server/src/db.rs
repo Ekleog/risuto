@@ -445,11 +445,11 @@ pub fn users_interested_by<'conn>(
     .map(|r| r.map(|u| UserId(u.user_id)).map_err(anyhow::Error::from))
 }
 
-async fn with_tmp_tasks_table<R, F>(conn: &mut sqlx::PgConnection, f: F) -> anyhow::Result<R>
+async fn with_tmp_tasks_table<R, F>(conn: &mut sqlx::PgConnection, f: F) -> Result<R, Error>
 where
     F: for<'a> FnOnce(
         &'a mut sqlx::PgConnection,
-    ) -> Pin<Box<dyn 'a + Send + Future<Output = anyhow::Result<R>>>>,
+    ) -> Pin<Box<dyn 'a + Send + Future<Output = Result<R, Error>>>>,
 {
     sqlx::query("CREATE TEMPORARY TABLE tmp_tasks (id UUID NOT NULL)")
         .execute(&mut *conn)
@@ -570,11 +570,11 @@ pub async fn search_tasks_for_user(
     conn: &mut sqlx::PgConnection,
     owner: UserId,
     query: &Query,
-) -> anyhow::Result<(Vec<Task>, Vec<Event>)> {
+) -> Result<(Vec<Task>, Vec<Event>), Error> {
     let query::Sql {
         where_clause,
         binds,
-    } = query::to_postgres(&query, 2);
+    } = query::to_postgres(&query, 2)?;
     with_tmp_tasks_table(&mut *conn, |conn| {
         Box::pin(async move {
             let query = format!(
@@ -623,7 +623,7 @@ pub async fn search_tasks_for_user(
 
 async fn fetch_tasks_from_tmp_tasks_table(
     conn: &mut sqlx::PgConnection,
-) -> anyhow::Result<(Vec<Task>, Vec<Event>)> {
+) -> Result<(Vec<Task>, Vec<Event>), Error> {
     let tasks = sqlx::query_as::<_, DbTask>(
         "
             SELECT t.id, t.owner_id, t.date, t.initial_title, t.top_comment_id

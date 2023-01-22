@@ -98,11 +98,7 @@ pub async fn search_tasks(
     Json(q): Json<risuto_api::Query>,
 ) -> Result<Json<(Vec<Task>, Vec<Event>)>, Error> {
     q.validate()?;
-    Ok(Json(
-        db::search_tasks_for_user(&mut *conn, user, &q)
-            .await
-            .with_context(|| format!("fetching task list for {:?}", user))?,
-    ))
+    Ok(Json(db::search_tasks_for_user(&mut *conn, user, &q).await?))
 }
 
 pub async fn submit_action(

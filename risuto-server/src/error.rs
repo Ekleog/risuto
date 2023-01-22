@@ -25,6 +25,10 @@ impl Error {
     pub fn invalid_pow() -> Error {
         Error::Api(ApiError::InvalidPow)
     }
+
+    pub fn integer_out_of_range(i: i64) -> Error {
+        Error::Api(ApiError::IntegerOutOfRange(i))
+    }
 }
 
 impl axum::response::IntoResponse for Error {
