@@ -41,7 +41,7 @@ pest_derive = "2.5"
 postgresfixture = "0.3.1"
 rand = "0.8.5"
 reqwest = { version = "0.11.12", features = ["json"] }
-# These need to be from git until this lands: https://github.com/TrueLayer/reqwest-middleware/pull/79
+# TODO: remove once this PR lands https://github.com/TrueLayer/reqwest-middleware/pull/79
 reqwest-middleware = { git = "https://github.com/ekleog/reqwest-middleware", rev = "7690746f07df7d6acd1576e8eb28fdda3b6f50f4" }
 reqwest-retry = { git = "https://github.com/ekleog/reqwest-middleware", rev = "7690746f07df7d6acd1576e8eb28fdda3b6f50f4" }
 serde = { version = "1.0", features = ["derive"] }
@@ -66,6 +66,10 @@ web-sys = { version = "0.3.60", features = ["CssStyleDeclaration", "DataTransfer
 whoami = "1.2"
 ws_stream_wasm = "0.7.3"
 yew = { version = "0.20.0", features = ["csr"] }
+
+[patch.crates-io]
+# TODO: remove once this PR lands https://github.com/chronotope/chrono/pull/942
+chrono = { git = "https://github.com/ekleog/chrono", rev = "6e7034f75b2d8d64624566522a1ff3fb1e4f2951" }
 
 [profile.dev.package.sqlx-macros]
 opt-level = 3

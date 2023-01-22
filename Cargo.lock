@@ -418,8 +418,7 @@ checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
 [[package]]
 name = "chrono"
 version = "0.4.23"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "16b0a3d9ed01224b22057780a37bb8c5dbfe1be8ba48678e7bf57ec4b385411f"
+source = "git+https://github.com/ekleog/chrono?rev=6e7034f75b2d8d64624566522a1ff3fb1e4f2951#6e7034f75b2d8d64624566522a1ff3fb1e4f2951"
 dependencies = [
  "arbitrary",
  "iana-time-zone",
