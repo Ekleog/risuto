@@ -21,8 +21,8 @@ async-trait = "0.1.58"
 axum = { version = "0.6.1", features = ["macros", "ws"] }
 base64 = "0.13.0"
 bcrypt = "0.13.0"
-# TODO: remove once these PRs land https://github.com/camshaft/bolero/pull/108 https://github.com/camshaft/bolero/pull/109
-bolero = { git = "https://github.com/Ekleog/bolero", rev = "12ab0cc90a6a6924447190feec64fa9069cb07ab" }
+# TODO: remove once these PRs land https://github.com/camshaft/bolero/pull/108 https://github.com/camshaft/bolero/pull/112
+bolero = { git = "https://github.com/Ekleog/bolero", rev = "577075994ea11f4d364d09d692134c6abcf56cd0" }
 chrono = { version = "0.4.22", features = ["arbitrary", "serde"] }
 # TODO: remove once this PR lands https://github.com/chronotope/chrono-tz/pull/124
 chrono-tz = { git = "https://github.com/Ekleog/chrono-tz", rev = "d9be1348755f9b6300d363babd0862f20d4ae54d", features = ["arbitrary", "serde"] }
