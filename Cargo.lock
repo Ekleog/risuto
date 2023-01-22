@@ -292,7 +292,7 @@ dependencies = [
 [[package]]
 name = "bolero"
 version = "0.8.0"
-source = "git+https://github.com/Ekleog/bolero?rev=577075994ea11f4d364d09d692134c6abcf56cd0#577075994ea11f4d364d09d692134c6abcf56cd0"
+source = "git+https://github.com/Ekleog/bolero?rev=b1a67cccaca5243af4d9636f9152a4decdfe71a5#b1a67cccaca5243af4d9636f9152a4decdfe71a5"
 dependencies = [
  "bolero-afl",
  "bolero-engine",
@@ -307,7 +307,7 @@ dependencies = [
 [[package]]
 name = "bolero-afl"
 version = "0.8.0"
-source = "git+https://github.com/Ekleog/bolero?rev=577075994ea11f4d364d09d692134c6abcf56cd0#577075994ea11f4d364d09d692134c6abcf56cd0"
+source = "git+https://github.com/Ekleog/bolero?rev=b1a67cccaca5243af4d9636f9152a4decdfe71a5#b1a67cccaca5243af4d9636f9152a4decdfe71a5"
 dependencies = [
  "bolero-engine",
  "cc",
@@ -316,7 +316,7 @@ dependencies = [
 [[package]]
 name = "bolero-engine"
 version = "0.8.1"
-source = "git+https://github.com/Ekleog/bolero?rev=577075994ea11f4d364d09d692134c6abcf56cd0#577075994ea11f4d364d09d692134c6abcf56cd0"
+source = "git+https://github.com/Ekleog/bolero?rev=b1a67cccaca5243af4d9636f9152a4decdfe71a5#b1a67cccaca5243af4d9636f9152a4decdfe71a5"
 dependencies = [
  "anyhow",
  "backtrace",
@@ -329,7 +329,7 @@ dependencies = [
 [[package]]
 name = "bolero-generator"
 version = "0.8.0"
-source = "git+https://github.com/Ekleog/bolero?rev=577075994ea11f4d364d09d692134c6abcf56cd0#577075994ea11f4d364d09d692134c6abcf56cd0"
+source = "git+https://github.com/Ekleog/bolero?rev=b1a67cccaca5243af4d9636f9152a4decdfe71a5#b1a67cccaca5243af4d9636f9152a4decdfe71a5"
 dependencies = [
  "arbitrary",
  "bolero-generator-derive",
@@ -340,7 +340,7 @@ dependencies = [
 [[package]]
 name = "bolero-generator-derive"
 version = "0.8.0"
-source = "git+https://github.com/Ekleog/bolero?rev=577075994ea11f4d364d09d692134c6abcf56cd0#577075994ea11f4d364d09d692134c6abcf56cd0"
+source = "git+https://github.com/Ekleog/bolero?rev=b1a67cccaca5243af4d9636f9152a4decdfe71a5#b1a67cccaca5243af4d9636f9152a4decdfe71a5"
 dependencies = [
  "proc-macro-crate",
  "proc-macro2",
@@ -351,7 +351,7 @@ dependencies = [
 [[package]]
 name = "bolero-honggfuzz"
 version = "0.8.0"
-source = "git+https://github.com/Ekleog/bolero?rev=577075994ea11f4d364d09d692134c6abcf56cd0#577075994ea11f4d364d09d692134c6abcf56cd0"
+source = "git+https://github.com/Ekleog/bolero?rev=b1a67cccaca5243af4d9636f9152a4decdfe71a5#b1a67cccaca5243af4d9636f9152a4decdfe71a5"
 dependencies = [
  "bolero-engine",
 ]
@@ -359,7 +359,7 @@ dependencies = [
 [[package]]
 name = "bolero-kani"
 version = "0.8.0"
-source = "git+https://github.com/Ekleog/bolero?rev=577075994ea11f4d364d09d692134c6abcf56cd0#577075994ea11f4d364d09d692134c6abcf56cd0"
+source = "git+https://github.com/Ekleog/bolero?rev=b1a67cccaca5243af4d9636f9152a4decdfe71a5#b1a67cccaca5243af4d9636f9152a4decdfe71a5"
 dependencies = [
  "bolero-engine",
 ]
@@ -367,7 +367,7 @@ dependencies = [
 [[package]]
 name = "bolero-libfuzzer"
 version = "0.8.0"
-source = "git+https://github.com/Ekleog/bolero?rev=577075994ea11f4d364d09d692134c6abcf56cd0#577075994ea11f4d364d09d692134c6abcf56cd0"
+source = "git+https://github.com/Ekleog/bolero?rev=b1a67cccaca5243af4d9636f9152a4decdfe71a5#b1a67cccaca5243af4d9636f9152a4decdfe71a5"
 dependencies = [
  "bolero-engine",
  "cc",
