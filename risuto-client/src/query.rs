@@ -1,15 +1,17 @@
 use std::str::FromStr;
 
 use crate::{
-    api::{Query, TimeQuery},
+    api::{Query, Time, TimeQuery},
     Comment, DbDump, Task,
 };
 
 use pest::{iterators::Pairs, pratt_parser::PrattParser, Parser as PestParser};
+use risuto_api::Error;
 
 pub trait QueryExt {
     fn from_search(db: &DbDump, tz: &chrono_tz::Tz, search: &str) -> Query;
-    fn matches(&self, task: &Task) -> bool;
+    fn validate_now(&self) -> Result<(), Error>;
+    fn matches(&self, task: &Task) -> Result<bool, Error>;
 }
 
 impl QueryExt for Query {
@@ -29,7 +31,31 @@ impl QueryExt for Query {
         res
     }
 
-    fn matches(&self, task: &Task) -> bool {
+    fn validate_now(&self) -> Result<(), Error> {
+        self.validate()?;
+        match self {
+            Query::Any(q) => q
+                .iter()
+                .map(QueryExt::validate_now)
+                .collect::<Result<(), Error>>(),
+            Query::All(q) => q
+                .iter()
+                .map(QueryExt::validate_now)
+                .collect::<Result<(), Error>>(),
+            Query::Not(q) => q.validate_now(),
+            Query::Archived(_) => Ok(()),
+            Query::Done(_) => Ok(()),
+            Query::Tag { tag: _, backlog: _ } => Ok(()),
+            Query::Untagged(_) => Ok(()),
+            Query::ScheduledForBefore(q) => timeq_validate_now(q),
+            Query::ScheduledForAfter(q) => timeq_validate_now(q),
+            Query::BlockedUntilAtMost(q) => timeq_validate_now(q),
+            Query::BlockedUntilAtLeast(q) => timeq_validate_now(q),
+            Query::Phrase(_) => Ok(()),
+        }
+    }
+
+    fn matches(&self, task: &Task) -> Result<bool, Error> {
         let tokenized = has_fts(self).then(|| tokenize_task(task));
         matches_impl(self, task, &tokenized)
     }
@@ -52,11 +78,23 @@ fn has_fts(q: &Query) -> bool {
     }
 }
 
-fn matches_impl(q: &Query, task: &Task, tokenized: &Option<Vec<Vec<String>>>) -> bool {
-    match q {
-        Query::Any(q) => q.iter().any(|q| matches_impl(q, task, tokenized)),
-        Query::All(q) => q.iter().all(|q| matches_impl(q, task, tokenized)),
-        Query::Not(q) => !matches_impl(q, task, tokenized),
+fn timeq_validate_now(q: &TimeQuery) -> Result<(), Error> {
+    q.eval_now().map(|_| ())
+}
+
+fn matches_impl(
+    q: &Query,
+    task: &Task,
+    tokenized: &Option<Vec<Vec<String>>>,
+) -> Result<bool, Error> {
+    Ok(match q {
+        Query::Any(queries) => queries
+            .iter()
+            .any(|q| matches_impl(q, task, tokenized) == Ok(true)),
+        Query::All(queries) => queries
+            .iter()
+            .all(|q| matches_impl(q, task, tokenized) == Ok(true)),
+        Query::Not(q) => matches_impl(q, task, tokenized) == Ok(false),
         Query::Archived(a) => task.is_archived == *a,
         Query::Done(d) => task.is_done == *d,
         Query::Tag { tag, backlog } => match task.current_tags.get(tag) {
@@ -67,37 +105,37 @@ fn matches_impl(q: &Query, task: &Task, tokenized: &Option<Vec<Vec<String>>>) ->
             },
         },
         Query::Untagged(u) => task.current_tags.is_empty() == *u,
-        Query::ScheduledForAfter(d) => task
-            .scheduled_for
-            .map(|s| s >= d.eval_now().expect("failed to eval query"))
-            .unwrap_or(false),
-        Query::ScheduledForBefore(d) => task
-            .scheduled_for
-            .map(|s| s <= d.eval_now().expect("failed to eval query"))
-            .unwrap_or(false),
-        Query::BlockedUntilAtLeast(d) => task
-            .blocked_until
-            .map(|b| b >= d.eval_now().expect("failed to eval query"))
-            .unwrap_or(false),
-        Query::BlockedUntilAtMost(d) => task
-            .blocked_until
-            .map(|b| b <= d.eval_now().expect("failed to eval query"))
-            .unwrap_or(false),
+        Query::ScheduledForAfter(d) => timeq_matches(d, &task.scheduled_for, |q, t| t >= q)?,
+        Query::ScheduledForBefore(d) => timeq_matches(d, &task.scheduled_for, |q, t| t <= q)?,
+        Query::BlockedUntilAtLeast(d) => timeq_matches(d, &task.blocked_until, |q, t| t >= q)?,
+        Query::BlockedUntilAtMost(d) => timeq_matches(d, &task.blocked_until, |q, t| t <= q)?,
         Query::Phrase(p) => {
             let q = tokenize(p);
             if q.is_empty() {
-                return true; // query consisting of nothing but stop-words
+                return Ok(true); // query consisting of nothing but stop-words
             }
             let tokenized = tokenized.as_ref().expect(
                 "called matched_impl on query that has fts without providing tokenized text",
             );
             for text in tokenized {
                 if text.windows(q.len()).any(|w| w == q) {
-                    return true;
+                    return Ok(true);
                 }
             }
             false
         }
+    })
+}
+
+fn timeq_matches(
+    q: &TimeQuery,
+    t: &Option<Time>,
+    check: impl FnOnce(&Time, &Time) -> bool,
+) -> Result<bool, Error> {
+    let q = q.eval_now()?;
+    match t {
+        None => Ok(false),
+        Some(t) => Ok(check(&q, t)),
     }
 }
 

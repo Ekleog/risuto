@@ -31,9 +31,9 @@ impl TimeQuery {
         }
     }
 
-    pub fn eval_now(&self) -> Option<Time> {
+    pub fn eval_now(&self) -> Result<Time, Error> {
         match self {
-            TimeQuery::Absolute(t) => Some(*t),
+            TimeQuery::Absolute(t) => Ok(*t),
             TimeQuery::DayRelative {
                 timezone,
                 day_offset,
@@ -47,6 +47,7 @@ impl TimeQuery {
                 date.and_then(|d| d.and_hms_opt(0, 0, 0))
                     .and_then(|d| d.and_local_timezone(*timezone).single())
                     .map(|d| d.with_timezone(&chrono::Utc))
+                    .ok_or(Error::IntegerOutOfRange(*day_offset))
             }
         }
     }

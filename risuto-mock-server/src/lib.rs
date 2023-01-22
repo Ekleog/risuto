@@ -8,7 +8,7 @@ use risuto_client::{
         self, Action, AuthInfo, AuthToken, Error, Event, NewSession, NewUser, Query, Search, Tag,
         UserId, Uuid,
     },
-    DbDump,
+    DbDump, QueryExt,
 };
 use tokio::sync::mpsc;
 
@@ -169,11 +169,11 @@ impl MockServer {
         tok: AuthToken,
         q: Query,
     ) -> Result<(Vec<api::Task>, Vec<Event>), Error> {
-        q.validate()?;
+        q.validate_now()?;
         let u = self.resolve(tok)?;
         let mut tasks = Vec::new();
         let mut evts = Vec::new();
-        for t in u.db.search(&Search::stub_for_query(q)) {
+        for t in u.db.search(&Search::stub_for_query(q))? {
             tasks.push(api::Task {
                 id: t.id,
                 owner_id: t.owner_id,

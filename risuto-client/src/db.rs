@@ -2,6 +2,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use anyhow::anyhow;
 use async_trait::async_trait;
+use risuto_api::Error;
 
 use crate::{
     api::{self, AuthInfo, Db, EventId, Search, SearchId, Tag, TagId, TaskId, Time, User, UserId},
@@ -83,17 +84,17 @@ impl DbDump {
             .map(|t| t.clone())
     }
 
-    /// Returns a list of all the tasks currently in this tag, ordered by increasing
-    /// priority and partitioned according to the sorting order
-    pub fn search(&self, s: &Search) -> Vec<Arc<Task>> {
-        let mut res = self
-            .tasks
-            .values()
-            .filter(|t| s.filter.matches(t))
-            .cloned()
-            .collect::<Vec<_>>();
+    /// Returns a list of all the tasks matching this search, ordered by increasing
+    /// priority according to the search order
+    pub fn search(&self, s: &Search) -> Result<Vec<Arc<Task>>, Error> {
+        let mut res = Vec::new();
+        for t in self.tasks.values() {
+            if s.filter.matches(t)? {
+                res.push(t.clone());
+            }
+        }
         s.order.sort(&mut res);
-        res
+        Ok(res)
     }
 }
 
