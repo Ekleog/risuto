@@ -186,14 +186,17 @@ impl MockServer {
     }
 
     pub async fn submit_action(&mut self, tok: AuthToken, a: Action) -> Result<(), Error> {
-        self.resolve(tok)?;
+        let u = self.resolve_mut(tok)?;
+        if !a
+            .is_authorized(&mut &u.db)
+            .await
+            .expect("checking if action is allowed on a DbDump")
+        {
+            return Err(Error::PermissionDenied);
+        }
         match a {
-            Action::NewUser(_) => return Err(Error::PermissionDenied),
+            Action::NewUser(_) => unreachable!(),
             Action::NewTask(t, top_comm) => {
-                let u = self.resolve_mut(tok)?;
-                if u.db.owner != t.owner_id {
-                    return Err(Error::PermissionDenied);
-                }
                 u.db.add_tasks(vec![t.clone()]);
                 u.db.add_events_and_refresh_all(vec![api::Event {
                     id: t.top_comment_id,
