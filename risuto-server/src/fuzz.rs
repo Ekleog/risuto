@@ -5,7 +5,7 @@ use axum::{
     extract::FromRequestParts,
     http::{self, request},
 };
-use risuto_api::{Error as ApiError, NewSession, NewUser, UserId};
+use risuto_api::{Error as ApiError, NewSession, NewUser, Query, UserId};
 use risuto_mock_server::MockServer;
 use std::{cmp, fmt::Debug, ops::RangeTo, panic::AssertUnwindSafe, path::Path};
 use tower::{Service, ServiceExt};
@@ -242,8 +242,28 @@ where
             }));
         }
     }
-    Err(ApiError::parse(&body)
-        .unwrap_or_else(|err| panic!("parsing error response body {err}, body is {body:?}")))
+    Err(ApiError::parse(&body).unwrap_or_else(|err| {
+        panic!(
+            r#"
+                Failed parsing resp error body!
+
+                The error is the following:
+                ---
+                {err}
+                ---
+
+                Response body is:
+                ---
+                {body:?}
+                ---
+
+                Request was:
+                ---
+                {req_body:?}
+                ---
+            "#
+        )
+    }))
 }
 
 async fn run_on_app<Req, Resp>(
@@ -331,6 +351,17 @@ impl ComparativeFuzzer {
                 self.sessions[0]
             }
         }
+    }
+
+    fn sanitize_query(&self, q: Query) -> Query {
+        // TODO: make Query::Tag.tag be likely to actually be a valid tag (once CreateTag will be implemented)
+        if let Err(_) =
+            serde_json::from_slice::<Query>(&serde_json::to_vec(&q).expect("serializing query"))
+        {
+            // recursion limit hit or similar issue
+            return Query::Done(true);
+        }
+        q
     }
 
     #[async_recursion]
@@ -441,7 +472,7 @@ impl ComparativeFuzzer {
             }
             FuzzOp::SearchTasks { sid, query } => {
                 let sess = self.get_session(sid).await;
-                // TODO: make Query::Tag.tag be likely to actually be a valid tag (once CreateTag will be implemented)
+                let query = self.sanitize_query(query);
                 compare(
                     "SearchTasks",
                     run_on_app(
