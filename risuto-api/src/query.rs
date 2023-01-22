@@ -22,13 +22,7 @@ pub enum TimeQuery {
 
 impl TimeQuery {
     pub fn validate(&self) -> Result<(), Error> {
-        match self {
-            TimeQuery::Absolute(t) => crate::validate_time(t),
-            TimeQuery::DayRelative {
-                timezone: _,
-                day_offset: _,
-            } => Ok(()),
-        }
+        crate::validate_time(&self.eval_now()?)
     }
 
     pub fn eval_now(&self) -> Result<Time, Error> {
