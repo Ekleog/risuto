@@ -1,4 +1,4 @@
-use crate::{Db, Event, Task, User};
+use crate::{Db, Error, Event, Task, User};
 
 #[derive(
     Clone,
@@ -25,6 +25,21 @@ impl Action {
             Action::NewUser(_) => Ok(false), // Only admin can create a user for now
             Action::NewTask(t, _) => Ok(t.owner_id == db.current_user()),
             Action::NewEvent(e) => e.is_authorized(db).await,
+        }
+    }
+
+    /// Helper function to check whether the action is valid.
+    ///
+    /// Note that you should not rely on the fact that an Action struct is "valid" according
+    /// to this in order to ensure safety of your code. (parsing is better than validation)
+    pub fn validate(&self) -> Result<(), Error> {
+        match self {
+            Action::NewUser(_) => Err(Error::PermissionDenied),
+            Action::NewTask(t, top_comm) => {
+                crate::validate_string(&top_comm)?;
+                t.validate()
+            }
+            Action::NewEvent(e) => e.validate(),
         }
     }
 }

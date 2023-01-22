@@ -97,6 +97,7 @@ pub async fn search_tasks(
     mut conn: PgConn,
     Json(q): Json<risuto_api::Query>,
 ) -> Result<Json<(Vec<Task>, Vec<Event>)>, Error> {
+    q.validate()?;
     Ok(Json(
         db::search_tasks_for_user(&mut *conn, user, &q)
             .await
@@ -110,6 +111,7 @@ pub async fn submit_action(
     mut conn: PgConn,
     Json(a): Json<Action>,
 ) -> Result<(), Error> {
+    a.validate()?;
     let mut db = db::PostgresDb {
         conn: &mut *conn,
         user,

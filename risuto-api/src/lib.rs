@@ -11,6 +11,7 @@ mod user;
 
 pub use action::Action;
 pub use auth::{AuthInfo, AuthToken, NewSession};
+use chrono::Datelike;
 pub use db::Db;
 pub use error::Error;
 pub use event::{Event, EventData, EventId, OrderId};
@@ -39,6 +40,16 @@ pub enum FeedMessage {
 pub fn validate_string(s: &str) -> Result<(), Error> {
     if s.chars().any(|c| c == '\0') {
         Err(Error::NullByteInString(String::from(s)))
+    } else {
+        Ok(())
+    }
+}
+
+/// Helper function to easily know whether a timestamp is valid to send to the API
+pub fn validate_time(s: &Time) -> Result<(), Error> {
+    let year = s.year();
+    if year < -4000 || year > 200000 {
+        Err(Error::InvalidTime(*s))
     } else {
         Ok(())
     }

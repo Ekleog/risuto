@@ -4,6 +4,8 @@ use anyhow::{anyhow, Context};
 use serde_json::json;
 use uuid::Uuid;
 
+use crate::Time;
+
 #[derive(Debug, Eq, PartialEq, thiserror::Error)]
 pub enum Error {
     #[error("Unknown error: {0}")]
@@ -26,6 +28,9 @@ pub enum Error {
 
     #[error("Invalid character in name {0:?}")]
     InvalidName(String),
+
+    #[error("Invalid time")]
+    InvalidTime(Time),
 }
 
 impl Error {
@@ -39,6 +44,7 @@ impl Error {
             Error::NameAlreadyUsed(_) => StatusCode::CONFLICT,
             Error::NullByteInString(_) => StatusCode::BAD_REQUEST,
             Error::InvalidName(_) => StatusCode::BAD_REQUEST,
+            Error::InvalidTime(_) => StatusCode::BAD_REQUEST,
         }
     }
 
@@ -75,6 +81,11 @@ impl Error {
                 "message": "there was an invalid character in a user name",
                 "type": "invalid-name",
                 "name": n,
+            }),
+            Error::InvalidTime(t) => json!({
+                "message": "passed time is not acceptable",
+                "type": "invalid-time",
+                "time": t,
             }),
         })
         .expect("serializing conflict")
@@ -117,6 +128,13 @@ impl Error {
                         anyhow!("error is about an invalid name but no name was provided")
                     })?,
                 )),
+                "invalid-time" => Error::InvalidTime(
+                    data.get("time")
+                        .and_then(|s| serde_json::from_value(s.clone()).ok())
+                        .ok_or_else(|| {
+                            anyhow!("error is about an invalid time but no time was provided")
+                        })?,
+                ),
                 _ => return Err(anyhow!("error contents has unknown type")),
             },
         )

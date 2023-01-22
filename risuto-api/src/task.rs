@@ -1,6 +1,6 @@
 use uuid::Uuid;
 
-use crate::{EventId, Time, UserId, STUB_UUID};
+use crate::{Error, EventId, Time, UserId, STUB_UUID};
 
 #[derive(
     Clone,
@@ -41,4 +41,11 @@ pub struct Task {
     #[generator(bolero::generator::gen_with::<String>().len(0..100usize))]
     pub initial_title: String,
     pub top_comment_id: EventId,
+}
+
+impl Task {
+    pub fn validate(&self) -> Result<(), Error> {
+        crate::validate_time(&self.date)?;
+        crate::validate_string(&self.initial_title)
+    }
 }

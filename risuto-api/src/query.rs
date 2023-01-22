@@ -1,4 +1,4 @@
-use crate::{TagId, Time};
+use crate::{Error, TagId, Time};
 
 #[derive(
     Clone,
@@ -21,6 +21,16 @@ pub enum TimeQuery {
 }
 
 impl TimeQuery {
+    pub fn validate(&self) -> Result<(), Error> {
+        match self {
+            TimeQuery::Absolute(t) => crate::validate_time(t),
+            TimeQuery::DayRelative {
+                timezone: _,
+                day_offset: _,
+            } => Ok(()),
+        }
+    }
+
     pub fn eval_now(&self) -> Option<Time> {
         match self {
             TimeQuery::Absolute(t) => Some(*t),
@@ -70,5 +80,32 @@ pub enum Query {
 impl Query {
     pub fn tag(tag: TagId) -> Query {
         Query::Tag { tag, backlog: None }
+    }
+
+    pub fn validate(&self) -> Result<(), Error> {
+        match self {
+            Query::Any(queries) => {
+                for q in queries {
+                    q.validate()?;
+                }
+                Ok(())
+            }
+            Query::All(queries) => {
+                for q in queries {
+                    q.validate()?;
+                }
+                Ok(())
+            }
+            Query::Not(q) => q.validate(),
+            Query::Archived(_) => Ok(()),
+            Query::Done(_) => Ok(()),
+            Query::Tag { tag: _, backlog: _ } => Ok(()),
+            Query::Untagged(_) => Ok(()),
+            Query::ScheduledForBefore(t) => t.validate(),
+            Query::ScheduledForAfter(t) => t.validate(),
+            Query::BlockedUntilAtMost(t) => t.validate(),
+            Query::BlockedUntilAtLeast(t) => t.validate(),
+            Query::Phrase(s) => crate::validate_string(s),
+        }
     }
 }

@@ -2,7 +2,7 @@ use anyhow::Context;
 use chrono::Utc;
 use uuid::Uuid;
 
-use crate::{Db, TagId, TaskId, Time, UserId, STUB_UUID, UUID_TODAY, UUID_UNTAGGED};
+use crate::{Db, Error, TagId, TaskId, Time, UserId, STUB_UUID, UUID_TODAY, UUID_UNTAGGED};
 
 #[derive(
     Clone,
@@ -180,5 +180,42 @@ impl Event {
                 auth!(par_task).can_read
             }
         })
+    }
+
+    // See comments on other `validate` functions throughout risuto-api
+    pub fn validate(&self) -> Result<(), Error> {
+        crate::validate_time(&self.date)?;
+        self.data.validate()
+    }
+}
+
+impl EventData {
+    // See comments on other `validate` functions throughout risuto-api
+    pub fn validate(&self) -> Result<(), Error> {
+        match self {
+            EventData::SetTitle(t) => crate::validate_string(t),
+            EventData::SetDone(_) => Ok(()),
+            EventData::SetArchived(_) => Ok(()),
+            EventData::BlockedUntil(None) => Ok(()),
+            EventData::BlockedUntil(Some(t)) => crate::validate_time(t),
+            EventData::ScheduleFor(None) => Ok(()),
+            EventData::ScheduleFor(Some(t)) => crate::validate_time(t),
+            EventData::SetOrder { order: _, prio: _ } => Ok(()),
+            EventData::AddTag {
+                tag: _,
+                prio: _,
+                backlog: _,
+            } => Ok(()),
+            EventData::RmTag(_) => Ok(()),
+            EventData::AddComment { text, parent_id: _ } => crate::validate_string(text),
+            EventData::EditComment {
+                text,
+                comment_id: _,
+            } => crate::validate_string(text),
+            EventData::SetEventRead {
+                event_id: _,
+                now_read: _,
+            } => Ok(()),
+        }
     }
 }

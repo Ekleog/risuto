@@ -169,6 +169,7 @@ impl MockServer {
         tok: AuthToken,
         q: Query,
     ) -> Result<(Vec<api::Task>, Vec<Event>), Error> {
+        q.validate()?;
         let u = self.resolve(tok)?;
         let mut tasks = Vec::new();
         let mut evts = Vec::new();
@@ -186,6 +187,7 @@ impl MockServer {
     }
 
     pub async fn submit_action(&mut self, tok: AuthToken, a: Action) -> Result<(), Error> {
+        a.validate()?;
         let u = self.resolve_mut(tok)?;
         if !a
             .is_authorized(&mut &u.db)

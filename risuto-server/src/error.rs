@@ -33,7 +33,8 @@ impl axum::response::IntoResponse for Error {
             Error::Anyhow(err) => {
                 tracing::error!(?err, "internal server error");
                 #[cfg(not(test))]
-                let err = ApiError::Unknown(String::from("Internal server error, see logs for details"));
+                let err =
+                    ApiError::Unknown(String::from("Internal server error, see logs for details"));
                 #[cfg(test)]
                 let err = ApiError::Unknown(format!("Internal server error: {err:?}"));
                 err
