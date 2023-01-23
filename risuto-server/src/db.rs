@@ -598,6 +598,8 @@ pub async fn search_tasks_for_user(
                         ON vtb.task_id = t.id
                     LEFT JOIN v_tasks_comments vtc
                         ON vtc.task_id = t.id
+                    LEFT JOIN v_tasks_text vtx
+                        ON vtx.task_id = t.id
                     WHERE vtu.user_id = $1
                     AND {where_clause}
                 "
