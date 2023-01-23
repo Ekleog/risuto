@@ -58,7 +58,8 @@ async fn main() -> anyhow::Result<()> {
         }
     };
 
-    let app = app(db, admin_token).await;
+    let feeds = UserFeeds::new();
+    let app = app(db, feeds, admin_token).await;
 
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
     tracing::info!("listening on {}", addr);
@@ -78,10 +79,8 @@ async fn create_sqlx_pool(db_url: &str) -> anyhow::Result<PgPool> {
     ))
 }
 
-async fn app(db: PgPool, admin_token: Option<AuthToken>) -> Router {
+async fn app(db: PgPool, feeds: UserFeeds, admin_token: Option<AuthToken>) -> Router {
     use handlers::*;
-
-    let feeds = UserFeeds::new();
 
     let state = AppState {
         db,

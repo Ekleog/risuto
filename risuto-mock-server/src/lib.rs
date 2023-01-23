@@ -3,6 +3,7 @@ use std::{
     sync::Arc,
 };
 
+use futures::channel::mpsc;
 use risuto_client::{
     api::{
         self, Action, AuthInfo, AuthToken, Error, Event, NewSession, NewUser, Query, Search, Tag,
@@ -10,7 +11,6 @@ use risuto_client::{
     },
     DbDump, QueryExt,
 };
-use tokio::sync::mpsc;
 
 pub struct MockServer(BTreeMap<UserId, DbUser>);
 
@@ -28,7 +28,7 @@ struct DbUser {
 impl DbUser {
     async fn relay_action(&mut self, a: Action) {
         self.feeds
-            .retain_mut(|f| matches!(f.send(a.clone()), Ok(())));
+            .retain_mut(|f| matches!(f.unbounded_send(a.clone()), Ok(())));
     }
 }
 
@@ -229,7 +229,7 @@ impl MockServer {
         tok: AuthToken,
     ) -> Result<mpsc::UnboundedReceiver<Action>, Error> {
         let u = self.resolve_mut(tok)?;
-        let (sender, receiver) = mpsc::unbounded_channel();
+        let (sender, receiver) = mpsc::unbounded();
         u.feeds.push(sender);
         Ok(receiver)
     }

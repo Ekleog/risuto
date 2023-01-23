@@ -2,10 +2,11 @@
 
 use async_recursion::async_recursion;
 use axum::{
-    extract::FromRequestParts,
+    extract::{ws::Message, FromRequestParts},
     http::{self, request},
 };
-use risuto_api::{Error as ApiError, NewSession, NewUser, Query, UserId};
+use futures::{channel::mpsc, StreamExt};
+use risuto_api::{Action, Error as ApiError, NewSession, NewUser, Query, UserId};
 use risuto_mock_server::MockServer;
 use std::{cmp, fmt::Debug, ops::RangeTo, panic::AssertUnwindSafe, path::Path};
 use tower::{Service, ServiceExt};
@@ -188,9 +189,12 @@ enum FuzzOp {
         sid: usize,
         evt: risuto_api::Action,
     },
-    /* TODO:
     OpenActionFeed {
         sid: usize,
+    },
+    /* TODO:
+    PingActionFeed {
+        feed_id: usize,
     },
     CloseActionFeed {
         feed_id: usize,
@@ -333,24 +337,35 @@ struct Session {
     mock: AuthToken,
 }
 
+struct Feed {
+    app_receiver: mpsc::UnboundedReceiver<Message>,
+    app_sender: mpsc::UnboundedSender<Result<Message, axum::Error>>,
+    mock_receiver: mpsc::UnboundedReceiver<Action>,
+}
+
 struct ComparativeFuzzer {
     admin_token: Uuid,
     app: Router,
     mock: MockServer,
+    app_db: PgPool,
+    app_feeds: UserFeeds,
     sessions: Vec<Session>,
+    feeds: Vec<Option<Feed>>,
 }
 
 impl ComparativeFuzzer {
     async fn new(pool: PgPool) -> ComparativeFuzzer {
         let admin_token = Uuid::new_v4();
-        let app = app(pool, Some(AuthToken(admin_token))).await;
-        let mock = MockServer::new();
-        let sessions = Vec::new();
+        let feeds = UserFeeds::new();
+        let app = app(pool.clone(), feeds.clone(), Some(AuthToken(admin_token))).await;
         ComparativeFuzzer {
             admin_token,
             app,
-            mock,
-            sessions,
+            mock: MockServer::new(),
+            app_db: pool,
+            app_feeds: feeds.clone(),
+            sessions: Vec::new(),
+            feeds: Vec::new(),
         }
     }
 
@@ -505,7 +520,49 @@ impl ComparativeFuzzer {
                     )
                     .await,
                     self.mock.submit_action(sess.mock, evt).await,
-                )
+                );
+            }
+            FuzzOp::OpenActionFeed { sid } => {
+                let sess = self.get_session(sid).await;
+                let (app_sender, serv_receiver) = mpsc::unbounded();
+                let (serv_sender, mut app_receiver) = mpsc::unbounded();
+                let (_, app_res) = futures::join!(
+                    async {
+                        crate::handlers::action_feed_impl(
+                            serv_sender,
+                            serv_receiver,
+                            self.app_db.clone(),
+                            self.app_feeds.clone(),
+                        )
+                        .await;
+                    },
+                    async {
+                        // TODO: also fuzz protocol violations here; but this should probably be a
+                        // separate fuzzer
+                        app_sender
+                            .unbounded_send(Ok(Message::Text(format!("{}", sess.app.0))))
+                            .expect("sending auth token to feed");
+                        match app_receiver.next().await {
+                            Some(Message::Text(t)) if t == "ok" => Ok(()),
+                            Some(Message::Text(t)) if t == "permission denied" => {
+                                Err(ApiError::PermissionDenied)
+                            }
+                            o => panic!("unexpected reply to auth request {o:?}"),
+                        }
+                    }
+                );
+                let (mock_res, mock_receiver) = match self.mock.action_feed(sess.mock).await {
+                    Ok(receiver) => (Ok(()), Some(receiver)),
+                    Err(e) => (Err(e), None),
+                };
+                compare("OpenActionFeed", app_res, mock_res);
+                if let Some(mock_receiver) = mock_receiver {
+                    self.feeds.push(Some(Feed {
+                        app_sender,
+                        app_receiver,
+                        mock_receiver,
+                    }));
+                }
             }
         }
     }

@@ -2556,6 +2556,7 @@ name = "risuto-mock-server"
 version = "0.1.0"
 dependencies = [
  "bcrypt",
+ "futures",
  "risuto-client",
  "tokio",
 ]
