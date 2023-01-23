@@ -36,7 +36,10 @@ impl TimeQuery {
                 let date = chrono::Utc::now().date_naive();
                 let date = match *day_offset >= 0 {
                     true => date.checked_add_days(chrono::naive::Days::new(*day_offset as u64)),
-                    false => date.checked_sub_days(chrono::naive::Days::new(-day_offset as u64)),
+                    false => day_offset
+                        .checked_neg()
+                        .map(|d| chrono::naive::Days::new(d as u64))
+                        .and_then(|offset| date.checked_sub_days(offset)),
                 };
                 date.and_then(|d| d.and_hms_opt(0, 0, 0))
                     .and_then(|d| d.and_local_timezone(*timezone).single())
