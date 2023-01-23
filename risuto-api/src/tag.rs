@@ -11,6 +11,7 @@ use crate::{UserId, STUB_UUID};
     Ord,
     PartialEq,
     PartialOrd,
+    arbitrary::Arbitrary,
     bolero::generator::TypeGenerator,
     serde::Deserialize,
     serde::Serialize,

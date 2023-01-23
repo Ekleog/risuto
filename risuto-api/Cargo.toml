@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 anyhow.workspace = true
+arbitrary.workspace = true
 async-trait.workspace = true
 bcrypt.workspace = true
 bolero.workspace = true

@@ -15,6 +15,7 @@ risuto-client = { path = "./risuto-client" }
 risuto-mock-server = { path = "./risuto-mock-server" }
 
 anyhow = "1.0"
+arbitrary = "1.2"
 arrayvec = "0.7.2"
 async-recursion = "1.0"
 async-trait = "0.1.58"
@@ -22,7 +23,7 @@ axum = { version = "0.6.1", features = ["macros", "ws"] }
 base64 = "0.13.0"
 bcrypt = "0.13.0"
 # TODO: remove once these PRs land https://github.com/camshaft/bolero/pull/108 https://github.com/camshaft/bolero/pull/112 https://github.com/camshaft/bolero/pull/115
-bolero = { git = "https://github.com/Ekleog/bolero", rev = "d0758dbb711562593d6a26cdf4c4a5628754bf42" }
+bolero = { git = "https://github.com/Ekleog/bolero", rev = "376115b94bbc1975843c641c55083646cce38027", features = ["arbitrary"] }
 chrono = { version = "0.4.22", features = ["arbitrary", "serde"] }
 # TODO: remove once this PR lands https://github.com/chronotope/chrono-tz/pull/124
 chrono-tz = { git = "https://github.com/Ekleog/chrono-tz", rev = "d9be1348755f9b6300d363babd0862f20d4ae54d", features = ["arbitrary", "serde"] }

@@ -5,6 +5,7 @@ use crate::{Error, TagId, Time};
     Debug,
     Eq,
     PartialEq,
+    arbitrary::Arbitrary,
     bolero::generator::TypeGenerator,
     serde::Deserialize,
     serde::Serialize,
@@ -55,15 +56,18 @@ impl TimeQuery {
     Debug,
     Eq,
     PartialEq,
+    arbitrary::Arbitrary,
     bolero::generator::TypeGenerator,
     serde::Deserialize,
     serde::Serialize,
 )]
 pub enum Query {
-    Any(#[generator(bolero::generator::gen_with::<Vec<Query>>().len(0..5usize))] Vec<Query>),
-    All(#[generator(bolero::generator::gen_with::<Vec<Query>>().len(0..5usize))] Vec<Query>),
+    // TODO: use TypeGenerator after fixing bolero's handling of recursive structs
+    // (right now the fuzzer rightfully finds a stack overflow in... bolero's TypeGenerator)
+    Any(#[generator(bolero::generator::gen_arbitrary())] Vec<Query>),
+    All(#[generator(bolero::generator::gen_arbitrary())] Vec<Query>),
     // TODO: the attr below should not be necessary, but see https://github.com/rust-lang/rust/issues/48214#issuecomment-1374372954
-    Not(#[generator(bolero::generator::gen())] Box<Query>),
+    Not(#[generator(bolero::generator::gen_arbitrary())] Box<Query>),
     Archived(bool),
     Done(bool),
     Tag { tag: TagId, backlog: Option<bool> },
