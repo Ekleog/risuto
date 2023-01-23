@@ -312,6 +312,21 @@ fn resize_int(fuzz_id: usize, RangeTo { end }: RangeTo<usize>) -> Option<usize> 
     Some(cmp::min(id, end - 1)) // in case id was actually over end - 1 due to rounding
 }
 
+fn sanitize_query(q: Query) -> Option<Query> {
+    // TODO: make Query::Tag.tag be likely to actually be a valid tag (once CreateTag will be implemented)
+    match serde_json::from_slice::<Query>(&serde_json::to_vec(&q).expect("serializing query")) {
+        // recursion limit hit or similar issue
+        Err(_) => None,
+
+        // eg. chrono leap seconds are do not round-trip nicely through json
+        // (https://github.com/chronotope/chrono/issues/944)
+        Ok(deserialized) if q != deserialized => None,
+
+        // All went fine
+        Ok(_) => Some(q),
+    }
+}
+
 #[derive(Clone, Copy)]
 struct Session {
     app: AuthToken,
@@ -351,17 +366,6 @@ impl ComparativeFuzzer {
                 self.sessions[0]
             }
         }
-    }
-
-    fn sanitize_query(&self, q: Query) -> Query {
-        // TODO: make Query::Tag.tag be likely to actually be a valid tag (once CreateTag will be implemented)
-        if let Err(_) =
-            serde_json::from_slice::<Query>(&serde_json::to_vec(&q).expect("serializing query"))
-        {
-            // recursion limit hit or similar issue
-            return Query::Done(true);
-        }
-        q
     }
 
     #[async_recursion]
@@ -472,19 +476,20 @@ impl ComparativeFuzzer {
             }
             FuzzOp::SearchTasks { sid, query } => {
                 let sess = self.get_session(sid).await;
-                let query = self.sanitize_query(query);
-                compare(
-                    "SearchTasks",
-                    run_on_app(
-                        &mut self.app,
-                        "POST",
-                        "/api/search-tasks",
-                        Some(sess.app.0),
-                        &query,
-                    )
-                    .await,
-                    self.mock.search_tasks(sess.mock, query),
-                );
+                if let Some(query) = sanitize_query(query) {
+                    compare(
+                        "SearchTasks",
+                        run_on_app(
+                            &mut self.app,
+                            "POST",
+                            "/api/search-tasks",
+                            Some(sess.app.0),
+                            &query,
+                        )
+                        .await,
+                        self.mock.search_tasks(sess.mock, query),
+                    );
+                }
             }
             FuzzOp::SubmitAction { sid, evt } => {
                 let sess = self.get_session(sid).await;
