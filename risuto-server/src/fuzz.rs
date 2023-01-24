@@ -316,19 +316,31 @@ fn resize_int(fuzz_id: usize, RangeTo { end }: RangeTo<usize>) -> Option<usize> 
     Some(cmp::min(id, end - 1)) // in case id was actually over end - 1 due to rounding
 }
 
-fn sanitize_query(q: Query) -> Option<Query> {
-    // TODO: make Query::Tag.tag be likely to actually be a valid tag (once CreateTag will be implemented)
-    match serde_json::from_slice::<Query>(&serde_json::to_vec(&q).expect("serializing query")) {
+fn check_json_roundtrip_is_identity<T>(t: T) -> Option<T>
+where
+    T: Eq + serde::Serialize + for<'de> serde::Deserialize<'de>,
+{
+    match serde_json::from_slice::<T>(&serde_json::to_vec(&t).expect("serializing to json")) {
         // recursion limit hit or similar issue
         Err(_) => None,
 
         // eg. chrono leap seconds are do not round-trip nicely through json
         // (https://github.com/chronotope/chrono/issues/944)
-        Ok(deserialized) if q != deserialized => None,
+        Ok(deserialized) if t != deserialized => None,
 
         // All went fine
-        Ok(_) => Some(q),
+        Ok(_) => Some(t),
     }
+}
+
+fn sanitize_query(q: Query) -> Option<Query> {
+    // TODO: make Query::Tag.tag be likely to actually be a valid tag (once CreateTag will be implemented)
+    check_json_roundtrip_is_identity(q)
+}
+
+fn sanitize_action(action: Action) -> Option<Action> {
+    // TODO: make Action::*Id likely to actually be valid IDs
+    check_json_roundtrip_is_identity(action)
 }
 
 #[derive(Clone, Copy)]
@@ -508,19 +520,20 @@ impl ComparativeFuzzer {
             }
             FuzzOp::SubmitAction { sid, evt } => {
                 let sess = self.get_session(sid).await;
-                // TODO: make Action::*Id likely to actually be valid IDs
-                compare(
-                    "SubmitAction",
-                    run_on_app(
-                        &mut self.app,
-                        "POST",
-                        "/api/submit-action",
-                        Some(sess.app.0),
-                        &evt,
-                    )
-                    .await,
-                    self.mock.submit_action(sess.mock, evt).await,
-                );
+                if let Some(evt) = sanitize_action(evt) {
+                    compare(
+                        "SubmitAction",
+                        run_on_app(
+                            &mut self.app,
+                            "POST",
+                            "/api/submit-action",
+                            Some(sess.app.0),
+                            &evt,
+                        )
+                        .await,
+                        self.mock.submit_action(sess.mock, evt).await,
+                    );
+                }
             }
             FuzzOp::OpenActionFeed { sid } => {
                 let sess = self.get_session(sid).await;
