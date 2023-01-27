@@ -6,7 +6,7 @@ use crate::{
 };
 
 use pest::{iterators::Pairs, pratt_parser::PrattParser, Parser as PestParser};
-use risuto_api::Error;
+use risuto_api::{midnight_on, Error};
 
 pub trait QueryExt {
     fn from_search(db: &DbDump, tz: &chrono_tz::Tz, search: &str) -> Query;
@@ -292,13 +292,12 @@ fn parse_date_cmp(
     let timequery = match timequery.as_rule() {
         Rule::abstimeq => TimeQuery::Absolute(
             // TODO: for safety, see (currently open) https://github.com/chronotope/chrono/pull/927
-            chrono::NaiveDate::parse_from_str(timequery.as_str(), "%Y-%m-%d")
-                .expect("parsing date cmp with ill-formed absolute date")
-                .and_hms_opt(0, 0, 0)
-                .expect("failed adding hms 000 to date")
-                .and_local_timezone(tz.clone())
-                .unwrap()
-                .with_timezone(&chrono::Utc),
+            midnight_on(
+                chrono::NaiveDate::parse_from_str(timequery.as_str(), "%Y-%m-%d")
+                    .expect("parsing date cmp with ill-formed absolute date"),
+                tz,
+            )
+            .with_timezone(&chrono::Utc),
         ),
         Rule::reltimeq => {
             let mut reader = timequery.into_inner();
@@ -341,7 +340,10 @@ fn parse_date_cmp(
     }
 }
 
-fn start_of_next_day(tz: &impl chrono::TimeZone, day: TimeQuery) -> TimeQuery {
+fn start_of_next_day<Tz>(tz: &Tz, day: TimeQuery) -> TimeQuery
+where
+    Tz: Clone + std::fmt::Debug + chrono::TimeZone,
+{
     match day {
         TimeQuery::DayRelative {
             timezone,
@@ -351,15 +353,13 @@ fn start_of_next_day(tz: &impl chrono::TimeZone, day: TimeQuery) -> TimeQuery {
             day_offset: day_offset + 1,
         },
         TimeQuery::Absolute(t) => TimeQuery::Absolute(
-            // TODO: for safety, see (currently open) https://github.com/chronotope/chrono/pull/927
-            t.date_naive()
-                .succ_opt()
-                .expect("failed figuring out a date for day+1")
-                .and_hms_opt(0, 0, 0)
-                .expect("failed setting hms to 000")
-                .and_local_timezone(tz.clone())
-                .unwrap()
-                .with_timezone(&chrono::Utc),
+            midnight_on(
+                t.date_naive()
+                    .succ_opt()
+                    .expect("failed figuring out a date for day+1"),
+                tz,
+            )
+            .with_timezone(&chrono::Utc),
         ),
     }
 }

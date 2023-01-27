@@ -42,8 +42,7 @@ impl TimeQuery {
                         .map(|d| chrono::naive::Days::new(d as u64))
                         .and_then(|offset| date.checked_sub_days(offset)),
                 };
-                date.and_then(|d| d.and_hms_opt(0, 0, 0))
-                    .and_then(|d| d.and_local_timezone(*timezone).single())
+                date.map(|d| crate::midnight_on(d, timezone))
                     .map(|d| d.with_timezone(&chrono::Utc))
                     .ok_or(Error::IntegerOutOfRange(*day_offset))
             }

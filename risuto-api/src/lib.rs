@@ -54,3 +54,30 @@ pub fn validate_time(s: &Time) -> Result<(), Error> {
         Ok(())
     }
 }
+
+// See https://github.com/chronotope/chrono/issues/948
+pub fn midnight_on<Tz>(date: chrono::NaiveDate, tz: &Tz) -> chrono::DateTime<Tz>
+where
+    Tz: Clone + std::fmt::Debug + chrono::TimeZone,
+{
+    let base = chrono::NaiveTime::MIN;
+    for multiple in 0..=24 {
+        let start_time = base + chrono::Duration::minutes(multiple * 15);
+        match date.and_time(start_time).and_local_timezone(tz.clone()) {
+            chrono::LocalResult::None => continue,
+            chrono::LocalResult::Single(dt) => return dt,
+            chrono::LocalResult::Ambiguous(dt1, dt2) => {
+                if dt1.naive_utc() < dt2.naive_utc() {
+                    return dt1;
+                } else {
+                    return dt2;
+                }
+            }
+        }
+    }
+
+    panic!(
+        "Unable to calculate start time for date {} and time zone {:?}",
+        date, tz
+    )
+}

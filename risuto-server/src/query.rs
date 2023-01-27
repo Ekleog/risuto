@@ -1,4 +1,4 @@
-use risuto_api::{Query, Time, TimeQuery, Uuid};
+use risuto_api::{midnight_on, Query, Time, TimeQuery, Uuid};
 
 use crate::error::Error;
 
@@ -129,11 +129,7 @@ fn timeq_to_bind(q: &TimeQuery) -> Result<Bind, Error> {
                     .checked_sub_days(chrono::naive::Days::new((-day_offset) as u64))
                     .ok_or_else(|| Error::integer_out_of_range(*day_offset))?,
             };
-            date.and_hms_opt(0, 0, 0)
-                .expect("naive_date and hms 000 failed")
-                .and_local_timezone(timezone.clone())
-                .unwrap()
-                .with_timezone(&chrono::Utc)
+            midnight_on(date, timezone).with_timezone(&chrono::Utc)
         }
     }))
 }
