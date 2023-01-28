@@ -194,10 +194,10 @@ enum FuzzOp {
     OpenActionFeed {
         sid: usize,
     },
-    /* TODO:
     PingActionFeed {
         feed_id: usize,
     },
+    /* TODO:
     CloseActionFeed {
         feed_id: usize,
     },
@@ -579,6 +579,32 @@ impl ComparativeFuzzer {
                     }));
                 }
             }
+            FuzzOp::PingActionFeed { feed_id } => {
+                let feed_id = match resize_int(feed_id, ..self.feeds.len()) {
+                    None => return,
+                    Some(feed_id) => feed_id,
+                };
+                if let Some(f) = &mut self.feeds[feed_id] {
+                    f.app_sender
+                        .unbounded_send(Ok(Message::Text(String::from("ping"))))
+                        .expect("sending ping");
+                    for _attempt in 0..1000 {
+                        match f.app_receiver.try_next() {
+                            Ok(Some(Message::Binary(m))) => {
+                                let m: FeedMessage = serde_json::from_slice(&m)
+                                    .expect("failed parsing ping response from json");
+                                match m {
+                                    FeedMessage::Pong => return,
+                                    m => panic!("received unexpected ping response: {m:?}"),
+                                }
+                            }
+                            Err(_) => tokio::task::yield_now().await, // waiting for response
+                            m => panic!("received unexpected answer to ping: {m:?}"),
+                        }
+                    }
+                    panic!("did not receive ping response within allocated time");
+                }
+            }
         }
     }
 
@@ -588,7 +614,7 @@ impl ComparativeFuzzer {
             while let Ok(Some(a)) = f.mock_receiver.try_next() {
                 expected.push_back(a);
             }
-            while !expected.is_empty() {
+            'next_action: while !expected.is_empty() {
                 for _attempt in 0..1000 {
                     match f.app_receiver.try_next() {
                         Err(_) => tokio::task::yield_now().await, // waiting for data
@@ -601,7 +627,7 @@ impl ComparativeFuzzer {
                                         FeedMessage::Action(a) => {
                                             assert_eq!(a, expected[0], "got unexpected feed message:\n---\n{a:#?}\n---\nExpected messages:\n---\n{expected:#?}\n---");
                                             expected.pop_front();
-                                            break;
+                                            continue 'next_action;
                                         }
                                         m => panic!("unexpected FeedMessage: {m:?}"),
                                     }
@@ -611,6 +637,7 @@ impl ComparativeFuzzer {
                         }
                     }
                 }
+                panic!("did not receive expected message within allocated time. Expected message:\n---\n{:#?}\n---", expected[0]);
             }
             match f.app_receiver.try_next() {
                 Ok(Some(m)) => panic!("expected no more messages, but got:\n---\n{m:#?}\n---"),

@@ -79,6 +79,7 @@ impl UserFeeds {
                         None => remove_self!(),
                         Some(Ok(Message::Close(_))) => remove_self!(),
                         Some(Ok(Message::Text(msg))) => {
+                            // TODO: remove the client if did not receive a ping from there for a while
                             if msg != "ping" {
                                 tracing::warn!("received unexpected message from client: {msg:?}");
                                 remove_self!();

@@ -32,7 +32,7 @@ const UUID_UNTAGGED: Uuid = uuid!("07A66EDa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
 
 #[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
 pub enum FeedMessage {
-    Pong, // TODO: this should be replaced with axum::extract::ws::Message::{Ping,Pong}
+    Pong, // TODO: this should be replaced with axum::extract::ws::Message::{Ping,Pong}, once ws_stream_wasm also gets them
     Action(Action),
 }
 
