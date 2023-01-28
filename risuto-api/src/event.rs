@@ -14,7 +14,7 @@ use crate::{Db, Error, TagId, TaskId, Time, UserId, STUB_UUID, UUID_TODAY, UUID_
     serde::Deserialize,
     serde::Serialize,
 )]
-pub struct OrderId(#[generator(bolero::generator::gen_arbitrary())] pub Uuid);
+pub struct OrderId(#[generator(bolero::gen_arbitrary())] pub Uuid);
 
 impl OrderId {
     pub fn stub() -> OrderId {
@@ -40,7 +40,7 @@ impl OrderId {
     serde::Deserialize,
     serde::Serialize,
 )]
-pub struct EventId(#[generator(bolero::generator::gen_arbitrary())] pub Uuid);
+pub struct EventId(#[generator(bolero::gen_arbitrary())] pub Uuid);
 
 #[derive(
     Clone,
@@ -54,7 +54,7 @@ pub struct EventId(#[generator(bolero::generator::gen_arbitrary())] pub Uuid);
 pub struct Event {
     pub id: EventId,
     pub owner_id: UserId,
-    #[generator(bolero::generator::gen_arbitrary())]
+    #[generator(bolero::gen_arbitrary())]
     pub date: Time,
     pub task_id: TaskId,
 
@@ -71,11 +71,11 @@ pub struct Event {
     serde::Serialize,
 )]
 pub enum EventData {
-    SetTitle(#[generator(bolero::generator::gen_with::<String>().len(0..100usize))] String),
+    SetTitle(#[generator(bolero::gen_with::<String>().len(0..100usize))] String),
     SetDone(bool),
     SetArchived(bool),
-    BlockedUntil(#[generator(bolero::generator::gen_arbitrary())] Option<Time>),
-    ScheduleFor(#[generator(bolero::generator::gen_arbitrary())] Option<Time>),
+    BlockedUntil(#[generator(bolero::gen_arbitrary())] Option<Time>),
+    ScheduleFor(#[generator(bolero::gen_arbitrary())] Option<Time>),
     SetOrder {
         order: OrderId,
         prio: i64,
@@ -87,12 +87,12 @@ pub enum EventData {
     },
     RmTag(TagId),
     AddComment {
-        #[generator(bolero::generator::gen_with::<String>().len(0..100usize))]
+        #[generator(bolero::gen_with::<String>().len(0..100usize))]
         text: String,
         parent_id: Option<EventId>,
     },
     EditComment {
-        #[generator(bolero::generator::gen_with::<String>().len(0..100usize))]
+        #[generator(bolero::gen_with::<String>().len(0..100usize))]
         text: String,
         comment_id: EventId,
     },

@@ -11,11 +11,11 @@ use crate::{Error, TagId, Time};
     serde::Serialize,
 )]
 pub enum TimeQuery {
-    Absolute(#[generator(bolero::generator::gen_arbitrary())] Time),
+    Absolute(#[generator(bolero::gen_arbitrary())] Time),
 
     /// Offset today().and_hms(0, 0, 0) by day_offset days
     DayRelative {
-        #[generator(bolero::generator::gen_arbitrary())]
+        #[generator(bolero::gen_arbitrary())]
         timezone: chrono_tz::Tz,
         day_offset: i64,
     },
@@ -63,10 +63,10 @@ impl TimeQuery {
 pub enum Query {
     // TODO: use TypeGenerator after fixing bolero's handling of recursive structs
     // (right now the fuzzer rightfully finds a stack overflow in... bolero's TypeGenerator)
-    Any(#[generator(bolero::generator::gen_arbitrary())] Vec<Query>),
-    All(#[generator(bolero::generator::gen_arbitrary())] Vec<Query>),
+    Any(#[generator(bolero::gen_arbitrary())] Vec<Query>),
+    All(#[generator(bolero::gen_arbitrary())] Vec<Query>),
     // TODO: the attr below should not be necessary, but see https://github.com/rust-lang/rust/issues/48214#issuecomment-1374372954
-    Not(#[generator(bolero::generator::gen_arbitrary())] Box<Query>),
+    Not(#[generator(bolero::gen_arbitrary())] Box<Query>),
     Archived(bool),
     Done(bool),
     Tag { tag: TagId, backlog: Option<bool> },
@@ -75,7 +75,7 @@ pub enum Query {
     ScheduledForAfter(TimeQuery),
     BlockedUntilAtMost(TimeQuery),
     BlockedUntilAtLeast(TimeQuery),
-    Phrase(#[generator(bolero::generator::gen_with::<String>().len(0..15usize))] String), // full-text search of one contiguous word vec
+    Phrase(#[generator(bolero::gen_with::<String>().len(0..15usize))] String), // full-text search of one contiguous word vec
 }
 
 impl Query {

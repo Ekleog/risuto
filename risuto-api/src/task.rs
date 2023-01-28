@@ -15,7 +15,7 @@ use crate::{Error, EventId, Time, UserId, STUB_UUID};
     serde::Deserialize,
     serde::Serialize,
 )]
-pub struct TaskId(#[generator(bolero::generator::gen_arbitrary())] pub Uuid);
+pub struct TaskId(#[generator(bolero::gen_arbitrary())] pub Uuid);
 
 impl TaskId {
     pub fn stub() -> TaskId {
@@ -35,10 +35,10 @@ impl TaskId {
 pub struct Task {
     pub id: TaskId,
     pub owner_id: UserId,
-    #[generator(bolero::generator::gen_arbitrary())]
+    #[generator(bolero::gen_arbitrary())]
     pub date: Time,
 
-    #[generator(bolero::generator::gen_with::<String>().len(0..100usize))]
+    #[generator(bolero::gen_with::<String>().len(0..100usize))]
     pub initial_title: String,
     pub top_comment_id: EventId,
 }

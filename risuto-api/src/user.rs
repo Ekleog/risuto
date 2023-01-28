@@ -15,7 +15,7 @@ use uuid::Uuid;
     serde::Deserialize,
     serde::Serialize,
 )]
-pub struct UserId(#[generator(bolero::generator::gen_arbitrary())] pub Uuid);
+pub struct UserId(#[generator(bolero::gen_arbitrary())] pub Uuid);
 
 impl UserId {
     pub fn stub() -> UserId {
@@ -40,9 +40,9 @@ pub struct User {
 #[derive(Clone, Debug, bolero::generator::TypeGenerator, serde::Deserialize, serde::Serialize)]
 pub struct NewUser {
     pub id: UserId,
-    #[generator(bolero::generator::gen_with::<String>().len(1..100usize))]
+    #[generator(bolero::gen_with::<String>().len(1..100usize))]
     pub name: String,
-    #[generator(bolero::generator::gen_with::<String>().len(1..100usize))]
+    #[generator(bolero::gen_with::<String>().len(1..100usize))]
     pub initial_password_hash: String,
 }
 

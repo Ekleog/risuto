@@ -165,7 +165,7 @@ enum FuzzOp {
     CreateUser(NewUser),
     Auth {
         uid: usize,
-        #[generator(bolero::generator::gen_with::<String>().len(1..100usize))]
+        #[generator(bolero::gen_with::<String>().len(1..100usize))]
         device: String,
     },
     Unauth {
@@ -649,7 +649,7 @@ impl ComparativeFuzzer {
 
 do_sqlx_test!(
     compare_with_mock,
-    bolero::generator::gen_with::<Vec<FuzzOp>>().len(1..100usize),
+    bolero::gen_with::<Vec<FuzzOp>>().len(1..100usize),
     |pool, test: Vec<FuzzOp>| async move {
         let mut fuzzer = ComparativeFuzzer::new(pool).await;
         for op in test {

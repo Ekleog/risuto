@@ -16,7 +16,7 @@ use crate::{UserId, STUB_UUID};
     serde::Deserialize,
     serde::Serialize,
 )]
-pub struct TagId(#[generator(bolero::generator::gen_arbitrary())] pub Uuid);
+pub struct TagId(#[generator(bolero::gen_arbitrary())] pub Uuid);
 
 impl TagId {
     pub fn stub() -> TagId {
