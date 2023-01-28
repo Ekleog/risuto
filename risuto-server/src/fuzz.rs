@@ -6,9 +6,11 @@ use axum::{
     http::{self, request},
 };
 use futures::{channel::mpsc, StreamExt};
-use risuto_api::{Action, Error as ApiError, NewSession, NewUser, Query, UserId};
+use risuto_api::{Action, Error as ApiError, FeedMessage, NewSession, NewUser, Query, UserId};
 use risuto_mock_server::MockServer;
-use std::{cmp, fmt::Debug, ops::RangeTo, panic::AssertUnwindSafe, path::Path};
+use std::{
+    cmp, collections::VecDeque, fmt::Debug, ops::RangeTo, panic::AssertUnwindSafe, path::Path,
+};
 use tower::{Service, ServiceExt};
 
 use crate::{extractors::*, *};
@@ -579,6 +581,43 @@ impl ComparativeFuzzer {
             }
         }
     }
+
+    async fn check_feeds(&mut self) {
+        for f in self.feeds.iter_mut().flat_map(|f| f.iter_mut()) {
+            let mut expected = VecDeque::new();
+            while let Ok(Some(a)) = f.mock_receiver.try_next() {
+                expected.push_back(a);
+            }
+            while !expected.is_empty() {
+                for _attempt in 0..1000 {
+                    match f.app_receiver.try_next() {
+                        Err(_) => tokio::task::yield_now().await, // waiting for data
+                        Ok(None) => panic!("app receiver closed while still expecting messages!\n---\n{expected:#?}\n---"),
+                        Ok(Some(m)) => {
+                            match m {
+                                Message::Binary(m) => {
+                                    let m: FeedMessage = serde_json::from_slice(&m).expect("failed deserializing feed message");
+                                    match m {
+                                        FeedMessage::Action(a) => {
+                                            assert_eq!(a, expected[0], "got unexpected feed message:\n---\n{a:#?}\n---\nExpected messages:\n---\n{expected:#?}\n---");
+                                            expected.pop_front();
+                                            break;
+                                        }
+                                        m => panic!("unexpected FeedMessage: {m:?}"),
+                                    }
+                                }
+                                m => panic!("unexpected ws::Message: {m:?}"),
+                            }
+                        }
+                    }
+                }
+            }
+            match f.app_receiver.try_next() {
+                Ok(Some(m)) => panic!("expected no more messages, but got:\n---\n{m:#?}\n---"),
+                _ => (),
+            }
+        }
+    }
 }
 
 do_sqlx_test!(
@@ -588,6 +627,7 @@ do_sqlx_test!(
         let mut fuzzer = ComparativeFuzzer::new(pool).await;
         for op in test {
             fuzzer.execute_fuzz_op(op).await;
+            fuzzer.check_feeds().await;
         }
     }
 );
