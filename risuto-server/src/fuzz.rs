@@ -6,7 +6,9 @@ use axum::{
     http::{self, request},
 };
 use futures::{channel::mpsc, StreamExt};
-use risuto_api::{Action, Error as ApiError, FeedMessage, NewSession, NewUser, Query, UserId};
+use risuto_api::{
+    Action, Error as ApiError, FeedMessage, NewSession, NewUser, Query, User, UserId,
+};
 use risuto_mock_server::MockServer;
 use std::{
     cmp, collections::VecDeque, fmt::Debug, ops::RangeTo, panic::AssertUnwindSafe, path::Path,
@@ -460,18 +462,18 @@ impl ComparativeFuzzer {
             }
             FuzzOp::FetchUsers { sid } => {
                 let sess = self.get_session(sid).await;
-                compare(
-                    "FetchUsers",
-                    run_on_app(
-                        &mut self.app,
-                        "GET",
-                        "/api/fetch-users",
-                        Some(sess.app.0),
-                        &(),
-                    )
-                    .await,
-                    self.mock.fetch_users(sess.mock),
-                );
+                let mut app_res: Result<Vec<User>, _> = run_on_app(
+                    &mut self.app,
+                    "GET",
+                    "/api/fetch-users",
+                    Some(sess.app.0),
+                    &(),
+                )
+                .await;
+                let _ = app_res.as_mut().map(|v| v.sort_by_key(|u| u.id));
+                let mut mock_res = self.mock.fetch_users(sess.mock);
+                let _ = mock_res.as_mut().map(|v| v.sort_by_key(|u| u.id));
+                compare("FetchUsers", app_res, mock_res);
             }
             FuzzOp::FetchTags { sid } => {
                 let sess = self.get_session(sid).await;
