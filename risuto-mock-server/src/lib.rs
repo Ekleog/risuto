@@ -59,6 +59,9 @@ impl MockServer {
     pub async fn admin_create_user(&mut self, u: NewUser, password: String) -> Result<(), Error> {
         u.validate()?;
 
+        if self.0.values().any(|db| db.db.owner == u.id) {
+            return Err(Error::UuidAlreadyUsed(u.id.0));
+        }
         if self.0.values().any(|db| db.name == u.name) {
             return Err(Error::NameAlreadyUsed(u.name));
         }

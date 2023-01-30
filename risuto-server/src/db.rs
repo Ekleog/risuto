@@ -253,6 +253,41 @@ impl From<DbEvent> for Event {
     }
 }
 
+trait QueryResultExt: Sized {
+    fn risuto_should_affect_rows(self, num_rows: u64) -> anyhow::Result<Self>;
+    fn risuto_db_err(
+        self,
+    ) -> Result<
+        Result<sqlx::postgres::PgQueryResult, Box<sqlx::postgres::PgDatabaseError>>,
+        sqlx::Error,
+    >;
+}
+
+impl QueryResultExt for Result<sqlx::postgres::PgQueryResult, sqlx::Error> {
+    fn risuto_should_affect_rows(self, num_rows: u64) -> anyhow::Result<Self> {
+        match self {
+            Err(e) => Ok(Err(e)),
+            Ok(r) if r.rows_affected() == num_rows => Ok(Ok(r)),
+            Ok(r) => Err(anyhow!(
+                "query should have affected {num_rows} but affected {}",
+                r.rows_affected()
+            )),
+        }
+    }
+    fn risuto_db_err(
+        self,
+    ) -> Result<
+        Result<sqlx::postgres::PgQueryResult, Box<sqlx::postgres::PgDatabaseError>>,
+        sqlx::Error,
+    > {
+        match self {
+            Ok(v) => Ok(Ok(v)),
+            Err(sqlx::Error::Database(d)) => Ok(Err(d.downcast())),
+            Err(e) => Err(e),
+        }
+    }
+}
+
 #[async_trait]
 impl<'a> risuto_api::Db for PostgresDb<'a> {
     fn current_user(&self) -> UserId {
@@ -798,7 +833,6 @@ pub async fn submit_task(db: &mut PostgresDb<'_>, t: Task, top_comm: String) -> 
 }
 
 pub async fn create_user(conn: &mut sqlx::PgConnection, user: NewUser) -> Result<(), Error> {
-    let user_id = user.id;
     let res = sqlx::query!(
         "INSERT INTO users VALUES ($1, $2, $3)",
         user.id.0,
@@ -807,19 +841,23 @@ pub async fn create_user(conn: &mut sqlx::PgConnection, user: NewUser) -> Result
     )
     .execute(&mut *conn)
     .await
+    .risuto_should_affect_rows(1)?
+    .risuto_db_err()
     .with_context(|| format!("inserting into database user {user:?}"))?;
-    match res.rows_affected() {
-        1 => Ok(()),
-        0 => {
-            let already_present = sqlx::query!("SELECT * FROM users WHERE id=$1", user.id.0)
-                .fetch_optional(&mut *conn)
-                .await
-                .context("sanity-checking the already-present user")?;
-            match already_present {
-                Some(p) if p.id == user.id.0 => Err(Error::uuid_already_used(p.id)),
-                _ => Err(Error::Anyhow(anyhow!("unknown user creation conflict: trying to insert {user:?}, already had {already_present:?}")))
+    match res {
+        Ok(_) => Ok(()),
+        Err(err) => match err.constraint() {
+            Some("users_pkey") => {
+                let already_present = sqlx::query!("SELECT * FROM users WHERE id=$1", user.id.0)
+                    .fetch_optional(&mut *conn)
+                    .await
+                    .context("sanity-checking the already-present user")?;
+                match already_present {
+                    Some(p) if p.id == user.id.0 => Err(Error::uuid_already_used(p.id)),
+                    _ => Err(Error::Anyhow(anyhow!("unknown user creation conflict on users_pkey: trying to insert {user:?}, already had {already_present:?}"))),
+                }
             }
+            constraint => Err(Error::Anyhow(anyhow!("unknown user creation conflict on constraint {constraint:?} while trying to insert {user:?}"))),
         }
-        rows => panic!("insertion of single user {user_id:?} affected multiple ({rows}) rows"),
     }
 }
