@@ -162,7 +162,6 @@ do_tokio_test!(fuzz_preauth_extractor, String, |token| async move {
 
 // TODO: also allow generating invalid requests?
 #[derive(Clone, Debug, bolero::generator::TypeGenerator)]
-// TODO: re-enable all
 enum FuzzOp {
     CreateUser(NewUser),
     Auth {
@@ -199,11 +198,9 @@ enum FuzzOp {
     PingActionFeed {
         feed_id: usize,
     },
-    /* TODO:
     CloseActionFeed {
         feed_id: usize,
     },
-    */
 }
 
 async fn call<Req, Resp>(
@@ -606,6 +603,13 @@ impl ComparativeFuzzer {
                     }
                     panic!("did not receive ping response within allocated time");
                 }
+            }
+            FuzzOp::CloseActionFeed { feed_id } => {
+                let feed_id = match resize_int(feed_id, ..self.feeds.len()) {
+                    None => return,
+                    Some(feed_id) => feed_id,
+                };
+                std::mem::drop(self.feeds[feed_id].take());
             }
         }
     }
