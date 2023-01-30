@@ -56,7 +56,7 @@ impl MockServer {
         self.0.len()
     }
 
-    pub fn admin_create_user(&mut self, u: NewUser, password: String) -> Result<(), Error> {
+    pub async fn admin_create_user(&mut self, u: NewUser, password: String) -> Result<(), Error> {
         u.validate()?;
 
         if self.0.values().any(|db| db.name == u.name) {
@@ -86,6 +86,14 @@ impl MockServer {
                         id: u.id,
                         name: u.name.clone(),
                     }]);
+                }
+                for existing_user in self.0.values_mut() {
+                    existing_user
+                        .relay_action(Action::NewUser(api::User {
+                            id: u.id,
+                            name: u.name.clone(),
+                        }))
+                        .await;
                 }
                 Ok(())
             }

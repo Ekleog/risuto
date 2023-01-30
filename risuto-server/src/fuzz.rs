@@ -413,7 +413,7 @@ impl ComparativeFuzzer {
                         &new_user,
                     )
                     .await,
-                    self.mock.admin_create_user(new_user, pass),
+                    self.mock.admin_create_user(new_user, pass).await,
                 )
             }
             FuzzOp::Auth { uid, device } => {
@@ -640,7 +640,16 @@ impl ComparativeFuzzer {
                 panic!("did not receive expected message within allocated time. Expected message:\n---\n{:#?}\n---", expected[0]);
             }
             match f.app_receiver.try_next() {
-                Ok(Some(m)) => panic!("expected no more messages, but got:\n---\n{m:#?}\n---"),
+                Ok(Some(m)) => {
+                    if let Message::Binary(m) = &m {
+                        if let Ok(m) = serde_json::from_slice::<FeedMessage>(m) {
+                            panic!("expected no more messages, but got:\n---\n{m:#?}\n---");
+                        }
+                    }
+                    panic!(
+                        "expected no more messages, but got impossible-to-parse:\n---\n{m:#?}\n---"
+                    );
+                }
                 _ => (),
             }
         }
