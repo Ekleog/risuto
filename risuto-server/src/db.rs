@@ -857,6 +857,7 @@ pub async fn create_user(conn: &mut sqlx::PgConnection, user: NewUser) -> Result
                     _ => Err(Error::Anyhow(anyhow!("unknown user creation conflict on users_pkey: trying to insert {user:?}, already had {already_present:?}"))),
                 }
             }
+            Some("users_name_key") => Err(Error::name_already_used(user.name)),
             constraint => Err(Error::Anyhow(anyhow!("unknown user creation conflict on constraint {constraint:?} while trying to insert {user:?}"))),
         }
     }

@@ -225,6 +225,7 @@ impl MockServer {
             }
             Action::NewEvent(e) => {
                 for u in self.0.values_mut() {
+                    // TODO: perms handling
                     if u.db.tasks.contains_key(&e.task_id) {
                         u.db.add_events_and_refresh_all(vec![e.clone()]);
                     }
