@@ -144,7 +144,7 @@ fn title_div(p: &TitleDivProps) -> Html {
 
 fn parse_new_title(db: &DbDump, title: String, task: &Task) -> Vec<Event> {
     let (title, mut evts) = util::parse_tag_changes(db, task.id, title);
-    if title != task.current_title {
+    if &title != &*task.current_title {
         evts.push(Event::now(db.owner, task.id, EventData::SetTitle(title)));
     }
     evts

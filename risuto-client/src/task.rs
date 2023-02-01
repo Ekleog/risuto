@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashMap};
+use std::sync::Arc;
 
 use crate::{
     api::{self, Event, EventData, OrderId, TagId, TaskId, Time, UserId},
@@ -21,8 +21,8 @@ pub struct Task {
     pub owner_id: UserId,
     pub date: Time,
 
-    pub initial_title: String,
-    pub current_title: String,
+    pub initial_title: Arc<String>,
+    pub current_title: Arc<String>,
 
     pub top_comment: Comment,
 
@@ -30,23 +30,24 @@ pub struct Task {
     pub is_archived: bool,
     pub blocked_until: Option<Time>,
     pub scheduled_for: Option<Time>,
-    pub current_tags: HashMap<TagId, TaskInTag>,
-    pub orders: HashMap<OrderId, i64>,
+    pub current_tags: im::HashMap<TagId, TaskInTag>,
+    pub orders: im::HashMap<OrderId, i64>,
 
     /// List of comments in chronological order
     pub current_comments: im::OrdMap<Time, im::Vector<Comment>>,
 
-    pub events: BTreeMap<Time, Vec<Event>>,
+    pub events: im::OrdMap<Time, im::Vector<Event>>,
 }
 
 impl From<api::Task> for Task {
     fn from(t: api::Task) -> Task {
+        let initial_title = Arc::new(t.initial_title);
         Task {
             id: t.id,
             owner_id: t.owner_id,
             date: t.date,
-            initial_title: t.initial_title.clone(),
-            current_title: t.initial_title,
+            initial_title: initial_title.clone(),
+            current_title: initial_title,
             top_comment: Comment {
                 creation_id: t.top_comment_id,
                 edits: im::OrdMap::new(),
@@ -57,10 +58,10 @@ impl From<api::Task> for Task {
             is_archived: false,
             blocked_until: None,
             scheduled_for: None,
-            current_tags: HashMap::new(),
-            orders: HashMap::new(),
+            current_tags: im::HashMap::new(),
+            orders: im::HashMap::new(),
             current_comments: im::OrdMap::new(),
-            events: BTreeMap::new(),
+            events: im::OrdMap::new(),
         }
     }
 }
@@ -76,15 +77,16 @@ impl Task {
 
     pub fn last_event_time(&self) -> Time {
         self.events
-            .last_key_value()
+            .iter()
+            .next_back()
             .map(|(d, _)| d.clone())
             .unwrap_or(self.date)
     }
 
     pub fn add_event(&mut self, e: Event) {
-        let insert_into = self.events.entry(e.date).or_insert(Vec::new());
+        let insert_into = self.events.entry(e.date).or_insert(im::Vector::new());
         if insert_into.iter().find(|evt| **evt == e).is_none() {
-            insert_into.push(e);
+            insert_into.push_back(e);
         }
     }
 
@@ -99,7 +101,7 @@ impl Task {
             }
             for e in evts {
                 match &e.data {
-                    EventData::SetTitle(title) => self.current_title = title.clone(),
+                    EventData::SetTitle(title) => self.current_title = Arc::new(title.clone()),
                     EventData::SetDone(now_done) => self.is_done = *now_done,
                     EventData::SetArchived(now_archived) => self.is_archived = *now_archived,
                     EventData::BlockedUntil(time) => self.blocked_until = *time,
