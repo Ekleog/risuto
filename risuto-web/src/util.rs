@@ -172,7 +172,7 @@ pub fn parse_tag_changes(db: &DbDump, task_id: TaskId, mut title: String) -> (St
                     },
                     Order::Tag(tag.id),
                 );
-                let tasks = db.search(&search);
+                let tasks = db.search(&search).expect("Infallible search failed");
                 res.extend(compute_reordering_events(
                     db.owner, &search, task_id, 0, false, &tasks,
                 ));

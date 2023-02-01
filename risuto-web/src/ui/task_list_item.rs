@@ -2,7 +2,7 @@ use std::{rc::Rc, sync::Arc};
 
 use chrono::{Datelike, Timelike};
 use risuto_client::{
-    api::{Event, EventData, TagId, Time},
+    api::{midnight_on, Event, EventData, TagId, Time},
     DbDump, Task,
 };
 use yew::prelude::*;
@@ -239,7 +239,7 @@ fn timeset_button(p: &TimesetButtonProps) -> Html {
             let remaining = d.signed_duration_since(chrono::Utc::now());
             let since_beginning_of_day = d.signed_duration_since(midnight_on(
                 chrono::Utc::now().date_naive(),
-                util::local_tz(),
+                &util::local_tz(),
             ));
             match remaining {
                 r if r > chrono::Duration::days(365) => Some(format!("{}", d.year())),

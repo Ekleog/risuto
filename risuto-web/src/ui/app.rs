@@ -91,7 +91,10 @@ impl App {
     }
 
     fn current_task_lists(&self) -> TaskLists {
-        let mut all_tasks = self.db.search(&self.active_search);
+        let mut all_tasks = self
+            .db
+            .search(&self.active_search)
+            .expect("Failed running current active search");
         match self.active_search.order {
             Order::Tag(tag) => {
                 let backlog = Rc::new(all_tasks.split_off(

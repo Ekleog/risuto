@@ -45,7 +45,11 @@ pub fn search_bar(p: &SearchBarProps) -> Html {
                         order: Order::LastEventDate(OrderType::Desc),
                         priority: 0,
                     };
-                    Some(SearchResults::Local(db.search(&search)))
+                    if let Ok(res) = db.search(&search) {
+                        Some(SearchResults::Local(res))
+                    } else {
+                        None
+                    }
                 }
             });
         })
