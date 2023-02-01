@@ -190,6 +190,7 @@ fn main() {
 
     // Generate tasks
     println!("BEGIN;");
+    println!("SET CONSTRAINTS task_has_top_comment DEFERRED;");
     let mut tasks = Vec::new();
     let mut top_comments = Vec::new();
     gen_n_items("tasks", NUM_TASKS, |_| {
