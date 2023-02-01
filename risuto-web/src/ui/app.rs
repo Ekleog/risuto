@@ -77,9 +77,9 @@ impl App {
                     },
                 });
                 task.refresh_metadata(&db.owner);
-                Arc::make_mut(&mut db.tasks).insert(t.id, Arc::new(task));
+                db.tasks.insert(t.id, Arc::new(task));
             }
-            Action::NewEvent(e) => match Arc::make_mut(&mut db.tasks).get_mut(&e.task_id) {
+            Action::NewEvent(e) => match db.tasks.get_mut(&e.task_id) {
                 None => tracing::warn!(evt=?e, "got event for task not in db"),
                 Some(t) => {
                     let task = Arc::make_mut(t);

@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
 
 use anyhow::anyhow;
 use async_trait::async_trait;
@@ -12,58 +12,54 @@ use crate::{
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DbDump {
     pub owner: UserId,
-    pub users: Arc<HashMap<UserId, User>>,
-    pub tags: Arc<HashMap<TagId, Tag>>,
-    pub searches: Arc<HashMap<SearchId, Search>>,
-    pub perms: Arc<HashMap<TagId, AuthInfo>>,
-    pub tasks: Arc<HashMap<TaskId, Arc<Task>>>,
+    pub users: im::HashMap<UserId, User>,
+    pub tags: im::HashMap<TagId, Tag>,
+    pub searches: im::HashMap<SearchId, Search>,
+    pub perms: im::HashMap<TagId, AuthInfo>,
+    pub tasks: im::HashMap<TaskId, Arc<Task>>,
 }
 
 impl DbDump {
     pub fn stub() -> DbDump {
         DbDump {
             owner: UserId::stub(),
-            users: Arc::new(HashMap::new()),
-            tags: Arc::new(HashMap::new()),
-            searches: Arc::new(HashMap::new()),
-            perms: Arc::new(HashMap::new()),
-            tasks: Arc::new(HashMap::new()),
+            users: im::HashMap::new(),
+            tags: im::HashMap::new(),
+            searches: im::HashMap::new(),
+            perms: im::HashMap::new(),
+            tasks: im::HashMap::new(),
         }
     }
 
     pub fn add_users(&mut self, users: Vec<api::User>) {
-        Arc::make_mut(&mut self.users).extend(users.into_iter().map(|u| (u.id, u)));
+        self.users.extend(users.into_iter().map(|u| (u.id, u)));
     }
 
     pub fn add_tags(&mut self, new_tags: Vec<(api::Tag, api::AuthInfo)>) {
-        let tags = Arc::make_mut(&mut self.tags);
-        let perms = Arc::make_mut(&mut self.perms);
-        tags.reserve(tags.len());
-        perms.reserve(tags.len());
         for (tag, perm) in new_tags.into_iter() {
-            perms.insert(tag.id, perm);
-            tags.insert(tag.id, tag);
+            self.perms.insert(tag.id, perm);
+            self.tags.insert(tag.id, tag);
         }
     }
 
     pub fn add_searches(&mut self, new_searches: Vec<Search>) {
-        Arc::make_mut(&mut self.searches).extend(new_searches.into_iter().map(|s| (s.id, s)));
+        self.searches
+            .extend(new_searches.into_iter().map(|s| (s.id, s)));
     }
 
     pub fn add_tasks(&mut self, tasks: Vec<api::Task>) {
-        Arc::make_mut(&mut self.tasks)
+        self.tasks
             .extend(tasks.into_iter().map(|t| (t.id, Arc::new(Task::from(t)))))
     }
 
     pub fn add_events_and_refresh_all(&mut self, events: Vec<api::Event>) {
-        let tasks = Arc::make_mut(&mut self.tasks);
         for e in events {
-            if let Some(t) = tasks.get_mut(&e.task_id) {
+            if let Some(t) = self.tasks.get_mut(&e.task_id) {
                 let t = Arc::make_mut(t);
                 t.add_event(e);
             }
         }
-        for t in tasks.values_mut() {
+        for (_, t) in self.tasks.iter_mut() {
             let t = Arc::make_mut(t);
             t.refresh_metadata(&self.owner);
         }

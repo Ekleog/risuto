@@ -10,6 +10,7 @@ chrono-tz.workspace = true
 futures.workspace = true
 getrandom = { workspace = true, features = ["js"] }
 gloo-storage.workspace = true
+im.workspace = true
 js-sys.workspace = true
 lazy_static.workspace = true
 num.workspace = true

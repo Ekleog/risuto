@@ -9,6 +9,7 @@ async-trait.workspace = true
 bolero.workspace = true
 chrono.workspace = true
 chrono-tz.workspace = true
+im.workspace = true
 lazy_static.workspace = true
 pest.workspace = true
 pest_derive.workspace = true

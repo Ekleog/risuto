@@ -1,4 +1,4 @@
-use std::{collections::HashMap, iter, sync::Arc};
+use std::iter;
 
 use risuto_client::api::{Search, SearchId, Tag, TagId, UserId};
 use yew::prelude::*;
@@ -7,8 +7,8 @@ use crate::util;
 
 #[derive(Clone, PartialEq, Properties)]
 pub struct SearchListProps {
-    pub searches: Arc<HashMap<SearchId, Search>>,
-    pub tags: Arc<HashMap<TagId, Tag>>,
+    pub searches: im::HashMap<SearchId, Search>,
+    pub tags: im::HashMap<TagId, Tag>,
     pub current_user: UserId,
     pub active_search: SearchId,
     pub on_select_search: Callback<Search>,
