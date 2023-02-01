@@ -21,14 +21,16 @@ impl OrderExt for Order {
                 })
             }
             Order::Tag(tag) => tasks.sort_unstable_by_key(|t| {
-                let tag_data = t
-                    .current_tags
-                    .get(tag)
-                    .expect("task passed to Order::Tag(t)::sort is not actually in the tag");
+                // Tasks not actually in the tag get pushed to the bottom of the list
+                let tag_data = match t.current_tags.get(tag) {
+                    Some(tag_data) => tag_data,
+                    None => return (3, 0, Reverse(t.date), t.id),
+                };
                 let category = match (tag_data.backlog, t.is_done) {
                     (false, false) => 0,
                     (false, true) => 1,
                     (true, _) => 2,
+                    // 3 is used above for tasks not actually in this tag
                 };
                 (category, tag_data.priority, Reverse(t.date), t.id)
             }),
