@@ -51,6 +51,7 @@ pub struct MainViewProps {
     pub actions_pending_submission: VecDeque<Action>,
     pub db: Rc<DbDump>,
     pub current_tag: Option<TagId>,
+    pub user_knows_current_tag: bool,
     pub tasks_open: Rc<Vec<Arc<Task>>>,
     pub tasks_done: Rc<Vec<Arc<Task>>>,
     pub tasks_backlog: Rc<Vec<Arc<Task>>>,
@@ -186,6 +187,7 @@ pub fn main_view(p: &MainViewProps) -> Html {
                         ref_this={ ref_open }
                         db={ p.db.clone() }
                         current_tag={ p.current_tag.clone() }
+                        user_knows_current_tag={ p.user_knows_current_tag }
                         tasks={ p.tasks_open.clone() }
                         on_event={ p.on_action.reform(Action::NewEvent) }
                     />
@@ -196,6 +198,7 @@ pub fn main_view(p: &MainViewProps) -> Html {
                         ref_this={ ref_done }
                         db={ p.db.clone() }
                         current_tag={ p.current_tag.clone() }
+                        user_knows_current_tag={ p.user_knows_current_tag }
                         tasks={ p.tasks_done.clone() }
                         on_event={ p.on_action.reform(Action::NewEvent) }
                     />
@@ -224,6 +227,7 @@ pub fn main_view(p: &MainViewProps) -> Html {
                             ref_this={ ref_backlog }
                             db={ p.db.clone() }
                             current_tag={ p.current_tag.clone() }
+                            user_knows_current_tag={ p.user_knows_current_tag }
                             tasks={ p.tasks_backlog.clone() }
                             on_event={ p.on_action.reform(Action::NewEvent) }
                         />

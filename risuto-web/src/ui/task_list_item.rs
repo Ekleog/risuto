@@ -13,6 +13,7 @@ use crate::util;
 pub struct TaskListItemProps {
     pub db: Rc<DbDump>,
     pub current_tag: Option<TagId>,
+    pub user_knows_current_tag: bool,
     pub task: Arc<Task>,
     pub on_event: Callback<Event>,
 }
@@ -23,7 +24,9 @@ pub fn task_list(p: &TaskListItemProps) -> Html {
         .task
         .current_tags
         .keys()
-        .filter(|t| p.current_tag.as_ref().map(|c| c != *t).unwrap_or(true))
+        .filter(|t| {
+            !p.user_knows_current_tag || p.current_tag.as_ref().map(|c| c != *t).unwrap_or(true)
+        })
         .filter_map(|t| p.db.tags.get(t).map(|tag| (t, tag)))
         .collect::<Vec<_>>();
     util::sort_tags(&p.db.owner, &mut tags, |t| &t.1);

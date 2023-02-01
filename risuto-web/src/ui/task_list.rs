@@ -12,6 +12,7 @@ pub struct TaskListProps {
     pub ref_this: NodeRef,
     pub db: Rc<DbDump>,
     pub current_tag: Option<TagId>,
+    pub user_knows_current_tag: bool,
     pub tasks: Rc<Vec<Arc<Task>>>,
     pub on_event: Callback<Event>,
 }
@@ -25,6 +26,7 @@ pub fn task_list(p: &TaskListProps) -> Html {
                 task={ t.clone() }
                 db={ p.db.clone() }
                 current_tag={ p.current_tag.clone() }
+                user_knows_current_tag={ p.user_knows_current_tag }
                 on_event={ p.on_event.clone() }
             />
         }

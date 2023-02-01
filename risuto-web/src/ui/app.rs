@@ -273,6 +273,15 @@ impl Component for App {
             })
         };
 
+        let current_tag = self.active_search.is_order_tag();
+        let user_knows_current_tag = match current_tag {
+            None => false,
+            Some(t) => match self.db.tags.get(&t) {
+                None => false,
+                Some(db_tag) => self.active_search == Search::for_tag(db_tag),
+            },
+        };
+
         html! {
             <div class="container-fluid vh-100">
                 <div class="row h-100">
@@ -290,7 +299,8 @@ impl Component for App {
                             connection_state={ self.connection_state.clone() }
                             actions_pending_submission={ self.actions_pending_submission.clone() }
                             db={ self.db.clone() }
-                            current_tag={ self.active_search.is_order_tag() }
+                            { current_tag }
+                            { user_knows_current_tag }
                             tasks_open={ tasks.open }
                             tasks_done={ tasks.done }
                             tasks_backlog={ tasks.backlog }
