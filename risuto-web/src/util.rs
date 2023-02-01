@@ -20,15 +20,8 @@ extern "C" {
     fn get_timezone() -> String;
 }
 
-lazy_static::lazy_static! {
-    static ref LOCAL_TZ: chrono_tz::Tz = {
-        chrono_tz::Tz::from_str(&get_timezone())
-            .expect("host js timezone is not in chrono-tz database")
-    };
-}
-
 pub fn local_tz() -> chrono_tz::Tz {
-    LOCAL_TZ.clone()
+    chrono_tz::Tz::from_str(&get_timezone()).expect("host js timezone is not in chrono-tz database")
 }
 
 pub fn sort_tags<'a, T, F>(current_user: &UserId, tags: &mut [T], get_tag: F)

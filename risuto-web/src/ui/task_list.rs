@@ -14,6 +14,8 @@ pub struct TaskListProps {
     pub current_tag: Option<TagId>,
     pub user_knows_current_tag: bool,
     pub tasks: Rc<Vec<Arc<Task>>>,
+    pub now: chrono::DateTime<chrono::Utc>,
+    pub timezone: chrono_tz::Tz,
     pub on_event: Callback<Event>,
 }
 
@@ -27,6 +29,8 @@ pub fn task_list(p: &TaskListProps) -> Html {
                 db={ p.db.clone() }
                 current_tag={ p.current_tag.clone() }
                 user_knows_current_tag={ p.user_knows_current_tag }
+                now={ p.now.clone() }
+                timezone={ p.timezone.clone() }
                 on_event={ p.on_event.clone() }
             />
         }

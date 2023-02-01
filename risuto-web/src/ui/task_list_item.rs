@@ -15,6 +15,8 @@ pub struct TaskListItemProps {
     pub current_tag: Option<TagId>,
     pub user_knows_current_tag: bool,
     pub task: Arc<Task>,
+    pub now: Time,
+    pub timezone: chrono_tz::Tz,
     pub on_event: Callback<Event>,
 }
 
@@ -56,6 +58,8 @@ pub fn task_list(p: &TaskListItemProps) -> Html {
                         current_date={ p.task.scheduled_for }
                         label="Schedule for"
                         icon="bi-alarm"
+                        now={ p.now.clone() }
+                        timezone={ p.timezone.clone() }
                         on_time_set={
                             let db = p.db.clone();
                             let task = p.task.clone();
@@ -66,6 +70,8 @@ pub fn task_list(p: &TaskListItemProps) -> Html {
                         current_date={ p.task.blocked_until }
                         label="Blocked until"
                         icon="bi-hourglass-split"
+                        now={ p.now.clone() }
+                        timezone={ p.timezone.clone() }
                         on_time_set={
                             let db = p.db.clone();
                             let task = p.task.clone();
@@ -183,6 +189,8 @@ struct TimesetButtonProps {
     current_date: Option<Time>,
     label: &'static str,
     icon: &'static str,
+    now: Time,
+    timezone: chrono_tz::Tz,
     on_time_set: Callback<Option<Time>>,
 }
 
@@ -239,11 +247,9 @@ fn timeset_button(p: &TimesetButtonProps) -> Html {
     let current_date = p.current_date.map(|t| t.with_timezone(&util::local_tz()));
     let timeset_label = current_date
         .and_then(|d| {
-            let remaining = d.signed_duration_since(chrono::Utc::now());
-            let since_beginning_of_day = d.signed_duration_since(midnight_on(
-                chrono::Utc::now().date_naive(),
-                &util::local_tz(),
-            ));
+            let remaining = d.signed_duration_since(p.now);
+            let since_beginning_of_day =
+                d.signed_duration_since(midnight_on(p.now.date_naive(), &p.timezone));
             match remaining {
                 r if r > chrono::Duration::days(365) => Some(format!("{}", d.year())),
                 r if r > chrono::Duration::days(1) => Some(format!("{}/{}", d.month(), d.day())),

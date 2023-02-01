@@ -23,6 +23,8 @@ pub struct AppProps {
 }
 
 pub enum AppMsg {
+    RefreshImpure,
+
     Logout,
 
     WebsocketConnected,
@@ -48,6 +50,8 @@ pub struct App {
     active_search: Search,
     actions_pending_submission: VecDeque<Action>, // push_back, pop_front
     feed_canceller: oneshot::Receiver<()>,
+    now: chrono::DateTime<chrono::Utc>,
+    timezone: chrono_tz::Tz,
 }
 
 #[derive(Clone)]
@@ -153,11 +157,18 @@ impl Component for App {
             active_search: Search::today(util::local_tz()),
             actions_pending_submission,
             feed_canceller,
+            now: chrono::Utc::now(),
+            timezone: util::local_tz(),
         }
     }
 
     fn update(&mut self, ctx: &Context<Self>, msg: Self::Message) -> bool {
+        self.now = chrono::Utc::now();
+        self.timezone = util::local_tz();
         match msg {
+            AppMsg::RefreshImpure => {
+                // Impure data gets refreshed on each AppMsg, so there's nothing more to do here
+            }
             AppMsg::Logout => {
                 self.feed_canceller.close(); // This should be unneeded as it closes on drop, but better safe than sorry
                 LocalStorage::delete(KEY_ACTS_PENDING_SUBMISSION);
@@ -229,6 +240,12 @@ impl Component for App {
     }
 
     fn view(&self, ctx: &Context<Self>) -> Html {
+        // Refresh impure data around 30 seconds after the last redraw
+        ctx.link().send_future(async {
+            let _ = wasm_timer::Delay::new(std::time::Duration::from_secs(30)).await;
+            AppMsg::RefreshImpure
+        });
+
         let tasks = self.current_task_lists();
 
         let on_order_change = {
@@ -304,6 +321,8 @@ impl Component for App {
                             tasks_open={ tasks.open }
                             tasks_done={ tasks.done }
                             tasks_backlog={ tasks.backlog }
+                            now={ self.now.clone() }
+                            timezone={ self.timezone.clone() }
                             on_logout={ ctx.link().callback(|_| AppMsg::Logout) }
                             on_action={ ctx.link().callback(AppMsg::NewUserAction) }
                             { on_order_change }

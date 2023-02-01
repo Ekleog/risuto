@@ -55,6 +55,8 @@ pub struct MainViewProps {
     pub tasks_open: Rc<Vec<Arc<Task>>>,
     pub tasks_done: Rc<Vec<Arc<Task>>>,
     pub tasks_backlog: Rc<Vec<Arc<Task>>>,
+    pub now: chrono::DateTime<chrono::Utc>,
+    pub timezone: chrono_tz::Tz,
     pub on_logout: Callback<()>,
     pub on_action: Callback<Action>,
     pub on_order_change: Callback<TaskOrderChangeEvent>,
@@ -189,6 +191,8 @@ pub fn main_view(p: &MainViewProps) -> Html {
                         current_tag={ p.current_tag.clone() }
                         user_knows_current_tag={ p.user_knows_current_tag }
                         tasks={ p.tasks_open.clone() }
+                        now={ p.now.clone() }
+                        timezone={ p.timezone.clone() }
                         on_event={ p.on_action.reform(Action::NewEvent) }
                     />
                 </div>
@@ -200,6 +204,8 @@ pub fn main_view(p: &MainViewProps) -> Html {
                         current_tag={ p.current_tag.clone() }
                         user_knows_current_tag={ p.user_knows_current_tag }
                         tasks={ p.tasks_done.clone() }
+                        now={ p.now.clone() }
+                        timezone={ p.timezone.clone() }
                         on_event={ p.on_action.reform(Action::NewEvent) }
                     />
                 </div>
@@ -229,6 +235,8 @@ pub fn main_view(p: &MainViewProps) -> Html {
                             current_tag={ p.current_tag.clone() }
                             user_knows_current_tag={ p.user_knows_current_tag }
                             tasks={ p.tasks_backlog.clone() }
+                            now={ p.now.clone() }
+                            timezone={ p.timezone.clone() }
                             on_event={ p.on_action.reform(Action::NewEvent) }
                         />
                     </div>
