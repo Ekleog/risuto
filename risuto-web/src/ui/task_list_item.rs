@@ -248,8 +248,10 @@ fn timeset_button(p: &TimesetButtonProps) -> Html {
     let timeset_label = current_date
         .and_then(|d| {
             let remaining = d.signed_duration_since(p.now);
-            let since_beginning_of_day =
-                d.signed_duration_since(midnight_on(p.now.date_naive(), &p.timezone));
+            let since_beginning_of_day = d.signed_duration_since(midnight_on(
+                p.now.with_timezone(&p.timezone).date_naive(),
+                &p.timezone,
+            ));
             match remaining {
                 r if r > chrono::Duration::days(365) => Some(format!("{}", d.year())),
                 r if r > chrono::Duration::days(1) => Some(format!("{}/{}", d.month(), d.day())),
