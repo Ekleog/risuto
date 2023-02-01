@@ -97,9 +97,9 @@ impl App {
             .expect("Failed running current active search");
         match self.active_search.order {
             Order::Tag(tag) => {
-                let backlog = Rc::new(all_tasks.split_off(
-                    all_tasks.partition_point(|t| !t.current_tags.get(&tag).unwrap().backlog),
-                ));
+                let backlog = Rc::new(all_tasks.split_off(all_tasks.partition_point(|t| {
+                    !t.current_tags.get(&tag).map(|t| t.backlog).unwrap_or(true)
+                })));
                 let done = Rc::new(all_tasks.split_off(all_tasks.partition_point(|t| !t.is_done)));
                 TaskLists {
                     open: Rc::new(all_tasks),
