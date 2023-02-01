@@ -147,7 +147,8 @@ fn tokenize_task(task: &Task) -> Vec<Vec<String>> {
     fn also_tokenize_comment(c: &Comment, res: &mut Vec<Vec<String>>) {
         res.push(tokenize(
             &c.edits
-                .last_key_value()
+                .iter()
+                .next_back()
                 .expect("comment with no edits")
                 .1
                 .last()

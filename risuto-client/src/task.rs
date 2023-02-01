@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap};
 
 use crate::{
     api::{self, Event, EventData, OrderId, TagId, TaskId, Time, UserId},
@@ -34,7 +34,7 @@ pub struct Task {
     pub orders: HashMap<OrderId, i64>,
 
     /// List of comments in chronological order
-    pub current_comments: BTreeMap<Time, Vec<Comment>>,
+    pub current_comments: im::OrdMap<Time, im::Vector<Comment>>,
 
     pub events: BTreeMap<Time, Vec<Event>>,
 }
@@ -49,9 +49,9 @@ impl From<api::Task> for Task {
             current_title: t.initial_title,
             top_comment: Comment {
                 creation_id: t.top_comment_id,
-                edits: BTreeMap::new(),
-                read: HashSet::new(),
-                children: BTreeMap::new(),
+                edits: im::OrdMap::new(),
+                read: im::HashSet::new(),
+                children: im::OrdMap::new(),
             },
             is_done: false,
             is_archived: false,
@@ -59,7 +59,7 @@ impl From<api::Task> for Task {
             scheduled_for: None,
             current_tags: HashMap::new(),
             orders: HashMap::new(),
-            current_comments: BTreeMap::new(),
+            current_comments: im::OrdMap::new(),
             events: BTreeMap::new(),
         }
     }
@@ -132,15 +132,19 @@ impl Task {
                             parent_id.is_none(),
                             "parent_id must be None for a task's top-comment"
                         );
-                        self.top_comment.edits.insert(e.date, vec![text.clone()]);
+                        let mut edit = im::Vector::new();
+                        edit.push_back(text.clone());
+                        self.top_comment.edits.insert(e.date, edit);
                         self.top_comment.read.insert(e.owner_id);
                     }
                     EventData::AddComment { text, parent_id } => {
-                        let mut edits = BTreeMap::new();
-                        edits.insert(e.date, vec![text.clone()]);
-                        let mut read = HashSet::new();
+                        let mut edit = im::Vector::new();
+                        edit.push_back(text.clone());
+                        let mut edits = im::OrdMap::new();
+                        edits.insert(e.date, edit);
+                        let mut read = im::HashSet::new();
                         read.insert(e.owner_id);
-                        let children = BTreeMap::new();
+                        let children = im::OrdMap::new();
                         let creation_id = e.id;
                         if let Some(parent) =
                             parent_id.and_then(|p| Comment::find_in(&mut self.current_comments, &p))
@@ -148,8 +152,8 @@ impl Task {
                             parent
                                 .children
                                 .entry(e.date)
-                                .or_insert(Vec::new())
-                                .push(Comment {
+                                .or_insert(im::Vector::new())
+                                .push_back(Comment {
                                     creation_id,
                                     edits,
                                     read,
@@ -159,8 +163,8 @@ impl Task {
                             // Also add as a top-level comment if the parent could not be found (TODO: log a warning)
                             self.current_comments
                                 .entry(e.date)
-                                .or_insert(Vec::new())
-                                .push(Comment {
+                                .or_insert(im::Vector::new())
+                                .push_back(Comment {
                                     creation_id,
                                     edits,
                                     read,
@@ -174,9 +178,9 @@ impl Task {
                         self.top_comment
                             .edits
                             .entry(e.date)
-                            .or_insert(Vec::new())
-                            .push(text.clone());
-                        self.top_comment.read = HashSet::new();
+                            .or_insert(im::Vector::new())
+                            .push_back(text.clone());
+                        self.top_comment.read = im::HashSet::new();
                         self.top_comment.read.insert(e.owner_id);
                     }
                     EventData::EditComment { comment_id, text } => {
@@ -186,9 +190,9 @@ impl Task {
                             comment
                                 .edits
                                 .entry(e.date)
-                                .or_insert(Vec::new())
-                                .push(text.clone());
-                            comment.read = HashSet::new();
+                                .or_insert(im::Vector::new())
+                                .push_back(text.clone());
+                            comment.read = im::HashSet::new();
                             comment.read.insert(e.owner_id);
                         }
                     }
