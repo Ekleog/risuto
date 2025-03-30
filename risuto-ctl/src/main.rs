@@ -29,6 +29,9 @@ fn admin_token() -> anyhow::Result<AuthToken> {
     Ok(AuthToken(tok))
 }
 
+// TODO: add some webdav contacts integration? to record when the last
+// exchange with someone was and add todos to keep contact with friends
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let opt = <Opt as structopt::StructOpt>::from_args();
